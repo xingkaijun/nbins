@@ -1,0 +1,334 @@
+# NBINS - 新造船检验管理系统 架构设计
+
+> **项目名称**：NBINS（New Building Inspection System）
+> **项目路径**：`d:\Code\nbins`
+> **创建日期**：2026-04-02
+
+---
+
+## 系统概述
+
+NBINS 是一个围绕数据库构建的多人协作新造船检验管理平台，核心工作流程为：
+
+```mermaid
+flowchart LR
+    A["📧 船厂邮件"] -->|n8n工作流| B["📝 报验单解析"]
+    B --> C[("🗄️ 数据库")]
+    C --> D["🖥️ 检验员前端"]
+    D -->|填写结果/意见| C
+    C --> E["📄 PDF报告生成"]
+    E -->|n8n工作流| F["📤 邮件发送 + 归档"]
+    C --> G["📊 报表与统计"]
+```
+
+---
+
+## 系统模块划分
+
+### 模块 1：数据采集层（n8n 工作流 → 数据库）
+- n8n 读取船厂邮件中的报验单
+- 解析提取检验项目信息
+- 写入数据库
+
+### 模块 2：Web 应用层（前端 + 后端 API）
+- 用户认证与权限管理
+- 检验项目列表与详情展示
+- 检验结果与意见录入
+- 防覆盖并发控制
+
+### 模块 3：报告生成模块
+- 单项检验 PDF 报告生成
+- 报告模板管理
+
+### 模块 4：报表与统计模块
+- 检验通过率统计
+- 意见清单生成
+- 多维度筛选（专业/日期/结果）
+
+### 模块 5：输出分发层（n8n 工作流）
+- PDF 报告邮件发送给船厂
+- 报告归档到指定目录
+
+### 模块 6：文档系统
+- 架构文档、API 文档、数据模型文档
+- AI Agent 交接文档（跨编程软件使用）
+
+---
+
+## 待确认问题
+
+> [!IMPORTANT]
+> 请在每个问题下方添加您的回答。不确定的地方可以写"由你建议"，我会给出推荐方案。
+
+### A. 业务流程与数据模型
+
+**A1. 报验单结构**
+船厂提交的报验单包含哪些字段？能否提供样本？
+（例如：船号、检验项目名称、专业分类、计划日期、检验标准编号、位置/区域等）
+
+> 📝 您的回答：
+
+**A2. 专业分类**
+检验涉及哪些专业？每个检验员按专业分工吗？
+（例如：船体、轮机、电气、涂装、管系等）
+
+> 📝 您的回答：
+
+**A3. 检验结果状态**
+检验结果包含哪些状态？是否需要支持附件上传（如现场照片）？
+（例如：通过 / 不通过 / 有条件通过 / 待复验）
+
+> 📝 您的回答：
+
+**A4. 检验流程状态机**
+一个检验项目从报验到完成，是否有多个阶段？
+（例如：待检验 → 检验中 → 已提交意见 → 已关闭）
+
+> 📝 您的回答：
+
+**A5. 数据规模**
+一个项目通常包含多少条船？每条船大约有多少检验项目？
+
+> 📝 您的回答：
+
+---
+
+### B. 用户与权限
+
+**B1. 用户角色**
+除了"检验员"，还需要哪些角色？
+（例如：超级管理员、项目经理、只读查看者、船厂联系人）
+
+> 📝 您的回答：
+
+**B2. 权限粒度**
+检验员的权限边界是什么？
+- 只能看到被分配的项目？
+- 同一项目内只能编辑自己负责的专业/检验项？
+- 是否需要审核流程（如项目经理复核检验结果）？
+
+> 📝 您的回答：
+
+**B3. 用户规模**
+预计同时使用系统的检验员数量？
+
+> 📝 您的回答：
+
+---
+
+### C. 技术与部署
+
+**C1. 部署环境**
+系统部署在哪里？（公司内网 / 云服务器 / 个人VPS / Docker）
+
+> 📝 您的回答：
+
+**C2. 前端技术偏好**
+是否有偏好？（React / Vue / Svelte / 纯HTML+JS）
+
+> 📝 您的回答：
+
+**C3. 后端技术偏好**
+是否有偏好？（Python FastAPI / Python Django / Node.js Express）
+
+> 📝 您的回答：
+
+**C4. 数据库偏好**
+是否有偏好？（PostgreSQL / MySQL / SQLite）
+
+> 📝 您的回答：
+
+**C5. n8n 现状与集成方式**
+- n8n 是否已部署？
+- 与本系统的集成方式偏好？（直接操作数据库 / 通过 REST API / Webhook）
+
+> 📝 您的回答：
+
+**C6. 移动端与离线**
+检验员是否需要在船上用手机/平板？是否需要离线功能？
+
+> 📝 您的回答：
+
+---
+
+### D. 报告与输出
+
+**D1. PDF 报告模板**
+检验报告是否有公司标准格式？还是可以自行设计？
+
+> 📝 您的回答：
+
+**D2. 报表维度**
+除了"通过率统计"和"意见清单"，还需要哪些报表？
+（例如：按检验员统计工作量、按船/项目统计进度、逾期检验项统计、每日/周/月汇总）
+
+> 📝 您的回答：
+
+---
+
+### E. 并发与防覆盖
+
+**E1. 冲突场景**
+典型的冲突场景是什么？
+- 两个检验员同时编辑同一条记录？
+- n8n 写入与检验员编辑同时发生？
+- 是否允许同一检验项由多人填写？
+
+> 📝 您的回答：
+
+**E2. 锁策略偏好**
+- 乐观锁：提交时检测冲突，提示用户刷新
+- 悲观锁：编辑时锁定记录，其他人不可编辑
+- 或者由我推荐？
+
+> 📝 您的回答：
+
+---
+
+## 初步技术方案（待确认后调整）
+
+| 层级 | 推荐方案 | 备选方案 | 说明 |
+|------|---------|---------|------|
+| 前端 | React + Vite | Vue 3 | 组件生态丰富，适合复杂表单 |
+| UI 框架 | Ant Design | Material UI | 表格/表单组件强大，适合管理系统 |
+| 后端 | Python FastAPI | Django REST | 高性能异步，API 优先设计 |
+| 数据库 | PostgreSQL | MySQL | 高级查询、JSON支持、并发性能 |
+| ORM | SQLAlchemy 2.0 | Tortoise ORM | 成熟稳定，迁移工具完善 |
+| 认证 | JWT + RBAC | Session | 无状态、适合前后端分离 |
+| PDF 生成 | WeasyPrint / ReportLab | Puppeteer | Python 原生，模板化生成 |
+| 数据库迁移 | Alembic | — | SQLAlchemy 标配 |
+| n8n 集成 | REST API + Webhook | 直接DB操作 | 解耦、可追溯 |
+| 文档 | Markdown + 项目内 `/docs` | — | AI Agent 友好 |
+
+---
+
+## 项目目录结构（草案）
+
+```
+d:\Code\nbins\
+├── docs/                    # 项目文档（架构、API、数据模型、交接文档）
+│   ├── architecture.md
+│   ├── data-model.md
+│   ├── api-reference.md
+│   └── handover/            # AI Agent 交接文档
+├── backend/                 # Python FastAPI 后端
+│   ├── app/
+│   │   ├── api/             # API 路由
+│   │   ├── models/          # 数据库模型
+│   │   ├── schemas/         # Pydantic 数据校验
+│   │   ├── services/        # 业务逻辑
+│   │   ├── core/            # 配置、安全、依赖
+│   │   └── utils/           # 工具函数（PDF生成等）
+│   ├── migrations/          # Alembic 数据库迁移
+│   ├── tests/
+│   └── requirements.txt
+├── frontend/                # React 前端
+│   ├── src/
+│   │   ├── components/      # 可复用组件
+│   │   ├── pages/           # 页面
+│   │   ├── hooks/           # 自定义 Hooks
+│   │   ├── services/        # API 调用
+│   │   ├── store/           # 状态管理
+│   │   └── utils/
+│   └── package.json
+├── n8n/                     # n8n 工作流配置备份
+│   ├── import-inspection.json
+│   └── send-report.json
+└── docker-compose.yml       # 部署配置
+```
+
+---
+
+## 数据模型草案（待确认后细化）
+
+```mermaid
+erDiagram
+    PROJECT ||--o{ SHIP : contains
+    SHIP ||--o{ INSPECTION_ITEM : has
+    INSPECTION_ITEM ||--o{ INSPECTION_RESULT : records
+    INSPECTION_ITEM ||--o{ COMMENT : has
+    USER ||--o{ INSPECTION_RESULT : submits
+    USER ||--o{ USER_PROJECT : assigned_to
+    PROJECT ||--o{ USER_PROJECT : has_members
+    ROLE ||--o{ USER : has
+
+    PROJECT {
+        int id PK
+        string name
+        string code
+        string status
+        date start_date
+        date end_date
+    }
+
+    SHIP {
+        int id PK
+        int project_id FK
+        string hull_number
+        string ship_type
+        string status
+    }
+
+    INSPECTION_ITEM {
+        int id PK
+        int ship_id FK
+        string item_name
+        string discipline
+        date planned_date
+        string status
+        string standard_ref
+        int version
+    }
+
+    INSPECTION_RESULT {
+        int id PK
+        int inspection_item_id FK
+        int inspector_id FK
+        string result
+        text opinion
+        datetime submitted_at
+        int version
+    }
+
+    USER {
+        int id PK
+        string username
+        string email
+        string password_hash
+        int role_id FK
+        bool is_active
+    }
+
+    COMMENT {
+        int id PK
+        int inspection_item_id FK
+        int user_id FK
+        text content
+        datetime created_at
+    }
+```
+
+---
+
+## 开发阶段规划（草案）
+
+| 阶段 | 内容 | 预估周期 |
+|------|------|---------|
+| **Phase 0** | 需求确认 + 架构设计定稿 | 当前阶段 |
+| **Phase 1** | 数据库模型 + 后端 API 骨架 + 认证系统 | — |
+| **Phase 2** | 前端骨架 + 检验项目列表/详情页 | — |
+| **Phase 3** | 检验结果录入 + 防覆盖机制 | — |
+| **Phase 4** | PDF 报告生成 | — |
+| **Phase 5** | 报表与统计 | — |
+| **Phase 6** | n8n 工作流集成（输入/输出） | — |
+| **Phase 7** | 文档完善 + 部署 | — |
+
+---
+
+## 下一步
+
+请在上方各问题的 `📝 您的回答：` 处填写您的意见，然后回复我。我将根据您的回答：
+
+1. 确定最终技术方案
+2. 细化数据模型
+3. 输出详细的分阶段实施任务清单
