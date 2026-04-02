@@ -246,7 +246,8 @@ flowchart TD
 
 ### 3.2 Webhook 触发
 
-**由 NBINS 前端触发**：检验员在检验详情页点击"发送报告"按钮 → NBINS API 调用此 Webhook。
+**由 NBINS 前端触发**：检验员在检验详情页录入检验结果与意见并点击"发送报告"按钮 → NBINS API 调用此 Webhook。
+*(注：系统会自动将当前进行编辑提交的人员记录为该次检验的 `inspector`（主检人员），所有检验结果和意见均归属到该主检人员名下，并在报告中予以展示。)*
 
 **Webhook 请求体**：
 ```json
@@ -290,7 +291,15 @@ flowchart TD
   <tr><td>检验项目:</td><td>{item_name}</td></tr>
   <tr><td>专业:</td><td>{discipline}</td></tr>
   <tr><td>检验日期:</td><td>{actual_date}</td></tr>
+  <tr><td>主检人员:</td><td>{inspector}</td></tr>
   <tr><td>检验结果:</td><td><b>{result_text}</b></td></tr>
+  <tr>
+    <td colspan="2">
+      <b>检验意见:</b><br/>
+      <!-- 遍历 comments 列表 -->
+      - 面漆厚度不足... (2026-04-02)
+    </td>
+  </tr>
 </table>
 <p>详细检验报告请见附件 PDF。</p>
 <hr>
