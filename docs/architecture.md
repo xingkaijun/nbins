@@ -1,9 +1,9 @@
-# NBINS - 新造船检验管理系统 架构设计 v4
+# NBINS - 新造船检验管理系统 架构设计 v5
 
 > **项目名称**：NBINS（New Building Inspection System）
 > **项目路径**：`d:\Code\nbins`
 > **创建日期**：2026-04-02
-> **状态**：架构设计 v4（复检流程重设计）
+> **状态**：架构设计 v5（全功能增强）
 
 ---
 
@@ -148,6 +148,7 @@ erDiagram
     USER ||--o{ INSPECTION_ROUND : "inspects"
     USER ||--o{ COMMENT : "authors"
     USER ||--o{ OBSERVATION : "records"
+    USER ||--o{ AUDIT_LOG : "performs"
 
     PROJECT {
         text id PK "UUID"
@@ -213,6 +214,7 @@ erDiagram
         text yard_qc "船厂质检员姓名"
         text result "CX/AA/QCC/OWC/RJ/null"
         text inspected_by FK "执行检验的检验员ID"
+        text notes "检验员备注(自由文本,nullable)"
         text source "n8n/manual"
         text created_at
         text updated_at
@@ -250,7 +252,7 @@ erDiagram
     OBSERVATION {
         text id PK "UUID"
         text ship_id FK
-        text type "patrol / sea_trial"
+        text type "patrol/sea_trial/dock_trial/other"
         text discipline "专业分类"
         text author_id FK "记录人(检验员)"
         text date "观察日期"
@@ -261,11 +263,50 @@ erDiagram
         text created_at
         text updated_at
     }
+
+    COMMENT_TEMPLATE {
+        text id PK "UUID"
+        text discipline "适用专业(nullable=通用)"
+        text title "模板标题"
+        text content "模板内容"
+        integer usage_count "使用次数"
+        text created_by FK "创建人"
+        text created_at
+        text updated_at
+    }
+
+    AUDIT_LOG {
+        text id PK "UUID"
+        text user_id FK "操作人"
+        text entity_type "实体类型(inspection_item/comment/observation/user/...)"
+        text entity_id "实体ID"
+        text action "操作(create/update/delete/close/submit_result)"
+        text changes "变更内容(JSON: old_value/new_value)"
+        text ip_address "IP地址(nullable)"
+        text created_at
+    }
 ```
 
 > [!NOTE]
 > - **冗余字段说明**：`INSPECTION_ITEM` 上的 `latest_result`、`open_comments_count` 是冗余字段，用于列表页快速查询和排序。由业务逻辑在提交结果/关闭意见时同步更新。
-> - **OBSERVATION 表**：用于巡检和试航中的非检验意见记录。通过 `type` 字段区分巡检(`patrol`)和试航(`sea_trial`)，共用一张表以简化查询和筛选。与检验意见（COMMENT）完全独立。
+> - **OBSERVATION 表**：用于巡检、试航、系泊试验等非检验意见记录。`type` 为可扩展枚举（`patrol`/`sea_trial`/`dock_trial`/`other`），共用一张表以简化查询。与检验意见（COMMENT）完全独立。
+> - **COMMENT_TEMPLATE 表**：常用意见模板库，检验员可从模板快速选取并微调，提升录入效率。
+> - **AUDIT_LOG 表**：审计日志，记录所有关键操作（提交结果、关闭意见、删除等），MVP 阶段仅写入不展示，供日后合规审查。
+
+### 4.2 D1 容量规划
+
+> [!WARNING]
+> Cloudflare D1 免费版限制：**5GB 存储 / 5M 行读取/天**。当前预估数据量：
+> - INSPECTION_ITEM: ~100,000 行
+> - INSPECTION_ROUND: ~150,000 行（含复检）
+> - COMMENT: ~200,000 行
+> - OBSERVATION: ~50,000 行
+> - AUDIT_LOG: 增长最快，预估 ~500,000 行/年
+>
+> **建议措施**：
+> 1. AUDIT_LOG 设置 TTL（保留最近 1 年，超期可导出归档后清理）
+> 2. 已 `closed` 超过 6 个月的项目标记为 `archived`，列表查询默认排除
+> 3. 定期监控 D1 用量，接近限制时评估升级付费版
 
 ### 4.2 检验结果状态码
 
@@ -416,9 +457,16 @@ WHERE id = ? AND inspection_item_id = ?
 
 | 端点 | 方法 | 说明 | 权限 |
 |------|------|------|------|
-| `/api/auth/login` | POST | 登录，返回 JWT | 公开 |
+| `/api/auth/login` | POST | 登录，返回 JWT（access + refresh） | 公开 |
+| `/api/auth/refresh` | POST | 用 refresh token 换取新 access token | 公开 |
 | `/api/auth/me` | GET | 当前用户信息 | 已登录 |
 | `/api/auth/change-password` | POST | 修改密码 | 已登录 |
+
+> [!NOTE]
+> **JWT 双 Token 机制**：
+> - `access_token`：短过期（2 小时），用于 API 请求认证
+> - `refresh_token`：长过期（7 天），仅用于换取新 access_token
+> - 前端 axios 拦截器在 access_token 过期时自动调用 `/api/auth/refresh` 静默续期
 
 ### 5.2 项目与船舶
 
@@ -440,10 +488,17 @@ WHERE id = ? AND inspection_item_id = ?
 | `/api/inspections/:id` | GET | 检验项详情（含所有轮次 + 意见列表） | 已登录 |
 | `/api/inspections/:id/rounds` | GET | 获取检验项的所有轮次历史 | 已登录 |
 | `/api/inspections/:id/rounds/current/result` | PUT | 提交当前轮次的检验结果（乐观锁） | 对应专业 |
+| `/api/inspections/batch-result` | PUT | **批量提交**多个检验项的当前轮次结果 | 对应专业 |
 | `/api/inspections/:id/comments` | GET | 获取检验项的所有意见 | 已登录 |
 | `/api/inspections/:id/comments` | POST | 添加意见（关联当前轮次） | 对应专业 |
 | `/api/comments/:id` | PUT | 编辑意见 | 作者本人 |
 | `/api/comments/:id/close` | PUT | 关闭意见（触发自动 AA 检查） | 对应专业 |
+| `/api/comment-templates` | GET | 获取意见模板列表（按专业筛选） | 已登录 |
+| `/api/comment-templates` | POST | 创建意见模板 | 已登录 |
+| `/api/comment-templates/:id` | PUT/DELETE | 编辑/删除意见模板 | 作者本人/admin |
+
+> [!NOTE]
+> **批量提交** (`PUT /api/inspections/batch-result`)：接收数组，每项包含 `inspection_id`、`result`、`actual_date`、`notes`、`comments[]`。逐项执行乐观锁校验，返回每项的成功/失败状态。用于「快速填写模式」。
 
 ### 5.4 手动导入（含复检匹配）
 
@@ -477,7 +532,7 @@ WHERE id = ? AND inspection_item_id = ?
 | `author_id` | 记录人 | UUID |
 | `date_from` / `date_to` | 日期范围 | `2026-04-01` |
 
-### 5.6 报表
+### 5.6 报表与导出
 
 | 端点 | 方法 | 说明 | 权限 |
 |------|------|------|------|
@@ -486,10 +541,17 @@ WHERE id = ? AND inspection_item_id = ?
 | `/api/reports/observations-list` | GET | 巡检/试航意见清单（OBSERVATION） | 已登录 |
 | `/api/reports/open-items` | GET | 所有未关闭意见汇总（COMMENT + OBSERVATION） | 已登录 |
 | `/api/reports/daily-summary` | GET | 每日检验汇总 | 已登录 |
+| `/api/reports/today-checklist` | GET | 今日待检清单（按检验员/船舶） | 已登录 |
 | `/api/reports/progress` | GET | 检验进度（远期） | 已登录 |
+| `/api/exports/comments` | GET | 导出意见清单（Excel/CSV） | 已登录 |
+| `/api/exports/observations` | GET | 导出巡检/试航清单（Excel/CSV） | 已登录 |
+| `/api/exports/inspections` | GET | 导出检验数据（Excel/CSV） | admin/manager |
+| `/api/exports/full-backup` | GET | 全量数据导出（JSON） | admin |
 
 > [!NOTE]
-> `/api/reports/observations-list` 和 `/api/reports/open-items` 支持与 5.5 节相同的筛选参数，可按专业、类型、检验员等维度拉取意见总表。
+> - 所有报表端点支持多维筛选（项目/船舶/专业/日期/检验员）
+> - `/api/reports/today-checklist` 可生成 PDF 格式的今日待检清单，检验员打印后带到船上
+> - 导出端点返回文件流，前端直接触发下载
 
 ### 5.7 Webhook（n8n 集成，远期）
 
@@ -515,6 +577,16 @@ WHERE id = ? AND inspection_item_id = ?
 | `/api/users` | POST | 创建用户 | admin |
 | `/api/users/:id` | PUT | 编辑用户 | admin |
 | `/api/users/:id` | DELETE | 停用用户 | admin |
+| `/api/users/:id/reset-password` | POST | 管理员重置用户密码 | admin |
+
+### 5.10 审计日志
+
+| 端点 | 方法 | 说明 | 权限 |
+|------|------|------|------|
+| `/api/audit-logs` | GET | 审计日志列表（支持按用户/实体/操作/日期筛选） | admin |
+
+> [!NOTE]
+> 审计日志仅在 admin 后台可见，MVP 阶段不做前端展示页面，但所有关键操作都写入 `AUDIT_LOG` 表。
 
 ---
 
@@ -583,15 +655,15 @@ d:\Code\nbins\
 | 阶段 | 内容 | 交付物 |
 |------|------|--------|
 | **Phase 0** | ✅ 需求确认 + 架构设计 | 本文档 + 前端规划 + n8n 规划 |
-| **Phase 1** | 项目骨架搭建 | Monorepo、D1 建表、Hono API 骨架、React 脚手架 |
-| **Phase 2** | 认证系统 + 用户管理 | 登录、JWT、用户 CRUD、RBAC 中间件 |
-| **Phase 3** | 核心业务 - 检验管理 + 手动导入 | 项目/船舶 CRUD、**手动批量导入检验项**、结果填写（乐观锁）、意见开闭 |
-| **Phase 3.5** | 巡检与试航意见模块 | OBSERVATION CRUD、按船/专业/类型筛选、意见开闭 |
-| **Phase 4** | PDF 报告生成 + 手动发送 | 报告模板、jsPDF 生成、下载/预览、**手动邮件发送引导** |
-| **Phase 5** | 报表与统计 | 通过率、检验意见清单、巡检/试航意见清单、未关闭意见汇总、多维筛选、导出 |
-| **Phase 6** | 部署上线 + 文档完善 | Vercel/Workers 部署、交接文档 |
+| **Phase 1** | 项目骨架搭建 | Monorepo、D1 建表（含 AUDIT_LOG）、Hono API 骨架、React 脚手架 |
+| **Phase 2** | 认证系统 + 用户管理 | 登录、JWT 双 Token、静默刷新、用户 CRUD、**密码重置**、RBAC 中间件 |
+| **Phase 3** | 核心业务 - 检验管理 + 手动导入 | 项目/船舶 CRUD、**手动批量导入**、单条/批量结果填写（乐观锁）、意见开闭、**意见模板** |
+| **Phase 3.5** | 巡检与试航意见模块 | OBSERVATION CRUD、可扩展 type、按船/专业/类型筛选、意见开闭 |
+| **Phase 4** | PDF 报告生成 + 手动发送 | 报告模板、jsPDF 生成、下载/预览、**今日待检清单 PDF**、**批量报告打包**、手动邮件引导 |
+| **Phase 5** | 报表与数据导出 | 通过率、意见清单、巡检/试航清单、未关闭汇总、多维筛选、**Excel/CSV 导出**、**全量备份** |
+| **Phase 6** | 部署上线 + 文档完善 | Vercel/Workers 部署、交接文档、**D1 容量监控** |
 | **Phase 7** *(远期)* | n8n 集成 - 数据自动导入 | Webhook 端点、n8n 报验单解析工作流 |
-| **Phase 8** *(远期)* | n8n 集成 - 报告自动分发 | 邮件发送工作流、OneDrive 归档 |
+| **Phase 8** *(远期)* | n8n 集成 - 报告自动分发 | 邮件发送工作流、OneDrive 归档、**批量报告邮件** |
 
 ---
 
