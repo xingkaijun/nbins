@@ -1,26 +1,28 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 05:29 Asia/Shanghai
+> Updated: 2026-04-04 05:31 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M5 — Harden D1 local dev UX + remove footguns
-**Goal:** Make D1 mode start with zero manual steps (or fail with clear message), and keep docs + scripts consistent.
+### M6 — Improve D1 persistence ergonomics (narrower writes)
+**Goal:** Reduce snapshot rewrite footgun by narrowing *write* operations to real D1 tables/queries (keep read path stable).
 
 **Definition of Done:**
-- `pnpm dev:api:d1` works on first run (auto bootstrap)
-- Docs + scripts are consistent
+- Replace at least one snapshot rewrite with narrow D1 writes
+- Keep mock path unchanged
 - Validation passes (`pnpm qa`)
 - Changes committed + pushed
 
 
 ## Task Breakdown
 
-- [x] Make `pnpm dev:api:d1` auto-run `pnpm d1:bootstrap` before starting Wrangler
-- [x] Add a README note about mock vs D1 drivers
-- [x] Keep `docs/status-board.md` in sync
-- [x] Commit + push
+- [ ] Pick the smallest safe target write path (recommended: result submission PUT)
+- [ ] Design minimal D1 table writes needed for that path (no full repo snapshot rewrite)
+- [ ] Implement narrow write(s) in D1 storage adapter
+- [ ] Update/extend tests to cover D1 narrow write behavior
+- [ ] Keep `docs/status-board.md` in sync
+- [ ] Commit + push
 
 
 ## Rules
