@@ -64,6 +64,13 @@ class FakeD1Database {
     this.executedSql.push(sql);
     const [, tableName] = sql.match(/FROM "([^"]+)"/) ?? [];
     const rows = [...this.tables[tableName]];
+    const inMatch = sql.match(/WHERE "([^"]+)" IN \(([^)]+)\)/);
+
+    if (inMatch) {
+      const [, column] = inMatch;
+      return rows.filter((row) => params.includes(row[column]));
+    }
+
     const whereMatch = sql.match(/WHERE "([^"]+)" = \?/);
 
     if (!whereMatch) {
@@ -212,11 +219,41 @@ test("D1InspectionStorage readInspectionDetail selects only item-scoped records"
       'SELECT * FROM "projects" WHERE "id" = ?',
       'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
       'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
-      'SELECT * FROM "users" WHERE "id" = ?'
+      'SELECT * FROM "users" WHERE "id" IN (?)'
     ]
   );
   assert.equal(
+    db.executedSql.filter((sql) => sql.startsWith('SELECT * FROM "users"')).length,
+    1
+  );
+  assert.equal(
+    db.executedSql.includes('SELECT * FROM "users" WHERE "id" = ?'),
+    false
+  );
+  assert.equal(
     db.executedSql.some((sql) => /^SELECT \* FROM "(users|projects|ships|inspection_items|inspection_rounds|comments)"$/.test(sql)),
+    false
+  );
+});
+
+test("D1InspectionStorage readInspectionDetail returns empty users without issuing user query", async () => {
+  const db = new FakeD1Database();
+  const storage = new D1InspectionStorage(db);
+  const baseline = createBaselineInspectionStorage();
+
+  baseline.inspectionRounds = baseline.inspectionRounds.map((round) =>
+    round.inspectionItemId === "insp-003" ? { ...round, inspectedBy: null } : round
+  );
+  baseline.comments = baseline.comments.filter((comment) => comment.inspectionItemId !== "insp-003");
+
+  await storage.write(baseline);
+  db.executedSql = [];
+
+  const detail = await storage.readInspectionDetail("insp-003");
+
+  assert.deepEqual(detail?.users, []);
+  assert.equal(
+    db.executedSql.some((sql) => sql.startsWith('SELECT * FROM "users"')),
     false
   );
 });

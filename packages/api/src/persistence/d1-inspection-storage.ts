@@ -92,11 +92,7 @@ export class D1InspectionStorage implements InspectionStorage {
       users:
         userIds.length === 0
           ? []
-          : await Promise.all(
-              userIds.map(async (userId) =>
-                mapUserRecord(await this.selectRequired(`SELECT * FROM "users" WHERE "id" = ?`, userId))
-              )
-            )
+          : await this.selectUsersByIds(userIds)
     };
   }
 
@@ -328,6 +324,25 @@ export class D1InspectionStorage implements InspectionStorage {
     }
 
     return row;
+  }
+
+  private async selectUsersByIds(userIds: string[]): Promise<UserRecord[]> {
+    const placeholders = userIds.map(() => "?").join(", ");
+    const rows = await this.selectMany(
+      `SELECT * FROM "users" WHERE "id" IN (${placeholders})`,
+      ...userIds
+    );
+    const usersById = new Map(rows.map((row) => [stringValue(row.id), mapUserRecord(row)]));
+
+    return userIds.map((userId) => {
+      const user = usersById.get(userId);
+
+      if (!user) {
+        throw new Error(`Expected row for query: SELECT * FROM "users" WHERE "id" IN (${placeholders})`);
+      }
+
+      return user;
+    });
   }
 }
 
