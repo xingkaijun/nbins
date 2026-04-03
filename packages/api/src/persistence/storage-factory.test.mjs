@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createInspectionStorage, createInspectionStorageResolver } from "./storage-factory.ts";
-import { D1InspectionStorage } from "./d1-inspection-storage.ts";
+import { D1SeededInspectionStorage } from "./d1-seeded-inspection-storage.ts";
 import { MockInspectionDatabase } from "./mock-inspection-db.ts";
 
 test("createInspectionStorage defaults to mock storage", () => {
@@ -27,7 +27,7 @@ test("createInspectionStorage returns D1 storage when driver and binding are pre
     }
   });
 
-  assert.equal(storage instanceof D1InspectionStorage, true);
+  assert.equal(storage instanceof D1SeededInspectionStorage, true);
 });
 
 test("createInspectionStorageResolver reuses the same mock storage across calls", () => {

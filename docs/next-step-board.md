@@ -18,11 +18,12 @@
 
 ## Task Breakdown
 
-- [ ] T1. Run local D1 end-to-end under Wrangler dev (with DB binding)
-- [ ] T2. Bootstrap schema into local D1 using generated SQL (document exact command)
-- [ ] T3. Exercise GET + PUT routes on D1 and confirm persistence after restart
-- [ ] T4. Document a single copy-paste "smoke script" section (commands + expected outputs)
-- [ ] T5. Run full validation (`typecheck`, `build`, `api test`)
+- [x] T1. Run local D1 end-to-end under Wrangler dev (with DB binding)
+- [x] T2. Bootstrap schema into local D1 using generated SQL (document exact command)
+- [x] T3. Exercise GET + PUT routes on D1 and confirm persistence after restart
+- [x] T4. Document a single copy-paste "smoke script" section (commands + expected outputs)
+  - See: `docs/m3-d1-smoke.md`
+- [x] T5. Run full validation (`typecheck`, `build`, `api test`)
 - [ ] T6. Commit and push
 
 ## Rules

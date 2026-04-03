@@ -214,15 +214,11 @@ export class MockInspectionDatabase implements InspectionStorage {
   }
 }
 
-export function createMockInspectionDatabase(
-  seed?: InspectionStorageSnapshot
-): MockInspectionDatabase {
+export function createMockInspectionDatabase(seed?: InspectionStorageSnapshot): MockInspectionDatabase {
   return new MockInspectionDatabase(seed);
 }
 
-export function cloneStorageSnapshot(
-  snapshot: InspectionStorageSnapshot
-): InspectionStorageSnapshot {
+export function cloneStorageSnapshot(snapshot: InspectionStorageSnapshot): InspectionStorageSnapshot {
   return {
     users: snapshot.users.map((record) => ({ ...record, disciplines: [...record.disciplines] })),
     projects: snapshot.projects.map((record) => ({ ...record, recipients: [...record.recipients] })),

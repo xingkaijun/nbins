@@ -160,6 +160,7 @@ Representative files:
 - `packages/api/src/db/sql.ts`
 - `packages/api/src/db/bootstrap.ts`
 - `packages/api/src/db/sql.test.mjs`
+- `docs/m3-d1-smoke.md`
 
 Delivery read:
 
@@ -209,6 +210,7 @@ Representative files:
 - `packages/api/src/domain/inspection-item-submission.test.mjs`
 - `packages/api/src/routes/inspections.test.mjs`
 - `packages/api/src/db/sql.test.mjs`
+- `docs/m3-d1-smoke.md`
 - `package.json`
 
 Delivery read:
