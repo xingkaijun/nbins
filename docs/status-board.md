@@ -147,6 +147,7 @@ What is in place:
 - SQL create-table statements can be generated from that schema metadata.
 - A bootstrap helper exists to execute schema creation against a D1 database.
 - Local dev script can auto-run bootstrap so first-run `pnpm dev:api:d1` is zero-manual-step.
+- Prefer `pnpm dev:api:d1` for exercising D1 locally; `pnpm dev:api` stays on mock by default.
 - A D1-backed inspection storage adapter can read and rewrite the current repository snapshot model (with dev seeding when empty).
 - Route/runtime wiring can switch between mock and D1 via bindings while preserving the default mock flow.
 

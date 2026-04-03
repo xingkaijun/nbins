@@ -126,8 +126,16 @@ pnpm dev:web
 ### 3. 启动 API
 
 ```bash
+# 默认使用 mock storage（适合演示 / 不依赖 D1）
 pnpm dev:api
+
+# 使用本地 D1（wrangler --local + persist），并在启动前自动 bootstrap schema
+# 需要保证 packages/api/wrangler.jsonc 里存在 DB 绑定
+pnpm dev:api:d1
 ```
+
+> 说明：当前 mock 与 D1 都走同一套 repository 逻辑，但 **mock 仍是默认 runtime driver**。
+> 若 `D1_DRIVER` 未设置为 `d1`，或 Wrangler 的 `DB` binding 未正确解析，API 会自动回退到 mock。
 
 ### 4. 类型检查 / 构建
 
