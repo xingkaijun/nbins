@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 06:55 Asia/Shanghai
+> Updated: 2026-04-04 07:25 Asia/Shanghai
 > Overall status: **MVP baseline implemented, with core inspection flow working and D1 runtime integration advanced to an adapter plus driver-switch stage**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -151,14 +151,15 @@ What is in place:
 - A D1-backed inspection storage adapter can read and rewrite the current repository snapshot model (with dev seeding when empty).
 - Route/runtime wiring can switch between mock and D1 via bindings while preserving the default mock flow.
 - The `PUT /api/inspections/:id/rounds/current/result` D1 path now uses narrow table updates for `inspection_rounds`, `inspection_items`, and inserted `comments`, instead of forcing a full snapshot rewrite.
+- The `PUT /api/inspections/:id/rounds/current/result` D1 path now also uses a narrow submission-context read (`inspection_items` by id, current `inspection_rounds` row, and an open-comment count) before applying domain rules, instead of loading the full repository snapshot first.
 - The `GET /api/inspections/:id` D1 path now uses narrow, item-scoped `SELECT` queries (item/ship/project/rounds/comments + a batched `users` fetch), instead of reading the entire snapshot from every table.
-- Coverage asserts both the narrow D1 write path and narrow D1 read path avoid the snapshot rewrite/delete-all flow and full-table reads, while keeping the mock driver behavior unchanged.
+- Coverage asserts the narrow D1 write path, the narrow D1 submission-context read path, and the narrow D1 inspection-detail read path avoid the snapshot rewrite/delete-all flow and full-table reads, while keeping the mock driver behavior unchanged.
 - The current narrow-read path now batches user fetches into a single `WHERE id IN (...)` query, removing the remaining per-user `SELECT` pattern from inspection detail reads.
 
 What is still missing:
 
 - No deployed D1-backed environment is exercised in integration tests.
-- Only part of the persistence surface is narrowed so far (one high-value write path + one high-value read path). The remaining operations still rely on the coarse snapshot bridge.
+- Only part of the persistence surface is narrowed so far (one high-value write path + two high-value read paths). The remaining operations still rely on the coarse snapshot bridge.
 
 Representative files:
 

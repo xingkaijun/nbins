@@ -23,12 +23,21 @@ export interface InspectionDetailStorageRecord {
   users: UserRecord[];
 }
 
+export interface InspectionSubmissionContextRecord {
+  item: InspectionItemRecord;
+  currentRound: InspectionRoundRecord;
+  openCommentCount: number;
+}
+
 export interface InspectionStorage {
   read(): Promise<InspectionStorageSnapshot>;
   write(next: InspectionStorageSnapshot): Promise<void>;
   readInspectionDetail?(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null>;
+  readSubmissionContext?(
+    inspectionItemId: string
+  ): Promise<InspectionSubmissionContextRecord | null>;
   submitCurrentRoundResult?(
     mutation: SubmitCurrentRoundResultStorageMutation
   ): Promise<void>;

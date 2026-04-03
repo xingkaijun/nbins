@@ -2,6 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import type { InspectionStorageSnapshot } from "./records.ts";
 import type {
   InspectionDetailStorageRecord,
+  InspectionSubmissionContextRecord,
   InspectionStorage,
   SubmitCurrentRoundResultStorageMutation
 } from "./inspection-storage.ts";
@@ -43,6 +44,29 @@ export class D1SeededInspectionStorage implements InspectionStorage {
 
       await this.ensureSeeded();
       return this.inner.readInspectionDetail(inspectionItemId);
+    }
+
+    await this.ensureSeeded();
+    return null;
+  }
+
+  async readSubmissionContext(
+    inspectionItemId: string
+  ): Promise<InspectionSubmissionContextRecord | null> {
+    if (this.inner.readSubmissionContext) {
+      const context = await this.inner.readSubmissionContext(inspectionItemId);
+
+      if (context) {
+        this.seeded = true;
+        return context;
+      }
+
+      if (this.seeded) {
+        return null;
+      }
+
+      await this.ensureSeeded();
+      return this.inner.readSubmissionContext(inspectionItemId);
     }
 
     await this.ensureSeeded();

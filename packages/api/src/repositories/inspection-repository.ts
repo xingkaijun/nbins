@@ -7,7 +7,12 @@ import { applyInspectionResultSubmission } from "../domain/inspection-item-submi
 import { resolveInspectionItemState } from "../domain/inspection-item-state.ts";
 import type { InspectionStorage } from "../persistence/inspection-storage.ts";
 import { cloneStorageSnapshot } from "../persistence/mock-inspection-db.ts";
-import type { CommentRecord, InspectionStorageSnapshot } from "../persistence/records.ts";
+import type {
+  CommentRecord,
+  InspectionItemRecord,
+  InspectionRoundRecord,
+  InspectionStorageSnapshot
+} from "../persistence/records.ts";
 import {
   mapInspectionDetailFromStorage,
   selectInspectionDetailRecord
@@ -36,21 +41,66 @@ export class InspectionRepository {
     inspectionItemId: string,
     submission: SubmitInspectionResultRequest
   ): Promise<SubmitInspectionResultResponse> {
-    const storage = cloneStorageSnapshot(await this.db.read());
-    const selected = selectInspectionDetailRecord(storage, inspectionItemId);
-
-    if (!selected) {
-      throw new Error("INSPECTION_ITEM_NOT_FOUND");
-    }
-
-    if (submission.expectedVersion !== selected.item.version) {
-      throw new Error("INSPECTION_ITEM_VERSION_CONFLICT");
-    }
-
-    const currentDetail = mapInspectionDetailFromStorage(selected);
     const submittedAt = submission.submittedAt ?? new Date().toISOString();
     const inspectorDisplayName =
       submission.inspectorDisplayName?.trim() || submission.submittedBy.trim();
+    const submissionContext = this.db.readSubmissionContext
+      ? await this.db.readSubmissionContext(inspectionItemId)
+      : null;
+    let storage: InspectionStorageSnapshot | null = null;
+    let itemRecord: InspectionItemRecord;
+    let roundRecord: InspectionRoundRecord;
+    let openCommentCount: number;
+
+    if (submissionContext) {
+      if (submission.expectedVersion !== submissionContext.item.version) {
+        throw new Error("INSPECTION_ITEM_VERSION_CONFLICT");
+      }
+
+      itemRecord = { ...submissionContext.item };
+      roundRecord = { ...submissionContext.currentRound };
+      openCommentCount = submissionContext.openCommentCount;
+    } else {
+      storage = cloneStorageSnapshot(await this.db.read());
+      const selected = selectInspectionDetailRecord(storage, inspectionItemId);
+
+      if (!selected) {
+        throw new Error("INSPECTION_ITEM_NOT_FOUND");
+      }
+
+      if (submission.expectedVersion !== selected.item.version) {
+        throw new Error("INSPECTION_ITEM_VERSION_CONFLICT");
+      }
+
+      const foundItemRecord = storage.inspectionItems.find((record) => record.id === inspectionItemId);
+
+      if (!foundItemRecord) {
+        throw new Error("INSPECTION_ITEM_NOT_FOUND");
+      }
+
+      itemRecord = foundItemRecord;
+
+      const foundRoundRecord = storage.inspectionRounds.find(
+        (record) =>
+          record.inspectionItemId === inspectionItemId &&
+          record.roundNumber === itemRecord.currentRound
+      );
+
+      if (!foundRoundRecord) {
+        throw new Error("INSPECTION_ROUND_NOT_FOUND");
+      }
+
+      roundRecord = foundRoundRecord;
+      openCommentCount = storage.comments.filter(
+        (record) => record.inspectionItemId === inspectionItemId && record.status === "open"
+      ).length;
+    }
+
+    const currentDetail = createSubmissionDetail({
+      item: itemRecord,
+      currentRound: roundRecord,
+      openCommentCount
+    });
 
     const output = applyInspectionResultSubmission({
       item: currentDetail,
@@ -62,22 +112,6 @@ export class InspectionRepository {
     });
 
     const now = submittedAt;
-    const itemRecord = storage.inspectionItems.find((record) => record.id === inspectionItemId);
-
-    if (!itemRecord) {
-      throw new Error("INSPECTION_ITEM_NOT_FOUND");
-    }
-
-    const roundRecord = storage.inspectionRounds.find(
-      (record) =>
-        record.inspectionItemId === inspectionItemId &&
-        record.roundNumber === itemRecord.currentRound
-    );
-
-    if (!roundRecord) {
-      throw new Error("INSPECTION_ROUND_NOT_FOUND");
-    }
-
     roundRecord.actualDate = submission.actualDate;
     roundRecord.result = submission.result;
     roundRecord.inspectedBy = submission.submittedBy;
@@ -95,13 +129,13 @@ export class InspectionRepository {
       })
     );
 
-    storage.comments.push(...newCommentRecords);
+    if (storage) {
+      storage.comments.push(...newCommentRecords);
+    }
 
     const nextState = resolveInspectionItemState({
       latestSubmittedResult: submission.result,
-      openCommentCount: storage.comments.filter(
-        (record) => record.inspectionItemId === inspectionItemId && record.status === "open"
-      ).length
+      openCommentCount: openCommentCount + newCommentRecords.length
     });
 
     itemRecord.workflowStatus = nextState.workflowStatus;
@@ -118,6 +152,10 @@ export class InspectionRepository {
         createdComments: newCommentRecords.map((record) => ({ ...record }))
       });
     } else {
+      if (!storage) {
+        throw new Error("INSPECTION_STORAGE_SNAPSHOT_REQUIRED");
+      }
+
       await this.db.write(storage);
     }
 
@@ -158,6 +196,62 @@ function createCommentRecord(input: {
     closedAt: null,
     createdAt: input.now,
     updatedAt: input.now
+  };
+}
+
+function createSubmissionDetail(input: {
+  item: InspectionItemRecord;
+  currentRound: InspectionRoundRecord;
+  openCommentCount: number;
+}): InspectionItemDetailResponse {
+  const state = resolveInspectionItemState({
+    latestSubmittedResult: input.item.lastRoundResult,
+    openCommentCount: input.openCommentCount
+  });
+
+  return {
+    id: input.item.id,
+    projectCode: "",
+    projectName: "",
+    hullNumber: "",
+    shipName: "",
+    itemName: input.item.itemName,
+    discipline: input.item.discipline,
+    source: input.item.source,
+    yardQc: input.currentRound.yardQc ?? "",
+    plannedDate: input.currentRound.plannedDate,
+    actualDate: input.currentRound.actualDate,
+    currentRound: input.item.currentRound,
+    currentRoundId: input.currentRound.id,
+    version: input.item.version,
+    workflowStatus: state.workflowStatus,
+    resolvedResult: state.resolvedResult,
+    lastRoundResult: state.lastRoundResult,
+    openCommentCount: state.openCommentCount,
+    pendingFinalAcceptance: state.pendingFinalAcceptance,
+    waitingForNextRound: state.waitingForNextRound,
+    comments: Array.from({ length: input.openCommentCount }, (_, index) => ({
+      id: `existing-open-comment-${index + 1}`,
+      roundNumber: input.item.currentRound,
+      status: "open",
+      message: "",
+      createdAt: "",
+      createdBy: "",
+      resolvedAt: null,
+      resolvedBy: null
+    })),
+    roundHistory: Array.from({ length: input.item.currentRound }, (_, index) => ({
+      id: index + 1 === input.item.currentRound ? input.currentRound.id : `${input.item.id}-round-${index + 1}`,
+      roundNumber: index + 1,
+      actualDate: index + 1 === input.item.currentRound ? input.currentRound.actualDate : null,
+      submittedResult: index + 1 === input.item.currentRound ? input.item.lastRoundResult : null,
+      submittedAt: index + 1 === input.item.currentRound ? "" : "",
+      submittedBy: "",
+      inspectorDisplayName: "",
+      notes: null,
+      source: input.item.source,
+      commentIds: []
+    }))
   };
 }
 

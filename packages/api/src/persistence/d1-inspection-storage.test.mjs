@@ -62,8 +62,20 @@ class FakeD1Database {
 
   #selectInternal(sql, params) {
     this.executedSql.push(sql);
+    const countMatch = sql.match(/SELECT COUNT\(\*\) AS "count" FROM "([^"]+)"/);
+
+    if (countMatch) {
+      const [, tableName] = countMatch;
+      const rows = [...this.tables[tableName]];
+      return [{ count: this.#filterRows(sql, params, rows).length }];
+    }
+
     const [, tableName] = sql.match(/FROM "([^"]+)"/) ?? [];
     const rows = [...this.tables[tableName]];
+    return this.#filterRows(sql, params, rows);
+  }
+
+  #filterRows(sql, params, rows) {
     const inMatch = sql.match(/WHERE "([^"]+)" IN \(([^)]+)\)/);
 
     if (inMatch) {
@@ -71,14 +83,15 @@ class FakeD1Database {
       return rows.filter((row) => params.includes(row[column]));
     }
 
-    const whereMatch = sql.match(/WHERE "([^"]+)" = \?/);
+    const whereMatches = [...sql.matchAll(/"([^"]+)" = \?/g)];
 
-    if (!whereMatch) {
+    if (whereMatches.length === 0) {
       return rows;
     }
 
-    const [, column] = whereMatch;
-    return rows.filter((row) => row[column] === params[0]);
+    return rows.filter((row) =>
+      whereMatches.every((match, index) => row[match[1]] === params[index])
+    );
   }
 
   execute(sql, params) {
@@ -254,6 +267,36 @@ test("D1InspectionStorage readInspectionDetail returns empty users without issui
   assert.deepEqual(detail?.users, []);
   assert.equal(
     db.executedSql.some((sql) => sql.startsWith('SELECT * FROM "users"')),
+    false
+  );
+});
+
+test("D1InspectionStorage readSubmissionContext selects only item-scoped records", async () => {
+  const db = new FakeD1Database();
+  const storage = new D1InspectionStorage(db);
+  const baseline = createBaselineInspectionStorage();
+
+  await storage.write(baseline);
+  db.executedSql = [];
+
+  const context = await storage.readSubmissionContext("insp-003");
+
+  assert.equal(context?.item.id, "insp-003");
+  assert.equal(context?.currentRound.id, "round-insp-003-r2");
+  assert.equal(context?.openCommentCount, 1);
+  assert.deepEqual(db.executedSql, [
+    'SELECT * FROM "inspection_items" WHERE "id" = ?',
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?',
+    'SELECT COUNT(*) AS "count" FROM "comments" WHERE "inspectionItemId" = ? AND "status" = ?'
+  ]);
+  assert.equal(
+    db.executedSql.some((sql) =>
+      /^SELECT \* FROM "(users|projects|ships|inspection_items|inspection_rounds|comments)"$/.test(sql)
+    ),
+    false
+  );
+  assert.equal(
+    db.executedSql.includes('SELECT * FROM "comments"'),
     false
   );
 });

@@ -58,8 +58,20 @@ class FakeD1Database {
 
   select(sql, params) {
     this.executedSql.push(sql);
+    const countMatch = sql.match(/SELECT COUNT\(\*\) AS "count" FROM "([^"]+)"/);
+
+    if (countMatch) {
+      const [, tableName] = countMatch;
+      const rows = [...this.tables[tableName]];
+      return [{ count: this.#filterRows(sql, params, rows).length }];
+    }
+
     const [, tableName] = sql.match(/FROM "([^"]+)"/) ?? [];
     const rows = [...this.tables[tableName]];
+    return this.#filterRows(sql, params, rows);
+  }
+
+  #filterRows(sql, params, rows) {
     const inMatch = sql.match(/WHERE "([^"]+)" IN \(([^)]+)\)/);
 
     if (inMatch) {
@@ -67,14 +79,15 @@ class FakeD1Database {
       return rows.filter((row) => params.includes(row[column]));
     }
 
-    const whereMatch = sql.match(/WHERE "([^"]+)" = \?/);
+    const whereMatches = [...sql.matchAll(/"([^"]+)" = \?/g)];
 
-    if (!whereMatch) {
+    if (whereMatches.length === 0) {
       return rows;
     }
 
-    const [, column] = whereMatch;
-    return rows.filter((row) => row[column] === params[0]);
+    return rows.filter((row) =>
+      whereMatches.every((match, index) => row[match[1]] === params[index])
+    );
   }
 
   execute(sql, params) {
@@ -253,6 +266,7 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   db.deletedTables = [];
   db.updatedTables = [];
   db.insertedTables = [];
+  db.executedSql = [];
 
   const response = await app.request(
     "http://localhost/api/inspections/insp-003/rounds/current/result",
@@ -283,6 +297,25 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   assert.deepEqual(db.deletedTables, []);
   assert.deepEqual(db.updatedTables, ["inspection_rounds", "inspection_items"]);
   assert.deepEqual(db.insertedTables, ["comments"]);
+  assert.deepEqual(db.executedSql.slice(0, 3), [
+    'SELECT * FROM "inspection_items" WHERE "id" = ?',
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?',
+    'SELECT COUNT(*) AS "count" FROM "comments" WHERE "inspectionItemId" = ? AND "status" = ?'
+  ]);
+  assert.equal(
+    db.executedSql.some((sql) =>
+      /^SELECT \* FROM "(users|projects|ships|inspection_items|inspection_rounds|comments)"$/.test(sql)
+    ),
+    false
+  );
+  assert.equal(
+    db.executedSql.some((sql) => sql === 'SELECT * FROM "comments"'),
+    false
+  );
+  assert.equal(
+    db.executedSql.some((sql) => sql === 'SELECT * FROM "inspection_rounds"'),
+    false
+  );
   assert.equal(
     db.tables.inspection_items.find((record) => record.id === "insp-003").version,
     6

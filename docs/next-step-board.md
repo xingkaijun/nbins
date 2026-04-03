@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 06:55 Asia/Shanghai
+> Updated: 2026-04-04 07:25 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -17,12 +17,12 @@
 
 ## Task Breakdown
 
-- [ ] Identify the next highest-value remaining D1 hotspot after M7.2
-- [ ] Land the next smallest safe D1 runtime increment
-- [ ] Verify mock remains default and behavior is unchanged for the MVP flow
-- [ ] Run full validation (`pnpm qa`)
+- [x] Identify the next highest-value remaining D1 hotspot after M7.2
+- [x] Land the next smallest safe D1 runtime increment
+- [x] Verify mock remains default and behavior is unchanged for the MVP flow
+- [x] Run full validation (`pnpm typecheck && pnpm build && pnpm --filter @nbins/api test`)
 - [ ] Commit + push
-- [ ] Update `docs/status-board.md` and this execution board
+- [x] Update `docs/status-board.md` and this execution board
 
 ## Rules
 
@@ -34,6 +34,7 @@
 
 ## Recent Completed Milestones
 
+- [x] M8 — Narrow D1 submission-context reads for current-round result submission
 - [x] M7.2 — Batch user fetch for inspection detail reads
 - [x] M7.1 — Narrow D1 reads for inspection detail GET (commit: `b3e8f80`)
 - [x] M6 — Improve D1 persistence ergonomics (narrower writes) (commit: `87ae4e8`)
@@ -45,5 +46,8 @@
 
 ## Notes
 
-- Current `readInspectionDetail()` does item/ship/project/rounds/comments scoped queries, but fetches users individually.
-- M7.2 is intended as a purely-internal performance/ergonomics improvement with no contract changes.
+- `readInspectionDetail()` is already item-scoped and now batches related user fetches into a single query.
+- This M8 increment is a purely-internal D1 runtime coverage improvement with no contract changes.
+- The M8 hotspot chosen here is the D1 pre-submit read for `PUT /api/inspections/:id/rounds/current/result`, which previously still fell back to a full snapshot read before applying domain rules.
+- This increment adds `readSubmissionContext()` so the D1 path can load only the target item, its current round row, and the open-comment count before reusing the existing narrow write path.
+- Mock remains the default runtime driver, and the mock repository path still falls back to full-snapshot behavior.

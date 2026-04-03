@@ -10,6 +10,7 @@ import type {
 } from "./records.ts";
 import type {
   InspectionDetailStorageRecord,
+  InspectionSubmissionContextRecord,
   InspectionStorage,
   SubmitCurrentRoundResultStorageMutation
 } from "./inspection-storage.ts";
@@ -93,6 +94,39 @@ export class D1InspectionStorage implements InspectionStorage {
         userIds.length === 0
           ? []
           : await this.selectUsersByIds(userIds)
+    };
+  }
+
+  async readSubmissionContext(
+    inspectionItemId: string
+  ): Promise<InspectionSubmissionContextRecord | null> {
+    const itemRow = await this.selectFirst(
+      `SELECT * FROM "inspection_items" WHERE "id" = ?`,
+      inspectionItemId
+    );
+
+    if (!itemRow) {
+      return null;
+    }
+
+    const item = mapInspectionItemRecord(itemRow);
+    const [roundRow, openCommentCount] = await Promise.all([
+      this.selectFirst(
+        `SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?`,
+        inspectionItemId,
+        item.currentRound
+      ),
+      this.countOpenComments(inspectionItemId)
+    ]);
+
+    if (!roundRow) {
+      throw new Error("INSPECTION_ROUND_NOT_FOUND");
+    }
+
+    return {
+      item,
+      currentRound: mapInspectionRoundRecord(roundRow),
+      openCommentCount
     };
   }
 
@@ -324,6 +358,15 @@ export class D1InspectionStorage implements InspectionStorage {
     }
 
     return row;
+  }
+
+  private async countOpenComments(inspectionItemId: string): Promise<number> {
+    const row = await this.selectRequired(
+      `SELECT COUNT(*) AS "count" FROM "comments" WHERE "inspectionItemId" = ? AND "status" = ?`,
+      inspectionItemId,
+      "open"
+    );
+    return integerValue(row.count);
   }
 
   private async selectUsersByIds(userIds: string[]): Promise<UserRecord[]> {
