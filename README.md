@@ -4,6 +4,16 @@
 
 NBINS 是一个面向船舶检验机构的多人协作新造船检验管理平台，用来管理报验（inspection requests）、检验结果、整改意见和轮次历史。
 
+## 当前状态
+
+NBINS 当前处于 **可演示的 MVP baseline** 阶段：核心检验明细读取、结果提交、领域规则和 mock-backed API 流程已经落地；真实 D1 持久化、权限体系、导入/PDF/n8n 仍在后续阶段。
+
+- `✅ Complete`: monorepo 基础、共享类型契约、inspection detail API、结果提交流程、核心领域规则、基础测试
+- `🟡 Partial`: persistence 抽象与 repository、D1 foundation、前端工作台与 API 集成深度
+- `❌ Not started`: auth / RBAC、import pipeline、正式 PDF、n8n automation
+
+更细的模块状态见：[项目状态看板](./docs/status-board.md)
+
 当前仓库已经不只是“架构草图”——它已经具备一套可演示的 MVP 主线：
 
 - 前后端共享类型契约
