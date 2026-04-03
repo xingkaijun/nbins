@@ -5,7 +5,7 @@
 
 ## Active Milestone
 
-### M1 — D1 Adapter + Driver Switch
+### M1 — D1 Adapter + Driver Switch (COMPLETED)
 **Goal:** Move NBINS from “D1 foundation exists” to “runtime can switch between mock and D1-backed storage without breaking current MVP flow”.
 
 **Definition of Done:**
@@ -25,7 +25,7 @@
 - [x] T3. Add driver/factory wiring so routes/app can choose mock vs D1 safely
 - [x] T4. Verify mock remains default and MVP demo path is not broken
 - [x] T5. Run full validation (`typecheck`, `build`, `api test`)
-- [ ] T6. Commit and push
+- [x] T6. Commit and push
 - [x] T7. Update `docs/status-board.md`
 
 ## Rules
