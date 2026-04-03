@@ -2,6 +2,13 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "nbins-api",
   "main": "src/index.ts",
-  "compatibility_date": "2026-04-03"
+  "compatibility_date": "2026-04-03",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      // Set both values after `wrangler d1 create <name>`.
+      "database_name": "nbins-local",
+      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+    }
+  ]
 }
-

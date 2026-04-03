@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 00:28 Asia/Shanghai
+> Updated: 2026-04-04 01:10 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -20,7 +20,7 @@
 
 ## Task Breakdown
 
-- [ ] T1. Add D1 binding and driver env docs for local dev (wrangler config + commands)
+- [x] T1. Add D1 binding and driver env docs for local dev (wrangler config + commands)
 - [ ] T2. Add minimal script/command for schema bootstrap against bound D1 (local)
 - [ ] T3. Add a focused integration-ish test or a dev check note for D1 path (no network)
 - [ ] T4. Validate mock default remains stable
@@ -44,3 +44,4 @@
 ## Notes
 
 - Current D1 path is a snapshot bridge (read/write entire repository snapshot). That is acceptable for proving wiring; narrow queries can follow after we confirm runtime behavior.
+- T1 delivered in [`packages/api/wrangler.jsonc`](/workspace/nbins/packages/api/wrangler.jsonc) and [`packages/api/README.md`](/workspace/nbins/packages/api/README.md): local D1 binding `DB`, `wrangler d1 create` flow, local/remote `wrangler d1 execute --file=...`, and `D1_DRIVER=d1 pnpm dev:api` guidance. Mock remains the default when the driver or binding is absent.
