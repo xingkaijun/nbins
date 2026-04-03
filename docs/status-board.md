@@ -151,12 +151,13 @@ What is in place:
 - A D1-backed inspection storage adapter can read and rewrite the current repository snapshot model (with dev seeding when empty).
 - Route/runtime wiring can switch between mock and D1 via bindings while preserving the default mock flow.
 - The `PUT /api/inspections/:id/rounds/current/result` D1 path now uses narrow table updates for `inspection_rounds`, `inspection_items`, and inserted `comments`, instead of forcing a full snapshot rewrite.
-- Coverage now asserts that the D1 result-submission path avoids the snapshot rewrite/delete-all flow while keeping the mock driver behavior unchanged.
+- The `GET /api/inspections/:id` D1 path now uses narrow, item-scoped `SELECT` queries (item/ship/project/rounds/comments/users), instead of reading the entire snapshot from every table.
+- Coverage asserts both the narrow D1 write path and narrow D1 read path avoid the snapshot rewrite/delete-all flow and full-table reads, while keeping the mock driver behavior unchanged.
 
 What is still missing:
 
 - No deployed D1-backed environment is exercised in integration tests.
-- Only one D1 write path has been narrowed so far; the remaining write operations still rely on the coarse snapshot rewrite bridge.
+- Only part of the persistence surface is narrowed so far (one high-value write path + one high-value read path). The remaining operations still rely on the coarse snapshot bridge.
 
 Representative files:
 
