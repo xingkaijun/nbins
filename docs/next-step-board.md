@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 01:29 Asia/Shanghai
+> Updated: 2026-04-04 01:30 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -25,7 +25,7 @@
 - [ ] T3. Add a focused integration-ish test or a dev check note for D1 path (no network)
 - [x] T4. Validate mock default remains stable
 - [x] T5. Run full validation (`typecheck`, `build`, `api test`)
-- [ ] T6. Commit and push
+- [x] T6. Commit and push
 
 ## Rules
 
