@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 07:43 Asia/Shanghai
+> Updated: 2026-04-04 07:56 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -17,9 +17,9 @@
 
 ## Task Breakdown
 
-- [ ] Change `D1InspectionStorage.readInspectionList()` to fetch current rounds in a single query (or small bounded set)
-- [ ] Update SQL-recording test for `GET /api/inspections` to assert reduced query count
-- [ ] Run validation (`pnpm qa`)
+- [x] Change `D1InspectionStorage.readInspectionList()` to fetch current rounds in a single query (or small bounded set)
+- [x] Update SQL-recording test for `GET /api/inspections` to assert reduced query count
+- [ ] Run validation (`pnpm typecheck && pnpm build && pnpm --filter @nbins/api test`)
 - [ ] Commit + push
 
 ## Rules
@@ -40,5 +40,5 @@
 
 ## Notes
 
-- Current `readInspectionList()` still runs one `inspection_rounds` query per item to fetch the current round. This is safe but not ideal.
-- Next step is batching the rounds query (e.g., fetch rounds by `inspectionItemId IN (...)` and then pick `roundNumber === currentRound` in memory).
+- This increment switches list-round loading to one item-scoped `inspection_rounds WHERE inspectionItemId IN (...)` query and filters to the current round in memory.
+- Remaining work for M10 is validation and, outside this lane, the usual commit/push step if the increment is accepted.

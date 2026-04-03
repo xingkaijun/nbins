@@ -49,18 +49,10 @@ export class D1InspectionStorage implements InspectionStorage {
     const itemRows = await this.selectMany(`SELECT * FROM "inspection_items"`);
     const items = itemRows.map(mapInspectionItemRecord);
     const shipIds = Array.from(new Set(items.map((record) => record.shipId)));
-    const roundKeys = items.map((record) => [record.id, record.currentRound] as const);
+    const inspectionItemIds = items.map((record) => record.id);
     const [ships, currentRounds] = await Promise.all([
       shipIds.length === 0 ? [] : this.selectShipsByIds(shipIds),
-      Promise.all(
-        roundKeys.map(([inspectionItemId, roundNumber]) =>
-          this.selectRequired(
-            `SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?`,
-            inspectionItemId,
-            roundNumber
-          ).then(mapInspectionRoundRecord)
-        )
-      )
+      inspectionItemIds.length === 0 ? [] : this.selectRoundsByInspectionItemIds(inspectionItemIds)
     ]);
     const projectIds = Array.from(new Set(ships.map((record) => record.projectId)));
     const projects = projectIds.length === 0 ? [] : await this.selectProjectsByIds(projectIds);
@@ -476,6 +468,18 @@ export class D1InspectionStorage implements InspectionStorage {
 
       return project;
     });
+  }
+
+  private async selectRoundsByInspectionItemIds(
+    inspectionItemIds: string[]
+  ): Promise<InspectionRoundRecord[]> {
+    const placeholders = inspectionItemIds.map(() => "?").join(", ");
+    const rows = await this.selectMany(
+      `SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (${placeholders})`,
+      ...inspectionItemIds
+    );
+
+    return rows.map(mapInspectionRoundRecord);
   }
 }
 

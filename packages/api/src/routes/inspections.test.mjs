@@ -456,8 +456,7 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
   assert.deepEqual(db.executedSql, [
     'SELECT * FROM "inspection_items"',
     'SELECT * FROM "ships" WHERE "id" IN (?, ?)',
-    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?',
-    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?',
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?)',
     'SELECT * FROM "projects" WHERE "id" IN (?, ?)'
   ]);
 });

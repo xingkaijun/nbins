@@ -155,6 +155,7 @@ What is in place:
 - The `GET /api/inspections` route now exists and returns the shared dashboard/list snapshot contract from repository-backed data instead of frontend-only mock data.
 - The `GET /api/inspections/:id` D1 path now uses narrow, item-scoped `SELECT` queries (item/ship/project/rounds/comments + a batched `users` fetch), instead of reading the entire snapshot from every table.
 - The `GET /api/inspections` D1 path now limits full-table reads to `inspection_items` only, then resolves related `ships`, `projects`, and current `inspection_rounds` with scoped `WHERE` queries instead of loading the full repository snapshot.
+- The `GET /api/inspections` D1 path now batches `inspection_rounds` reads with a single `inspectionItemId IN (...)` query for the listed items, instead of issuing one current-round query per inspection item.
 - Coverage asserts the narrow D1 write path, the narrow D1 submission-context read path, and the narrow D1 inspection-detail read path avoid the snapshot rewrite/delete-all flow and full-table reads, while keeping the mock driver behavior unchanged.
 - Coverage now also asserts the D1 inspections list route avoids full-table snapshot reads for `users`, `projects`, `ships`, `inspection_rounds`, and `comments`.
 - The current narrow-read path now batches user fetches into a single `WHERE id IN (...)` query, removing the remaining per-user `SELECT` pattern from inspection detail reads.
