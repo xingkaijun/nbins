@@ -5,7 +5,7 @@
 
 ## Active Milestone
 
-### M4 — Make D1 demo usable: seed + docs + one-liner bootstrap
+### M4 — Make D1 demo usable: seed + docs + one-liner bootstrap ✅
 **Goal:** Make it trivial to run D1 mode locally with seeded demo data and a single bootstrap command, without 500s.
 
 **Definition of Done:**
@@ -42,3 +42,16 @@
 ## Notes
 
 - Current D1 path is a snapshot bridge (read/write entire repository snapshot). That is acceptable for proving wiring; narrow queries can follow after we confirm runtime behavior.
+
+
+## Next Milestone
+
+### M5 — Harden D1 local dev UX + remove footguns
+**Goal:** Make D1 mode start with zero manual steps (or fail with clear message), and keep docs + scripts consistent.
+
+**Candidate Tasks:**
+- [ ] Add `pnpm qa` run to CI (or document)
+- [ ] Add `dev:api:d1` wrapper script that auto-runs `d1:bootstrap` if schema missing (or prints clear instructions)
+- [ ] Add a `dev:api` note in README about mock vs D1 drivers
+- [ ] Keep docs/status-board.md in sync
+- [ ] Commit + push
