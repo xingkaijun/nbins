@@ -1,4 +1,5 @@
 import type { InspectionStorageSnapshot } from "./records.ts";
+import type { InspectionStorage } from "./inspection-storage.ts";
 
 const NOW = "2026-04-03T09:00:00.000Z";
 
@@ -193,7 +194,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
   ]
 };
 
-export class MockInspectionDatabase {
+export class MockInspectionDatabase implements InspectionStorage {
   private data: InspectionStorageSnapshot;
 
   constructor(seed: InspectionStorageSnapshot = BASELINE_DATA) {

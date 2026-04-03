@@ -5,7 +5,7 @@ import type {
 } from "@nbins/shared";
 import { applyInspectionResultSubmission } from "../domain/inspection-item-submission.ts";
 import { resolveInspectionItemState } from "../domain/inspection-item-state.ts";
-import type { MockInspectionDatabase } from "../persistence/mock-inspection-db.ts";
+import type { InspectionStorage } from "../persistence/inspection-storage.ts";
 import { cloneStorageSnapshot } from "../persistence/mock-inspection-db.ts";
 import type { CommentRecord, InspectionStorageSnapshot } from "../persistence/records.ts";
 import {
@@ -14,9 +14,9 @@ import {
 } from "./inspection-detail-mapper.ts";
 
 export class InspectionRepository {
-  private readonly db: MockInspectionDatabase;
+  private readonly db: InspectionStorage;
 
-  constructor(db: MockInspectionDatabase) {
+  constructor(db: InspectionStorage) {
     this.db = db;
   }
 
@@ -147,7 +147,7 @@ function createCommentRecord(input: {
 }
 
 export function createInspectionRepositorySnapshot(
-  db: MockInspectionDatabase
+  db: InspectionStorage
 ): InspectionStorageSnapshot {
   return cloneStorageSnapshot(db.read());
 }
