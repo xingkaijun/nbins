@@ -1,9 +1,9 @@
-# NBINS - 新造船检验管理系统 架构设计 v5
+# NBINS - 新造船检验管理系统 架构设计 v6
 
 > **项目名称**：NBINS（New Building Inspection System）
 > **项目路径**：`d:\Code\nbins`
 > **创建日期**：2026-04-02
-> **状态**：架构设计 v5（全功能增强）
+> **状态**：架构设计 v6（关键冲突已收口）
 
 ---
 
@@ -20,8 +20,9 @@ flowchart LR
     B --> C[("🗄️ Cloudflare D1<br/>SQLite")]
     C --> D["🖥️ 检验员前端<br/>(Vercel)"]
     D -->|"填写结果/意见"| B
-    D -->|"生成 PDF"| E["📄 PDF 报告"]
-    E --> F1["💾 手动下载<br/>+ 手动邮件发送"]
+    D -->|"请求生成正式 PDF"| B
+    B --> E["📄 正式 PDF 报告"]
+    E --> F1["💾 下载 / 手动发送"]
     E -.->|"n8n 工作流<br/>(远期)"| F2["📤 自动邮件<br/>+ OneDrive"]
     C --> G["📊 报表统计"]
 ```
@@ -41,7 +42,7 @@ sequenceDiagram
 
     船厂->>n8n: 发送报验单邮件
     n8n->>API: POST /webhook/inspections（批量导入）
-    API->>DB: 写入检验项目（status=pending）
+    API->>DB: 写入检验项目（workflow_status=pending）
 
     Note over 检验员: 早会分配今日检验任务（线下）
 
@@ -53,10 +54,10 @@ sequenceDiagram
     检验员->>API: 提交检验结果 + 意见
     API->>DB: 更新 result, 新增 comment
 
-    检验员->>API: 生成 PDF 报告
-    API-->>检验员: 返回 PDF 下载
+    检验员->>API: 请求生成正式 PDF 报告
+    API-->>检验员: 返回正式 PDF 下载/预览
 
-    检验员->>API: 触发报告发送
+    检验员->>API: 触发报告发送（远期）
     API->>n8n: Webhook 触发发送工作流
     n8n->>船厂: 邮件发送 PDF 报告
     n8n->>n8n: 归档 PDF 到指定目录
@@ -103,7 +104,7 @@ sequenceDiagram
 | **数据库** | Cloudflare D1 (SQLite) | 用户指定，Serverless，免运维 |
 | **ORM** | Drizzle ORM | 类型安全，原生支持 D1 |
 | **认证** | JWT (jose 库) | 无状态，适合 serverless |
-| **PDF 生成** | jsPDF (前端) | 浏览器端生成，无需服务器 |
+| **PDF 生成** | API 侧统一生成 | 下载、发送、归档使用同一正式版本，避免前端环境差异 |
 | **状态管理** | Zustand | 轻量级 React 状态管理 |
 | **n8n 集成** | REST API + Webhook | 通过 API 端点交互 |
 
@@ -112,7 +113,7 @@ sequenceDiagram
 ```mermaid
 graph TB
     subgraph "Vercel"
-        FE["React SPA<br/>Ant Design<br/>jsPDF"]
+        FE["React SPA<br/>Ant Design"]
     end
 
     subgraph "Cloudflare"
@@ -194,8 +195,9 @@ erDiagram
         text item_name "检验项目名称(原始标题)"
         text item_name_normalized "标准化名称(用于复检匹配)"
         text discipline "专业分类"
-        text status "pending/open/closed/cancelled"
-        text latest_result "最新轮次结果(冗余)"
+        text workflow_status "pending/open/closed/cancelled"
+        text last_round_result "最近轮次真实结果(冗余)"
+        text resolved_result "当前归档结论(冗余, 如自动转AA)"
         integer current_round "当前轮次号(从1开始)"
         integer open_comments_count "开放意见数(冗余计数)"
         integer version "乐观锁版本号"
@@ -288,7 +290,7 @@ erDiagram
 ```
 
 > [!NOTE]
-> - **冗余字段说明**：`INSPECTION_ITEM` 上的 `latest_result`、`open_comments_count` 是冗余字段，用于列表页快速查询和排序。由业务逻辑在提交结果/关闭意见时同步更新。
+> - **冗余字段说明**：`INSPECTION_ITEM` 上的 `last_round_result`、`resolved_result`、`open_comments_count` 是冗余字段，用于列表页快速查询和排序。由统一业务服务层在结果提交、意见新增/关闭、复检导入时同步更新。
 > - **OBSERVATION 表**：用于巡检、试航、系泊试验等非检验意见记录。`type` 为可扩展枚举（`patrol`/`sea_trial`/`dock_trial`/`other`），共用一张表以简化查询。与检验意见（COMMENT）完全独立。
 > - **COMMENT_TEMPLATE 表**：常用意见模板库，检验员可从模板快速选取并微调，提升录入效率。
 > - **AUDIT_LOG 表**：审计日志，记录所有关键操作（提交结果、关闭意见、删除等），MVP 阶段仅写入不展示，供日后合规审查。
@@ -321,7 +323,7 @@ erDiagram
 
 ### 4.3 状态流转
 
-#### 检验项目状态 (`INSPECTION_ITEM.status`)
+#### 检验项目状态 (`INSPECTION_ITEM.workflow_status`)
 
 ```mermaid
 stateDiagram-v2
@@ -347,20 +349,20 @@ stateDiagram-v2
 ```text
 检验员提交 Round N 的结果时：
 ├── result = AA（接受）
-│   ├── 无开放意见 → item.status = closed
-│   └── 有历史开放意见 → item.status = open（等待意见逐步关闭）
+│   ├── 无开放意见 → item.workflow_status = closed, resolved_result = AA
+│   └── 有历史开放意见 → item.workflow_status = open（等待意见逐步关闭）, resolved_result 保持待定
 ├── result = QCC（带意见接受）
 │   ├── 检验员可同时附加新意见
-│   └── item.status = open（等待意见逐步关闭，无需新 Round）
-│       → 所有意见关闭后 → 自动 latest_result = AA, status = closed
+│   └── item.workflow_status = open（等待意见逐步关闭，无需新 Round）
+│       → 所有意见关闭后 → 自动 resolved_result = AA, workflow_status = closed
 ├── result = OWC（复检）
 │   ├── 检验员可同时附加新意见
-│   └── item.status = open（等待船厂重新报验，触发新 Round）
+│   └── item.workflow_status = open（等待船厂重新报验，触发新 Round）
 ├── result = RJ（拒绝）
 │   ├── 检验员可同时附加新意见
-│   └── item.status = open（等待船厂重新报验，触发新 Round）
+│   └── item.workflow_status = open（等待船厂重新报验，触发新 Round）
 └── result = CX（取消）
-    └── item.status = cancelled（船厂准备好后可重新报验）
+    └── item.workflow_status = cancelled（船厂准备好后可重新报验）
 ```
 
 #### 意见状态 (`COMMENT.status`)
@@ -372,7 +374,7 @@ stateDiagram-v2
 ```
 
 > [!IMPORTANT]
-> **自动 AA 规则**：当某个 INSPECTION_ITEM 的所有 COMMENT 状态均为 `closed`（即 `open_comments_count = 0`）时，系统自动将 `latest_result` 更新为 `AA`，`status` 更新为 `closed`。此规则在每次关闭意见时触发检查。
+> **自动 AA 规则**：当某个 INSPECTION_ITEM 的所有 COMMENT 状态均为 `closed`（即 `open_comments_count = 0`）时，系统自动将 `resolved_result` 更新为 `AA`，`workflow_status` 更新为 `closed`；`last_round_result` 保留最近轮次真实提交结果。此规则在每次关闭意见时由统一业务服务层触发检查。
 
 ### 4.4 数据条目关系说明
 
@@ -407,9 +409,9 @@ stateDiagram-v2
 1. 标准化 item_name → normalized_name
 2. 在同一 ship_id + discipline 下查找 item_name_normalized = normalized_name 的 ITEM
 3. 未找到 → 新建 INSPECTION_ITEM + Round 1
-4. 找到且 status 为 open/cancelled：
+4. 找到且 workflow_status 为 open/cancelled：
    → 创建新 INSPECTION_ROUND (round_number = current_round + 1)
-   → item.current_round += 1, item.status = pending
+   → item.current_round += 1, item.workflow_status = pending
    → 导入日志标记为「复检匹配」
 5. 找到且 status 为 closed：
    → 已经最终接受的项目又报验，标记为「需人工确认」，写入 IMPORT_LOG.error_details
@@ -440,11 +442,14 @@ stateDiagram-v2
 -- 提交检验结果时（操作 INSPECTION_ITEM + 当前 ROUND）
 -- Step 1: 乐观锁检查并更新 ITEM 状态
 UPDATE inspection_items
-SET latest_result = ?, status = ?,
+SET last_round_result = ?, workflow_status = ?, resolved_result = ?,
     open_comments_count = ?,
     version = version + 1, updated_at = ?
 WHERE id = ? AND version = ?
 -- affected_rows = 0 → 版本冲突，提示用户刷新后重试
+
+-- 所有影响聚合状态的写操作（结果提交、意见新增/关闭、复检导入）
+-- 必须统一经过同一业务服务层/事务逻辑，重算 open_comments_count / workflow_status / resolved_result / version
 
 -- Step 2: 更新当前 ROUND 的结果
 UPDATE inspection_rounds
@@ -467,9 +472,10 @@ WHERE id = ? AND inspection_item_id = ?
 
 > [!NOTE]
 > **JWT 双 Token 机制**：
-> - `access_token`：短过期（2 小时），用于 API 请求认证
-> - `refresh_token`：长过期（7 天），仅用于换取新 access_token
+> - `access_token`：短过期（2 小时），仅存前端内存，用于 API 请求认证
+> - `refresh_token`：长过期（7 天），通过 HttpOnly Secure Cookie 保存，仅用于换取新 access_token
 > - 前端 axios 拦截器在 access_token 过期时自动调用 `/api/auth/refresh` 静默续期
+> - 用户停用、重置密码、管理员强制失效会话时，应统一撤销对应 refresh token
 
 ### 5.2 项目与船舶
 
@@ -477,7 +483,7 @@ WHERE id = ? AND inspection_item_id = ?
 |------|------|------|------|
 | `/api/projects` | GET | 项目列表 | 已登录（仅返回允许项目） |
 | `/api/projects/:id` | GET | 项目详情 | 已登录（仅限允许项目） |
-| `/api/projects` | POST | 创建项目 | admin/manager（manager 仅可创建自己负责的项目） |
+| `/api/projects` | POST | 创建项目 | admin |
 | `/api/projects/:id` | PUT | 编辑项目 | admin/manager（仅限主管项目） |
 | `/api/projects/:id/members` | GET/POST/DELETE | 成员管理 | admin/manager（仅限主管项目） |
 | `/api/ships` | GET | 船舶列表（按项目筛选） | 已登录（仅限允许项目） |
@@ -494,8 +500,8 @@ WHERE id = ? AND inspection_item_id = ?
 | `/api/inspections/batch-result` | PUT | **批量提交**多个检验项的当前轮次结果 | 对应专业，且仅限允许项目 |
 | `/api/inspections/:id/comments` | GET | 获取检验项的所有意见 | 已登录（仅限允许项目） |
 | `/api/inspections/:id/comments` | POST | 添加意见（关联当前轮次） | 对应专业，且仅限允许项目 |
-| `/api/comments/:id` | PUT | 编辑意见 | 作者本人 |
-| `/api/comments/:id/close` | PUT | 关闭意见（触发自动 AA 检查） | 对应专业，且仅限允许项目 |
+| `/api/comments/:id` | PUT | 编辑意见 | 同项目同专业检验员 / manager（主管项目）/ admin |
+| `/api/comments/:id/close` | PUT | 关闭意见（触发自动 AA 检查） | 同项目同专业检验员 / manager（主管项目）/ admin |
 | `/api/comment-templates` | GET | 获取意见模板列表（按专业筛选） | 已登录（仅限允许项目相关专业） |
 | `/api/comment-templates` | POST | 创建意见模板 | 已登录 |
 | `/api/comment-templates/:id` | PUT/DELETE | 编辑/删除意见模板 | 作者本人/admin |
@@ -539,20 +545,21 @@ WHERE id = ? AND inspection_item_id = ?
 
 | 端点 | 方法 | 说明 | 权限 |
 |------|------|------|------|
-| `/api/reports/pass-rate` | GET | 通过率统计 | 已登录 |
-| `/api/reports/comments-list` | GET | 检验意见清单（COMMENT） | 已登录 |
-| `/api/reports/observations-list` | GET | 巡检/试航意见清单（OBSERVATION） | 已登录 |
-| `/api/reports/open-items` | GET | 所有未关闭意见汇总（COMMENT + OBSERVATION） | 已登录 |
-| `/api/reports/daily-summary` | GET | 每日检验汇总 | 已登录 |
-| `/api/reports/today-checklist` | GET | 今日待检清单（按检验员/船舶） | 已登录 |
-| `/api/reports/progress` | GET | 检验进度（远期） | 已登录 |
-| `/api/exports/comments` | GET | 导出意见清单（Excel/CSV） | 已登录 |
-| `/api/exports/observations` | GET | 导出巡检/试航清单（Excel/CSV） | 已登录 |
-| `/api/exports/inspections` | GET | 导出检验数据（Excel/CSV） | admin/manager（仅限允许项目） |
+| `/api/reports/pass-rate` | GET | 通过率统计 | 已登录（admin 可看全局；其他角色自动按 allowed projects / role scope / discipline scope 过滤） |
+| `/api/reports/comments-list` | GET | 检验意见清单（COMMENT） | 已登录（admin 可看全局；其他角色自动按 allowed projects / role scope / discipline scope 过滤） |
+| `/api/reports/observations-list` | GET | 巡检/试航意见清单（OBSERVATION） | 已登录（admin 可看全局；其他角色自动按 allowed projects / role scope / discipline scope 过滤） |
+| `/api/reports/open-items` | GET | 所有未关闭意见汇总（COMMENT + OBSERVATION） | 已登录（admin 可看全局；其他角色自动按 allowed projects / role scope / discipline scope 过滤） |
+| `/api/reports/daily-summary` | GET | 每日检验汇总 | 已登录（admin 可看全局；其他角色自动按 allowed projects / role scope / discipline scope 过滤） |
+| `/api/reports/today-checklist` | GET | 今日待检清单（按检验员/船舶） | 已登录（admin 可看全局；其他角色自动按 allowed projects / role scope / discipline scope 过滤） |
+| `/api/reports/progress` | GET | 检验进度（远期） | 已登录（admin 可看全局；其他角色自动按 allowed projects / role scope / discipline scope 过滤） |
+| `/api/exports/comments` | GET | 导出意见清单（Excel/CSV） | 已登录（admin 可看全局；其他角色自动按 allowed projects / role scope / discipline scope 过滤） |
+| `/api/exports/observations` | GET | 导出巡检/试航清单（Excel/CSV） | 已登录（admin 可看全局；其他角色自动按 allowed projects / role scope / discipline scope 过滤） |
+| `/api/exports/inspections` | GET | 导出检验数据（Excel/CSV） | admin（全局）/ manager（仅限主管项目） |
 | `/api/exports/full-backup` | GET | 全量数据导出（JSON） | admin |
 
 > [!NOTE]
 > - 所有报表端点支持多维筛选（项目/船舶/专业/日期/检验员）
+> - 所有查询/报表/导出接口默认按权限范围过滤；仅 `admin` 可查看全局数据
 > - `/api/reports/today-checklist` 可生成 PDF 格式的今日待检清单，检验员打印后带到船上
 > - 导出端点返回文件流，前端直接触发下载
 
@@ -590,32 +597,6 @@ WHERE id = ? AND inspection_item_id = ?
 
 > [!NOTE]
 > 审计日志仅在 admin 后台可见，MVP 阶段不做前端展示页面，但所有关键操作都写入 `AUDIT_LOG` 表。
-
-### 5.11 数据库运维（仅 admin）
-
-| 端点 | 方法 | 说明 | 权限 |
-|------|------|------|------|
-| `/api/admin/db/tables` | GET | 获取可浏览的数据表列表 | admin |
-| `/api/admin/db/tables/:table/rows` | GET | 分页浏览指定表数据 | admin |
-| `/api/admin/db/tables/:table/rows/:id` | GET | 获取单条记录详情（原始 JSON） | admin |
-| `/api/admin/db/tables/:table/rows/:id` | PUT | 直接修改单条记录 | admin |
-| `/api/admin/db/sql/query` | POST | 执行 SQL（默认只读） | admin |
-| `/api/admin/db/sql/execute` | POST | 执行写入型 SQL（需二次确认） | admin |
-| `/api/admin/db/stats` | GET | 获取数据库总体统计和预置分析指标 | admin |
-| `/api/admin/db/backup/full` | POST | 创建全量数据库备份 | admin |
-| `/api/admin/db/backup/project/:id` | POST | 创建单项目数据包 | admin |
-| `/api/admin/db/backup/:backupId/download` | GET | 下载备份文件 | admin |
-| `/api/admin/db/restore/validate` | POST | 校验待恢复备份包 | admin |
-| `/api/admin/db/restore` | POST | 执行恢复操作（需二次确认） | admin |
-| `/api/admin/projects/:id/package` | POST | 打包导出项目完整数据 | admin |
-| `/api/admin/ops/commands` | GET | 获取允许执行的命令模板列表 | admin |
-| `/api/admin/ops/commands/execute` | POST | 执行白名单命令模板 | admin |
-
-> [!WARNING]
-> - 运维接口仅对 `admin` 开放，不向 manager/reviewer/inspector 暴露。
-> - SQL 写入、直接数据修改、恢复备份、项目打包、命令执行均需二次确认，并强制记录操作原因。
-> - 命令执行只允许白名单模板，不提供任意 shell，不接受自由拼接参数。
-> - 直接修改数据必须回写 `AUDIT_LOG`，保存修改前后快照或差异摘要。
 
 ---
 
@@ -688,7 +669,7 @@ d:\Code\nbins\
 | **Phase 2** | 认证系统 + 用户管理 | 登录、JWT 双 Token、静默刷新、用户 CRUD、**密码重置**、RBAC 中间件 |
 | **Phase 3** | 核心业务 - 检验管理 + 手动导入 | 项目/船舶 CRUD、**手动批量导入**、单条/批量结果填写（乐观锁）、意见开闭、**意见模板** |
 | **Phase 3.5** | 巡检与试航意见模块 | OBSERVATION CRUD、可扩展 type、按船/专业/类型筛选、意见开闭 |
-| **Phase 4** | PDF 报告生成 + 手动发送 | 报告模板、jsPDF 生成、下载/预览、**今日待检清单 PDF**、**批量报告打包**、手动邮件引导 |
+| **Phase 4** | PDF 报告生成 + 手动发送 | 报告模板、API 统一生成正式 PDF、下载/预览、**今日待检清单 PDF**、手动邮件引导 |
 | **Phase 5** | 报表与数据导出 | 通过率、意见清单、巡检/试航清单、未关闭汇总、多维筛选、**Excel/CSV 导出**、**全量备份** |
 | **Phase 6** | 部署上线 + 文档完善 | Vercel/Workers 部署、交接文档、**D1 容量监控** |
 | **Phase 7** *(远期)* | n8n 集成 - 数据自动导入 | Webhook 端点、n8n 报验单解析工作流 |

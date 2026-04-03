@@ -47,15 +47,12 @@ flowchart TD
     EXTRACT --> PARSE["解析电子表格<br/>逐行读取"]
     PARSE_BODY --> MAP
     PARSE --> MAP["字段映射<br/>转换为 API 格式"]
-    MAP --> VALIDATE{"数据校验<br/>船号存在?<br/>专业有效?"}
+    MAP --> VALIDATE{"数据校验<br/>基础字段是否完整?<br/>专业格式是否有效?"}
     VALIDATE -->|校验失败| ERROR["❌ 记录错误<br/>发送告警邮件"]
-    VALIDATE -->|校验通过| DEDUP{"去重检查<br/>同船号+同项目+同日期"}
-    DEDUP -->|已存在| SKIP["跳过重复项"]
-    DEDUP -->|新项目| API["📡 POST /api/webhook/inspections<br/>批量写入"]
+    VALIDATE -->|校验通过| API["📡 POST /api/webhook/inspections<br/>批量交给 API 判定"]
     API --> SUCCESS{"API 响应"}
-    SUCCESS -->|200 OK| LOG["✅ 记录成功<br/>导入 N 条"]
+    SUCCESS -->|200 OK| LOG["✅ 记录成功<br/>由 API 返回新建/复检/跳过/人工确认结果"]
     SUCCESS -->|Error| ERROR
-    SKIP --> LOG
     ERROR --> NOTIFY["📧 发送通知邮件<br/>给管理员"]
     LOG --> END2["结束"]
     NOTIFY --> END2
@@ -202,13 +199,18 @@ for (const item of items) {
 }
 ```
 
-### 2.3 去重策略
+### 2.3 导入判定策略
 
-API 端会根据以下组合判断重复：
-```
-hull_number + item_name + discipline + planned_date
-```
-如果组合已存在，跳过该条（不覆盖已有数据）。
+> [!IMPORTANT]
+> **n8n 只负责解析、映射、基础校验和转发原始数据；不在工作流侧做业务级去重或复检判定。**
+>
+> 以下判定全部由 NBINS API 统一完成：
+> - 是否创建新 `INSPECTION_ITEM`
+> - 是否识别为已有项目的复检并创建新 `INSPECTION_ROUND`
+> - 是否跳过重复导入
+> - 是否标记为“需人工确认”
+
+这样可以保证手动导入与 n8n 导入共享同一套业务规则，避免两套逻辑打架。
 
 ### 2.4 异常处理
 
@@ -232,7 +234,7 @@ hull_number + item_name + discipline + planned_date
 flowchart TD
     START["🔗 Webhook 触发<br/>接收来自 NBINS 的请求"] --> VALIDATE{"校验请求<br/>API Key 有效?"}
     VALIDATE -->|无效| REJECT["❌ 401 拒绝"]
-    VALIDATE -->|有效| FETCH["📥 获取 PDF<br/>从请求 Body 中 Base64 解码<br/>或从 URL 下载"]
+    VALIDATE -->|有效| FETCH["📥 从 NBINS API 下载正式 PDF"]
     FETCH --> COMPOSE["📝 组装邮件<br/>收件人 + 主题 + 正文"]
     COMPOSE --> SEND["📧 SMTP 发送邮件<br/>附 PDF 附件"]
     SEND --> SAVE["💾 保存 PDF<br/>到指定目录"]
@@ -246,7 +248,7 @@ flowchart TD
 
 ### 3.2 Webhook 触发
 
-**由 NBINS 前端触发**：检验员在检验详情页录入检验结果与意见并点击"发送报告"按钮 → NBINS API 调用此 Webhook。
+**由 NBINS API 触发**：检验员在前端点击“发送报告”按钮后，请求先进入 NBINS API；由 API 生成正式 PDF，并调用此 Webhook 执行发送与归档。
 *(注：系统会自动将当前进行编辑提交的人员记录为该次检验的 `inspector`（主检人员），所有检验结果和意见均归属到该主检人员名下，并在报告中予以展示。)*
 
 **Webhook 请求体**：
@@ -310,7 +312,7 @@ flowchart TD
 
 ### 3.4 文件归档（OneDrive）
 
-通过 **OneDrive API** 将 PDF 归档到云端，按目录结构组织：
+通过 **OneDrive API** 将 API 生成的正式 PDF 归档到云端，按目录结构组织：
 
 ```
 OneDrive:/NBINS-Reports/
