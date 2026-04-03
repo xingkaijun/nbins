@@ -44,6 +44,7 @@
 
 - [架构设计规划 (architecture.md)](./docs/architecture.md)
 - [前端页面规划 (frontend-plan.md)](./docs/frontend-plan.md)
+- [前端风格对齐执行方案 (frontend-style-alignment.md)](./docs/frontend-style-alignment.md)
 - [n8n 工作流设计 (n8n-plan.md)](./docs/n8n-plan.md)
 
 ---

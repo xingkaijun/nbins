@@ -75,11 +75,11 @@ sequenceDiagram
 | **流程** | 前一天/当天船厂提交报验 → 早会分配（线下）→ 当日检验 → 填写结果和意见 |
 | **数据规模** | ~10 项目 × 10 船 × 1,000 项 = ~100,000 检验项 |
 | **用户规模** | ~30 名检验员 |
-| **角色** | 超级管理员(admin)、项目经理(manager)、检验员(inspector) |
-| **权限** | 所有项目可查看；编辑需有对应专业权限；无审核流程 |
-| **检验分配** | 早会线下分配，不在系统中追踪；检验员主动编辑自己负责的项目 |
+| **角色** | 超级管理员(admin)、项目经理(manager)、外部人员(reviewer)、检验员(inspector) |
+| **权限** | 所有项目按“允许项目”范围授权；manager 仅可编辑主管项目的数据；reviewer 仅可读取允许项目的数据；inspector 的查看/编辑也限定在允许项目范围内 |
+| **检验分配** | 早会线下分配，不在系统中追踪；系统仅保存项目级授权范围，manager/reviewer/inspector 只能访问被分配的项目 |
 | **质检员** | 报验单中的质检员是**船厂方**的质检人员 |
-| **并发策略** | 乐观锁 + 专业权限约束；自动导入(n8n)的基础数据检验员不可编辑，手动导入的数据管理员/经理可编辑 |
+| **并发策略** | 乐观锁 + 专业权限约束；自动导入(n8n)的基础数据检验员不可编辑，手动导入的数据仅 admin/manager（限主管项目）可编辑 |
 | **认证** | 用户名 + 密码 |
 | **部署** | 前端 Vercel，API + DB 在 Cloudflare，n8n 在 VPS |
 | **移动端** | 远期规划，当前仅 PC Web |
@@ -174,7 +174,7 @@ erDiagram
         text username "用户名"
         text display_name "显示名称"
         text password_hash "密码哈希"
-        text role "admin / manager / inspector"
+        text role "admin / manager / reviewer / inspector"
         text disciplines "专业(JSON数组)"
         integer is_active "1=活跃 0=停用"
         text created_at
@@ -419,17 +419,20 @@ stateDiagram-v2
 
 ### 4.6 权限模型 (RBAC)
 
-| 角色 | 查看所有项目 | 编辑检验结果 | 管理意见 | 管理用户 | 管理项目 |
+| 角色 | 查看允许项目 | 编辑项目数据 | 管理意见 | 管理用户 | 管理项目 |
 |------|:-----------:|:-----------:|:-------:|:-------:|:-------:|
-| **admin** | ✅ | ✅ 所有专业 | ✅ | ✅ | ✅ |
-| **manager** | ✅ | ✅ 所有专业 | ✅ | ❌ | ✅ |
-| **inspector** | ✅ 查看 | ✅ 仅自己专业 | ✅ 仅自己专业 | ❌ | ❌ |
+| **admin** | ✅ 所有项目 | ✅ 所有项目 | ✅ | ✅ | ✅ |
+| **manager** | ✅ 允许项目 | ✅ 主管项目 | ✅ 主管项目 | ❌ | ❌ |
+| **reviewer** | ✅ 允许项目 | ❌ | ❌ | ❌ | ❌ |
+| **inspector** | ✅ 允许项目 | ✅ 允许项目，且仅限自己专业 | ✅ 允许项目，且仅限自己专业 | ❌ | ❌ |
 
 **编辑权限规则**：
-1. 检验员只能编辑**自己专业范围内**的检验项
-2. 导入的基础数据（item_name, discipline 等）检验员不可修改，仅 admin 可修改
-3. 检验员可编辑的字段：当前轮次的 `result`、`actual_date`，以及新增/管理 `COMMENT`
-4. 提交结果时自动记录当前轮次的 `inspected_by` 为当前用户
+1. manager 只能编辑自己主管项目的数据，不能越权修改其他项目
+2. reviewer 只读，不允许新增、修改或关闭任何业务数据
+3. inspector 只能编辑**允许项目且自己专业范围内**的检验项
+4. 导入的基础数据（item_name, discipline 等）检验员不可修改，仅 admin 可修改
+5. 可编辑的字段：当前轮次的 `result`、`actual_date`，以及新增/管理 `COMMENT`
+6. 提交结果时自动记录当前轮次的 `inspected_by` 为当前用户
 
 ### 4.7 并发控制：乐观锁
 
@@ -472,28 +475,28 @@ WHERE id = ? AND inspection_item_id = ?
 
 | 端点 | 方法 | 说明 | 权限 |
 |------|------|------|------|
-| `/api/projects` | GET | 项目列表 | 已登录 |
-| `/api/projects/:id` | GET | 项目详情 | 已登录 |
-| `/api/projects` | POST | 创建项目 | admin/manager |
-| `/api/projects/:id` | PUT | 编辑项目 | admin/manager |
-| `/api/projects/:id/members` | GET/POST/DELETE | 成员管理 | admin/manager |
-| `/api/ships` | GET | 船舶列表（按项目筛选） | 已登录 |
-| `/api/ships/:id` | GET | 船舶详情 | 已登录 |
+| `/api/projects` | GET | 项目列表 | 已登录（仅返回允许项目） |
+| `/api/projects/:id` | GET | 项目详情 | 已登录（仅限允许项目） |
+| `/api/projects` | POST | 创建项目 | admin/manager（manager 仅可创建自己负责的项目） |
+| `/api/projects/:id` | PUT | 编辑项目 | admin/manager（仅限主管项目） |
+| `/api/projects/:id/members` | GET/POST/DELETE | 成员管理 | admin/manager（仅限主管项目） |
+| `/api/ships` | GET | 船舶列表（按项目筛选） | 已登录（仅限允许项目） |
+| `/api/ships/:id` | GET | 船舶详情 | 已登录（仅限允许项目） |
 
 ### 5.3 检验项目与轮次
 
 | 端点 | 方法 | 说明 | 权限 |
 |------|------|------|------|
-| `/api/inspections` | GET | 检验项目列表（多维筛选） | 已登录 |
-| `/api/inspections/:id` | GET | 检验项详情（含所有轮次 + 意见列表） | 已登录 |
-| `/api/inspections/:id/rounds` | GET | 获取检验项的所有轮次历史 | 已登录 |
-| `/api/inspections/:id/rounds/current/result` | PUT | 提交当前轮次的检验结果（乐观锁） | 对应专业 |
-| `/api/inspections/batch-result` | PUT | **批量提交**多个检验项的当前轮次结果 | 对应专业 |
-| `/api/inspections/:id/comments` | GET | 获取检验项的所有意见 | 已登录 |
-| `/api/inspections/:id/comments` | POST | 添加意见（关联当前轮次） | 对应专业 |
+| `/api/inspections` | GET | 检验项目列表（多维筛选） | 已登录（仅限允许项目） |
+| `/api/inspections/:id` | GET | 检验项详情（含所有轮次 + 意见列表） | 已登录（仅限允许项目） |
+| `/api/inspections/:id/rounds` | GET | 获取检验项的所有轮次历史 | 已登录（仅限允许项目） |
+| `/api/inspections/:id/rounds/current/result` | PUT | 提交当前轮次的检验结果（乐观锁） | 对应专业，且仅限允许项目 |
+| `/api/inspections/batch-result` | PUT | **批量提交**多个检验项的当前轮次结果 | 对应专业，且仅限允许项目 |
+| `/api/inspections/:id/comments` | GET | 获取检验项的所有意见 | 已登录（仅限允许项目） |
+| `/api/inspections/:id/comments` | POST | 添加意见（关联当前轮次） | 对应专业，且仅限允许项目 |
 | `/api/comments/:id` | PUT | 编辑意见 | 作者本人 |
-| `/api/comments/:id/close` | PUT | 关闭意见（触发自动 AA 检查） | 对应专业 |
-| `/api/comment-templates` | GET | 获取意见模板列表（按专业筛选） | 已登录 |
+| `/api/comments/:id/close` | PUT | 关闭意见（触发自动 AA 检查） | 对应专业，且仅限允许项目 |
+| `/api/comment-templates` | GET | 获取意见模板列表（按专业筛选） | 已登录（仅限允许项目相关专业） |
 | `/api/comment-templates` | POST | 创建意见模板 | 已登录 |
 | `/api/comment-templates/:id` | PUT/DELETE | 编辑/删除意见模板 | 作者本人/admin |
 
@@ -504,9 +507,9 @@ WHERE id = ? AND inspection_item_id = ?
 
 | 端点 | 方法 | 说明 | 权限 |
 |------|------|------|------|
-| `/api/inspections/batch` | POST | 批量导入检验项目（自动复检匹配） | admin/manager |
-| `/api/inspections` | POST | 单条新增检验项目 | admin/manager |
-| `/api/inspections/:id` | PUT | 编辑检验项基础信息 | admin/manager |
+| `/api/inspections/batch` | POST | 批量导入检验项目（自动复检匹配） | admin/manager（仅限主管项目） |
+| `/api/inspections` | POST | 单条新增检验项目 | admin/manager（仅限主管项目） |
+| `/api/inspections/:id` | PUT | 编辑检验项基础信息 | admin/manager（仅限主管项目） |
 | `/api/inspections/:id` | DELETE | 删除检验项 | admin |
 
 > [!NOTE]
@@ -516,11 +519,11 @@ WHERE id = ? AND inspection_item_id = ?
 
 | 端点 | 方法 | 说明 | 权限 |
 |------|------|------|------|
-| `/api/ships/:shipId/observations` | GET | 获取某船的意见列表（支持筛选） | 已登录 |
-| `/api/ships/:shipId/observations` | POST | 新增巡检/试航意见 | 对应专业 |
-| `/api/observations/:id` | GET | 意见详情 | 已登录 |
-| `/api/observations/:id` | PUT | 编辑意见 | 作者本人 |
-| `/api/observations/:id/close` | PUT | 关闭意见 | 对应专业 |
+| `/api/ships/:shipId/observations` | GET | 获取某船的意见列表（支持筛选） | 已登录（仅限允许项目） |
+| `/api/ships/:shipId/observations` | POST | 新增巡检/试航意见 | 对应专业，且仅限允许项目 |
+| `/api/observations/:id` | GET | 意见详情 | 已登录（仅限允许项目） |
+| `/api/observations/:id` | PUT | 编辑意见 | 作者本人，且仅限允许项目 |
+| `/api/observations/:id/close` | PUT | 关闭意见 | 对应专业，且仅限允许项目 |
 
 **筛选参数** (`GET /api/ships/:shipId/observations`)：
 
@@ -545,7 +548,7 @@ WHERE id = ? AND inspection_item_id = ?
 | `/api/reports/progress` | GET | 检验进度（远期） | 已登录 |
 | `/api/exports/comments` | GET | 导出意见清单（Excel/CSV） | 已登录 |
 | `/api/exports/observations` | GET | 导出巡检/试航清单（Excel/CSV） | 已登录 |
-| `/api/exports/inspections` | GET | 导出检验数据（Excel/CSV） | admin/manager |
+| `/api/exports/inspections` | GET | 导出检验数据（Excel/CSV） | admin/manager（仅限允许项目） |
 | `/api/exports/full-backup` | GET | 全量数据导出（JSON） | admin |
 
 > [!NOTE]
@@ -587,6 +590,32 @@ WHERE id = ? AND inspection_item_id = ?
 
 > [!NOTE]
 > 审计日志仅在 admin 后台可见，MVP 阶段不做前端展示页面，但所有关键操作都写入 `AUDIT_LOG` 表。
+
+### 5.11 数据库运维（仅 admin）
+
+| 端点 | 方法 | 说明 | 权限 |
+|------|------|------|------|
+| `/api/admin/db/tables` | GET | 获取可浏览的数据表列表 | admin |
+| `/api/admin/db/tables/:table/rows` | GET | 分页浏览指定表数据 | admin |
+| `/api/admin/db/tables/:table/rows/:id` | GET | 获取单条记录详情（原始 JSON） | admin |
+| `/api/admin/db/tables/:table/rows/:id` | PUT | 直接修改单条记录 | admin |
+| `/api/admin/db/sql/query` | POST | 执行 SQL（默认只读） | admin |
+| `/api/admin/db/sql/execute` | POST | 执行写入型 SQL（需二次确认） | admin |
+| `/api/admin/db/stats` | GET | 获取数据库总体统计和预置分析指标 | admin |
+| `/api/admin/db/backup/full` | POST | 创建全量数据库备份 | admin |
+| `/api/admin/db/backup/project/:id` | POST | 创建单项目数据包 | admin |
+| `/api/admin/db/backup/:backupId/download` | GET | 下载备份文件 | admin |
+| `/api/admin/db/restore/validate` | POST | 校验待恢复备份包 | admin |
+| `/api/admin/db/restore` | POST | 执行恢复操作（需二次确认） | admin |
+| `/api/admin/projects/:id/package` | POST | 打包导出项目完整数据 | admin |
+| `/api/admin/ops/commands` | GET | 获取允许执行的命令模板列表 | admin |
+| `/api/admin/ops/commands/execute` | POST | 执行白名单命令模板 | admin |
+
+> [!WARNING]
+> - 运维接口仅对 `admin` 开放，不向 manager/reviewer/inspector 暴露。
+> - SQL 写入、直接数据修改、恢复备份、项目打包、命令执行均需二次确认，并强制记录操作原因。
+> - 命令执行只允许白名单模板，不提供任意 shell，不接受自由拼接参数。
+> - 直接修改数据必须回写 `AUDIT_LOG`，保存修改前后快照或差异摘要。
 
 ---
 
