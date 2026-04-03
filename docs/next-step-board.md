@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 01:36 Asia/Shanghai
+> Updated: 2026-04-04 02:56 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -24,7 +24,7 @@
 - [x] T4. Document a single copy-paste "smoke script" section (commands + expected outputs)
   - See: `docs/m3-d1-smoke.md`
 - [x] T5. Run full validation (`typecheck`, `build`, `api test`)
-- [ ] T6. Commit and push
+- [x] T6. Commit and push
 
 ## Rules
 
