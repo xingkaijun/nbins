@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 05:27 Asia/Shanghai
+> Updated: 2026-04-04 05:29 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -20,7 +20,7 @@
 - [x] Make `pnpm dev:api:d1` auto-run `pnpm d1:bootstrap` before starting Wrangler
 - [x] Add a README note about mock vs D1 drivers
 - [x] Keep `docs/status-board.md` in sync
-- [ ] Commit + push
+- [x] Commit + push
 
 
 ## Rules
