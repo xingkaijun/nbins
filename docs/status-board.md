@@ -158,7 +158,6 @@ Representative files:
 
 - `packages/api/src/persistence/d1-seeded-inspection-storage.ts`
 - `packages/api/scripts/bootstrap-local-d1.mjs`
-
 - `packages/api/src/db/schema.ts`
 - `packages/api/src/db/sql.ts`
 - `packages/api/src/db/bootstrap.ts`
