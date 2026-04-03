@@ -1,28 +1,31 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 07:25 Asia/Shanghai
+> Updated: 2026-04-04 07:31 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M8 — Broaden D1 route/runtime coverage beyond current narrow slices
-**Goal:** Continue moving the D1 runtime path from a snapshot bridge toward more targeted reads/writes, while keeping mock as the safe default path.
+### M9 — Narrow D1 list endpoint reads (inspections index)
+**Goal:** Reduce the remaining D1 dependency on snapshot reads by narrowing reads for the inspections list endpoint (the next likely high-traffic surface after detail + submit).
 
 **Definition of Done:**
-- One additional meaningful D1 runtime hotspot is narrowed or simplified
-- Existing MVP routes remain stable with mock as default
+- Add a narrow D1 read path for the inspections list endpoint (likely `GET /api/inspections`)
+- D1 implementation uses scoped `SELECT` queries with `WHERE`/`LIMIT` as appropriate (no full-table snapshot reads)
+- Tests assert the D1 list route avoids full-table `SELECT * FROM ...` reads
 - Validation passes (`pnpm qa`)
 - Changes committed + pushed
-- `docs/status-board.md` stays aligned with the newly landed capability
+- `docs/status-board.md` is updated if the capability meaningfully changes
 
 ## Task Breakdown
 
-- [x] Identify the next highest-value remaining D1 hotspot after M7.2
-- [x] Land the next smallest safe D1 runtime increment
-- [x] Verify mock remains default and behavior is unchanged for the MVP flow
-- [x] Run full validation (`pnpm typecheck && pnpm build && pnpm --filter @nbins/api test`)
-- [x] Commit + push
-- [x] Update `docs/status-board.md` and this execution board
+- [ ] Confirm the actual list endpoint path + response contract (`GET /api/inspections` or similar)
+- [ ] Add optional storage method for list read (e.g. `readInspectionList?()`)
+- [ ] Implement narrow D1 list read in `D1InspectionStorage` (+ seeded wrapper)
+- [ ] Update repository/route to use narrow list read when available; fallback to snapshot otherwise
+- [ ] Add/extend SQL-recording tests for the D1 list route
+- [ ] Run validation (`pnpm qa`)
+- [ ] Commit + push
+- [ ] Update `docs/status-board.md`
 
 ## Rules
 
@@ -34,8 +37,8 @@
 
 ## Recent Completed Milestones
 
-- [x] M8 — Narrow D1 submission-context reads for current-round result submission
-- [x] M7.2 — Batch user fetch for inspection detail reads
+- [x] M8 — Narrow D1 submission-context reads for current-round result submission (commit: `94aca7a`)
+- [x] M7.2 — Batch user fetch for inspection detail reads (commit: `09ab34a`)
 - [x] M7.1 — Narrow D1 reads for inspection detail GET (commit: `b3e8f80`)
 - [x] M6 — Improve D1 persistence ergonomics (narrower writes) (commit: `87ae4e8`)
 - [x] M3 — Prove D1 runtime path under Wrangler dev (local smoke + docs) (commits: `f09c8ff`, `fb0775e`, `5ec6bfa`, `a0bd69c`)
@@ -46,8 +49,5 @@
 
 ## Notes
 
-- `readInspectionDetail()` is already item-scoped and now batches related user fetches into a single query.
-- This M8 increment is a purely-internal D1 runtime coverage improvement with no contract changes.
-- The M8 hotspot chosen here is the D1 pre-submit read for `PUT /api/inspections/:id/rounds/current/result`, which previously still fell back to a full snapshot read before applying domain rules.
-- This increment adds `readSubmissionContext()` so the D1 path can load only the target item, its current round row, and the open-comment count before reusing the existing narrow write path.
-- Mock remains the default runtime driver, and the mock repository path still falls back to full-snapshot behavior.
+- D1 now has narrow reads for inspection detail (`GET /api/inspections/:id`) and pre-submit context for result submission (`PUT /api/inspections/:id/rounds/current/result`).
+- The next best ROI is narrowing the list/index endpoint, which is typically hit more often than detail.
