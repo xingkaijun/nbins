@@ -16,10 +16,10 @@
 
 ## Task Breakdown
 
-- [ ] Implement batch user fetch in `D1InspectionStorage.readInspectionDetail()`
-- [ ] Update/extend SQL-recording tests to enforce single users query
+- [x] Implement batch user fetch in `D1InspectionStorage.readInspectionDetail()`
+- [x] Update/extend SQL-recording tests to enforce single users query
 - [ ] Keep `docs/status-board.md` in sync (if status meaningfully changes)
-- [ ] Commit + push
+- [x] Commit + push
 
 ## Rules
 
@@ -31,6 +31,7 @@
 
 ## Recent Completed Milestones
 
+- [x] M7.2 — Batch user fetch for inspection detail reads (commit: `e6e8b69`)
 - [x] M7.1 — Narrow D1 reads for inspection detail GET (commit: `b3e8f80`)
 - [x] M6 — Improve D1 persistence ergonomics (narrower writes) (commit: `87ae4e8`)
 - [x] M3 — Prove D1 runtime path under Wrangler dev (local smoke + docs) (commits: `f09c8ff`, `fb0775e`, `5ec6bfa`, `a0bd69c`)
