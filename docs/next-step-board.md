@@ -1,54 +1,46 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 00:00 Asia/Shanghai
+> Updated: 2026-04-04 00:28 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M1 — D1 Adapter + Driver Switch (COMPLETED)
-**Goal:** Move NBINS from “D1 foundation exists” to “runtime can switch between mock and D1-backed storage without breaking current MVP flow”.
+### M2 — Exercise D1 Path in Wrangler Dev + Document Setup
+**Goal:** Prove the D1 runtime path actually works end-to-end under Wrangler dev with a real D1 binding, and document the exact steps.
 
 **Definition of Done:**
-- D1-backed storage/adapter exists for current repository needs
-- Runtime wiring supports mock default + optional D1 path
-- Existing MVP routes keep working
-- `pnpm typecheck` passes
-- `pnpm build` passes
-- `pnpm --filter @nbins/api test` passes
-- Changes are committed and pushed
-- `docs/status-board.md` updated to reflect the new status
+- `wrangler dev` can run the API with a D1 database binding
+- Schema bootstrap can be executed against that binding
+- With `D1_DRIVER=d1`, API routes work (GET detail; PUT submit result persists)
+- With default settings (no driver/binding), mock path still works
+- Add minimal docs for local D1 dev setup (where to add binding + how to run)
+- `pnpm typecheck`, `pnpm build`, `pnpm --filter @nbins/api test` still pass
+- Changes committed + pushed
+- `docs/status-board.md` updated if needed
 
 ## Task Breakdown
 
-- [x] T1. Review current D1 foundation files and define minimal runtime adapter shape
-- [x] T2. Implement D1-backed storage adapter for repository-compatible read/write path
-- [x] T3. Add driver/factory wiring so routes/app can choose mock vs D1 safely
-- [x] T4. Verify mock remains default and MVP demo path is not broken
-- [x] T5. Run full validation (`typecheck`, `build`, `api test`)
-- [x] T6. Commit and push
-- [x] T7. Update `docs/status-board.md`
+- [ ] T1. Add D1 binding and driver env docs for local dev (wrangler config + commands)
+- [ ] T2. Add minimal script/command for schema bootstrap against bound D1 (local)
+- [ ] T3. Add a focused integration-ish test or a dev check note for D1 path (no network)
+- [ ] T4. Validate mock default remains stable
+- [ ] T5. Run full validation (`typecheck`, `build`, `api test`)
+- [ ] T6. Commit and push
 
 ## Rules
 
 1. Only one active milestone at a time
-2. No new parallel big goals until M1 is closed or explicitly re-scoped
+2. No new parallel big goals until the active milestone is closed or explicitly re-scoped
 3. Every finished sub-goal must leave the repo in a validated state
 4. Commit + push after each meaningful completed increment
 5. After a successful push, if the active milestone still has unchecked tasks, immediately dispatch the next Codex task for the next smallest safe increment
 
 ## Recent Completed Milestones
 
+- [x] M1 — D1 adapter + driver switch (commits: `58a0d94`, `3eaca21`)
 - [x] D1 schema bootstrap foundation (`2bb1116`)
 - [x] Fine-grained status board + README status surface (`7810669`)
 
-## Current Increment Notes
+## Notes
 
-- Storage contract is now async so the repository/service path can support D1 I/O without a separate codepath.
-- `D1InspectionStorage` implements snapshot read/write against the current D1 schema tables.
-- Runtime storage resolution keeps mock as the default and only uses D1 when `D1_DRIVER=d1` and `DB` are both available.
-- Route tests verify the default mock path still preserves writes across sequential requests.
-
-## Next Smallest Safe Increment After This
-
-- Exercise the D1-backed route path against a real Worker binding and schema bootstrap flow.
-- Replace coarse snapshot rewrite behavior with narrower D1 repository operations once the adapter path is proven.
+- Current D1 path is a snapshot bridge (read/write entire repository snapshot). That is acceptable for proving wiring; narrow queries can follow after we confirm runtime behavior.
