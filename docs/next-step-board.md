@@ -1,31 +1,26 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 07:31 Asia/Shanghai
+> Updated: 2026-04-04 07:43 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M9 — Narrow D1 list endpoint reads (inspections index)
-**Goal:** Reduce the remaining D1 dependency on snapshot reads by narrowing reads for the inspections list endpoint (the next likely high-traffic surface after detail + submit).
+### M10 — Reduce remaining full-table D1 reads (inspection list rounds)
+**Goal:** Improve the D1 inspections list read so it no longer requires N item-scoped queries for `inspection_rounds` and avoids any full-table reads where practical.
 
 **Definition of Done:**
-- Add a narrow D1 read path for the inspections list endpoint (likely `GET /api/inspections`)
-- D1 implementation uses scoped `SELECT` queries with `WHERE`/`LIMIT` as appropriate (no full-table snapshot reads)
-- Tests assert the D1 list route avoids full-table `SELECT * FROM ...` reads
+- `readInspectionList()` no longer issues N queries for current rounds (use a single query or batched IN)
+- Tests assert fewer D1 queries for the list endpoint (and still no full-table reads for `users/projects/ships/comments`)
 - Validation passes (`pnpm qa`)
 - Changes committed + pushed
-- `docs/status-board.md` is updated if the capability meaningfully changes
+- Update `docs/status-board.md` if capability meaningfully changes
 
 ## Task Breakdown
 
-- [ ] Confirm the actual list endpoint path + response contract (`GET /api/inspections` or similar)
-- [ ] Add optional storage method for list read (e.g. `readInspectionList?()`)
-- [ ] Implement narrow D1 list read in `D1InspectionStorage` (+ seeded wrapper)
-- [ ] Update repository/route to use narrow list read when available; fallback to snapshot otherwise
-- [ ] Add/extend SQL-recording tests for the D1 list route
+- [ ] Change `D1InspectionStorage.readInspectionList()` to fetch current rounds in a single query (or small bounded set)
+- [ ] Update SQL-recording test for `GET /api/inspections` to assert reduced query count
 - [ ] Run validation (`pnpm qa`)
 - [ ] Commit + push
-- [ ] Update `docs/status-board.md`
 
 ## Rules
 
@@ -37,17 +32,13 @@
 
 ## Recent Completed Milestones
 
+- [x] M9 — Add inspections list route + narrow D1 reads (commit: `966da65`)
 - [x] M8 — Narrow D1 submission-context reads for current-round result submission (commit: `94aca7a`)
 - [x] M7.2 — Batch user fetch for inspection detail reads (commit: `09ab34a`)
 - [x] M7.1 — Narrow D1 reads for inspection detail GET (commit: `b3e8f80`)
 - [x] M6 — Improve D1 persistence ergonomics (narrower writes) (commit: `87ae4e8`)
-- [x] M3 — Prove D1 runtime path under Wrangler dev (local smoke + docs) (commits: `f09c8ff`, `fb0775e`, `5ec6bfa`, `a0bd69c`)
-- [x] M2 — D1 dev docs + bootstrap SQL generator (commits: `1af7280`, `c2af8d9`, `1340d1f`)
-- [x] M1 — D1 adapter + driver switch (commits: `58a0d94`, `3eaca21`)
-- [x] D1 schema bootstrap foundation (`2bb1116`)
-- [x] Fine-grained status board + README status surface (`7810669`)
 
 ## Notes
 
-- D1 now has narrow reads for inspection detail (`GET /api/inspections/:id`) and pre-submit context for result submission (`PUT /api/inspections/:id/rounds/current/result`).
-- The next best ROI is narrowing the list/index endpoint, which is typically hit more often than detail.
+- Current `readInspectionList()` still runs one `inspection_rounds` query per item to fetch the current round. This is safe but not ideal.
+- Next step is batching the rounds query (e.g., fetch rounds by `inspectionItemId IN (...)` and then pick `roundNumber === currentRound` in memory).
