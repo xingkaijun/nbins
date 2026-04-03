@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 05:31 Asia/Shanghai
+> Updated: 2026-04-04 05:32 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -48,10 +48,12 @@
 
 ## Next Milestone
 
-### M6 — Improve D1 persistence ergonomics (narrower writes)
-**Goal:** Reduce snapshot footgun by narrowing persistence operations once D1 wiring is stable.
+### M7 — Replace snapshot model with real persistence (scoped)
+**Goal:** After M6 proves at least one narrow write path, progressively migrate the rest of the snapshot model to real D1 queries (read + write), in a controlled, test-driven way.
 
 **Candidate Tasks:**
-- [ ] Identify top 2–3 repository operations to de-snapshot
-- [ ] Add D1 queries for those operations
-- [ ] Keep tests green
+- [ ] Identify the next 2–3 highest-value operations to migrate
+- [ ] Add query helpers + tests
+- [ ] Reduce snapshot footprint
+- [ ] Keep docs/status-board consistent
+
