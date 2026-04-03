@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 02:57 Asia/Shanghai
+> Updated: 2026-04-04 04:16 Asia/Shanghai
 > Overall status: **MVP baseline implemented, with core inspection flow working and D1 runtime integration advanced to an adapter plus driver-switch stage**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -146,6 +146,7 @@ What is in place:
 - D1/SQLite-compatible schema metadata is defined.
 - SQL create-table statements can be generated from that schema metadata.
 - A bootstrap helper exists to execute schema creation against a D1 database.
+- Local dev script can auto-run bootstrap so first-run `pnpm dev:api:d1` is zero-manual-step.
 - A D1-backed inspection storage adapter can read and rewrite the current repository snapshot model (with dev seeding when empty).
 - Route/runtime wiring can switch between mock and D1 via bindings while preserving the default mock flow.
 

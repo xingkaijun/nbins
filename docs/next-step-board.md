@@ -1,27 +1,27 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 03:12 Asia/Shanghai
+> Updated: 2026-04-04 04:16 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M4 — Make D1 demo usable: seed + docs + one-liner bootstrap ✅
-**Goal:** Make it trivial to run D1 mode locally with seeded demo data and a single bootstrap command, without 500s.
+### M5 — Harden D1 local dev UX + remove footguns
+**Goal:** Make D1 mode start with zero manual steps (or fail with clear message), and keep docs + scripts consistent.
 
 **Definition of Done:**
-- Root scripts make local D1 bootstrap + dev repeatable
-- Docs include one copy/paste flow
-- Validation passes (`typecheck`, `build`, `api test`)
+- `pnpm dev:api:d1` works on first run (auto bootstrap)
+- Docs + scripts are consistent
+- Validation passes (`pnpm qa`)
 - Changes committed + pushed
+
 
 ## Task Breakdown
 
-- [x] Ensure D1 dev starts with schema present (via `pnpm d1:bootstrap` and documented smoke)
-- [x] Add `pnpm d1:gen` root script to regenerate `packages/api/src/db/d1-bootstrap.sql`
-- [x] Add `pnpm d1:bootstrap` root script to wrap the above
-- [x] Add `pnpm dev:api:d1` script that sets `D1_DRIVER=d1` and runs wrangler local dev
-- [x] Add one integration test to confirm seeded snapshot inserted on first D1 read
-- [x] Commit + push
+- [x] Make `pnpm dev:api:d1` auto-run `pnpm d1:bootstrap` before starting Wrangler
+- [ ] Add a README note about mock vs D1 drivers
+- [ ] Keep `docs/status-board.md` in sync
+- [ ] Commit + push
+
 
 ## Rules
 
@@ -46,12 +46,10 @@
 
 ## Next Milestone
 
-### M5 — Harden D1 local dev UX + remove footguns
-**Goal:** Make D1 mode start with zero manual steps (or fail with clear message), and keep docs + scripts consistent.
+### M6 — Improve D1 persistence ergonomics (narrower writes)
+**Goal:** Reduce snapshot footgun by narrowing persistence operations once D1 wiring is stable.
 
 **Candidate Tasks:**
-- [ ] Add `pnpm qa` run to CI (or document)
-- [ ] Add `dev:api:d1` wrapper script that auto-runs `d1:bootstrap` if schema missing (or prints clear instructions)
-- [ ] Add a `dev:api` note in README about mock vs D1 drivers
-- [ ] Keep docs/status-board.md in sync
-- [ ] Commit + push
+- [ ] Identify top 2–3 repository operations to de-snapshot
+- [ ] Add D1 queries for those operations
+- [ ] Keep tests green
