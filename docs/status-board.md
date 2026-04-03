@@ -284,3 +284,9 @@ Delivery read:
 3. Add comment close/resolve flow so the current inspection lifecycle can fully close in product code.
 4. Introduce auth and project-scoped RBAC before expanding beyond the MVP demo path.
 5. Build import and PDF generation only after the core data model is persisted end to end.
+
+
+# Bootstrap schema (generated SQL)
+
+We generate the bootstrap SQL from the canonical schema metadata in `packages/api/src/db/sql.ts` to avoid hand-maintaining DDL snippets in docs.
+

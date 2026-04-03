@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "dev": "wrangler dev",
+    "gen:bootstrap-sql": "node --experimental-strip-types ./scripts/gen-bootstrap-sql.mjs",
     "test": "node --experimental-specifier-resolution=node --test src/**/*.test.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
