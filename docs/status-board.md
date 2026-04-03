@@ -20,7 +20,7 @@ This board is intended to be more concrete than the phase table in the README. I
 | API | ✅ | Hono API exposes inspection detail read and current-round result submission |
 | Domain rules | ✅ | Core inspection result semantics are encoded and covered by tests |
 | Persistence | 🟡 | Repository/storage now support async mock or D1-backed snapshots, but mock remains the default runtime path |
-| D1 foundation | 🟡 | D1 schema metadata, SQL generation, bootstrap helper, and a runtime storage adapter now exist, but D1 is not yet the default shipped path |
+| D1 foundation | 🟡 | D1 schema metadata, SQL generation, bootstrap helper, seeded runtime storage, and Wrangler-local smoke steps exist, but D1 is not yet the default shipped path |
 | Frontend workspace | 🟡 | React/Vite workbench is functional, but parts of the experience still fall back to shared mock data |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
 | Auth / RBAC | ❌ | Roles are defined in shared types, but no login, JWT, or authorization enforcement exists in code |
@@ -158,7 +158,6 @@ Representative files:
 
 - `packages/api/src/persistence/d1-seeded-inspection-storage.ts`
 - `packages/api/scripts/bootstrap-local-d1.mjs`
-- `docs/m3-d1-smoke.md`
 
 - `packages/api/src/db/schema.ts`
 - `packages/api/src/db/sql.ts`
