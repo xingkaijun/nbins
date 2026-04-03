@@ -1,0 +1,502 @@
+import type {
+  InspectionItemComment,
+  InspectionItemDetailResponse,
+  InspectionRoundHistoryEntry
+} from "./inspection-detail";
+
+export const DISCIPLINES = [
+  "HULL",
+  "OUTFIT",
+  "ENGINE",
+  "CARGO",
+  "ELEC",
+  "PAINT",
+  "CTNMT"
+] as const;
+
+export type Discipline = (typeof DISCIPLINES)[number];
+
+export const DISCIPLINE_LABELS: Record<Discipline, string> = {
+  HULL: "船体",
+  OUTFIT: "舾装",
+  ENGINE: "轮机",
+  CARGO: "货物",
+  ELEC: "电气",
+  PAINT: "涂装",
+  CTNMT: "货围"
+};
+
+export const INSPECTION_RESULTS = ["CX", "AA", "QCC", "OWC", "RJ"] as const;
+export type InspectionResult = (typeof INSPECTION_RESULTS)[number];
+
+export const INSPECTION_RESULT_LABELS: Record<InspectionResult, string> = {
+  CX: "取消",
+  AA: "接受",
+  QCC: "带意见接受",
+  OWC: "复检",
+  RJ: "拒绝"
+};
+
+export const WORKFLOW_STATUSES = [
+  "pending",
+  "open",
+  "closed",
+  "cancelled"
+] as const;
+export type WorkflowStatus = (typeof WORKFLOW_STATUSES)[number];
+
+export const ROLES = ["admin", "manager", "reviewer", "inspector"] as const;
+export type Role = (typeof ROLES)[number];
+
+export interface InspectionListItem {
+  id: string;
+  projectCode: string;
+  projectName: string;
+  hullNumber: string;
+  shipName: string;
+  itemName: string;
+  discipline: Discipline;
+  plannedDate: string;
+  yardQc: string;
+  currentResult: InspectionResult | null;
+  workflowStatus: WorkflowStatus;
+  openComments: number;
+  currentRound: number;
+}
+
+export interface DashboardSummary {
+  pendingToday: number;
+  completedToday: number;
+  openComments: number;
+  reinspectionQueue: number;
+  projectProgress: number;
+}
+
+export interface DashboardSnapshot {
+  generatedAt: string;
+  summary: DashboardSummary;
+  items: InspectionListItem[];
+}
+
+export * from "./inspection-detail.ts";
+
+function countOpenComments(comments: InspectionItemComment[]): number {
+  return comments.filter((comment) => comment.status === "open").length;
+}
+
+function buildRoundEntry(input: {
+  id: string;
+  roundNumber: number;
+  actualDate: string | null;
+  submittedResult: InspectionResult | null;
+  submittedAt: string;
+  submittedBy: string;
+  inspectorDisplayName?: string;
+  notes?: string | null;
+  source?: "manual" | "n8n";
+  commentIds: string[];
+}): InspectionRoundHistoryEntry {
+  return {
+    id: input.id,
+    roundNumber: input.roundNumber,
+    actualDate: input.actualDate,
+    submittedResult: input.submittedResult,
+    submittedAt: input.submittedAt,
+    submittedBy: input.submittedBy,
+    inspectorDisplayName: input.inspectorDisplayName ?? input.submittedBy,
+    notes: input.notes ?? null,
+    source: input.source ?? "manual",
+    commentIds: input.commentIds
+  };
+}
+
+const MOCK_ITEMS: InspectionListItem[] = [
+  {
+    id: "insp-001",
+    projectCode: "P-001",
+    projectName: "Hudong LNG Carrier",
+    hullNumber: "H-2748",
+    shipName: "NB2748",
+    itemName: "Main Engine Alignment",
+    discipline: "ENGINE",
+    plannedDate: "2026-04-03",
+    yardQc: "Zhang San",
+    currentResult: null,
+    workflowStatus: "pending",
+    openComments: 0,
+    currentRound: 1
+  },
+  {
+    id: "insp-002",
+    projectCode: "P-001",
+    projectName: "Hudong LNG Carrier",
+    hullNumber: "H-2748",
+    shipName: "NB2748",
+    itemName: "Cargo Tank Coating Final Check",
+    discipline: "PAINT",
+    plannedDate: "2026-04-03",
+    yardQc: "Li Si",
+    currentResult: "QCC",
+    workflowStatus: "open",
+    openComments: 2,
+    currentRound: 1
+  },
+  {
+    id: "insp-003",
+    projectCode: "P-002",
+    projectName: "CSSC Containment Series",
+    hullNumber: "H-2751",
+    shipName: "NB2751",
+    itemName: "Containment Weld Visual Survey",
+    discipline: "CTNMT",
+    plannedDate: "2026-04-03",
+    yardQc: "Wang Wu",
+    currentResult: "OWC",
+    workflowStatus: "open",
+    openComments: 1,
+    currentRound: 2
+  },
+  {
+    id: "insp-004",
+    projectCode: "P-002",
+    projectName: "CSSC Containment Series",
+    hullNumber: "H-2751",
+    shipName: "NB2751",
+    itemName: "Hull Block Fairing Review",
+    discipline: "HULL",
+    plannedDate: "2026-04-03",
+    yardQc: "Zhao Liu",
+    currentResult: "AA",
+    workflowStatus: "closed",
+    openComments: 0,
+    currentRound: 1
+  },
+  {
+    id: "insp-005",
+    projectCode: "P-003",
+    projectName: "Jiangnan Product Carrier",
+    hullNumber: "H-2802",
+    shipName: "NB2802",
+    itemName: "Electrical Cable Penetration Seal",
+    discipline: "ELEC",
+    plannedDate: "2026-04-03",
+    yardQc: "Chen Qi",
+    currentResult: "RJ",
+    workflowStatus: "open",
+    openComments: 3,
+    currentRound: 1
+  }
+];
+
+const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
+  "insp-001": {
+    id: "insp-001",
+    projectCode: "P-001",
+    projectName: "Hudong LNG Carrier",
+    hullNumber: "H-2748",
+    shipName: "NB2748",
+    itemName: "Main Engine Alignment",
+    discipline: "ENGINE",
+    source: "manual",
+    yardQc: "Zhang San",
+    plannedDate: "2026-04-03",
+    actualDate: null,
+    currentRound: 1,
+    currentRoundId: "round-insp-001-r1",
+    version: 1,
+    workflowStatus: "pending",
+    resolvedResult: null,
+    lastRoundResult: null,
+    openCommentCount: 0,
+    pendingFinalAcceptance: false,
+    waitingForNextRound: false,
+    comments: [],
+    roundHistory: []
+  },
+  "insp-002": {
+    id: "insp-002",
+    projectCode: "P-001",
+    projectName: "Hudong LNG Carrier",
+    hullNumber: "H-2748",
+    shipName: "NB2748",
+    itemName: "Cargo Tank Coating Final Check",
+    discipline: "PAINT",
+    source: "manual",
+    yardQc: "Li Si",
+    plannedDate: "2026-04-03",
+    actualDate: "2026-04-03",
+    currentRound: 1,
+    currentRoundId: "round-insp-002-r1",
+    version: 3,
+    workflowStatus: "open",
+    resolvedResult: null,
+    lastRoundResult: "QCC",
+    openCommentCount: 2,
+    pendingFinalAcceptance: true,
+    waitingForNextRound: false,
+    comments: [
+      {
+        id: "insp-002-comment-1",
+        roundNumber: 1,
+        status: "open",
+        message: "Stripe coat at nozzle edge needs one more touch-up.",
+        createdAt: "2026-04-03T08:15:00.000Z",
+        createdBy: "ABS Inspector Lin",
+        resolvedAt: null,
+        resolvedBy: null
+      },
+      {
+        id: "insp-002-comment-2",
+        roundNumber: 1,
+        status: "open",
+        message: "Holiday test record must be attached before final acceptance.",
+        createdAt: "2026-04-03T08:19:00.000Z",
+        createdBy: "ABS Inspector Lin",
+        resolvedAt: null,
+        resolvedBy: null
+      }
+    ],
+    roundHistory: [
+      buildRoundEntry({
+        id: "insp-002-round-1",
+        roundNumber: 1,
+        actualDate: "2026-04-03",
+        submittedResult: "QCC",
+        submittedAt: "2026-04-03T08:20:00.000Z",
+        submittedBy: "user-inspector-li",
+        inspectorDisplayName: "ABS Inspector Lin",
+        notes: "Touch-up required before close-out.",
+        source: "manual",
+        commentIds: ["insp-002-comment-1", "insp-002-comment-2"]
+      })
+    ]
+  },
+  "insp-003": {
+    id: "insp-003",
+    projectCode: "P-002",
+    projectName: "CSSC Containment Series",
+    hullNumber: "H-2751",
+    shipName: "NB2751",
+    itemName: "Containment Weld Visual Survey",
+    discipline: "CTNMT",
+    source: "n8n",
+    yardQc: "Wang Wu",
+    plannedDate: "2026-04-03",
+    actualDate: null,
+    currentRound: 2,
+    currentRoundId: "round-insp-003-r2",
+    version: 5,
+    workflowStatus: "open",
+    resolvedResult: null,
+    lastRoundResult: "OWC",
+    openCommentCount: 1,
+    pendingFinalAcceptance: false,
+    waitingForNextRound: true,
+    comments: [
+      {
+        id: "insp-003-comment-1",
+        roundNumber: 1,
+        status: "closed",
+        message: "Toe grinding required at frame 72 insert joint.",
+        createdAt: "2026-04-02T09:05:00.000Z",
+        createdBy: "Owner Rep Sun",
+        resolvedAt: "2026-04-02T14:30:00.000Z",
+        resolvedBy: "Yard QC Wang Wu"
+      },
+      {
+        id: "insp-003-comment-2",
+        roundNumber: 2,
+        status: "open",
+        message: "Reinspect after final MT result is uploaded.",
+        createdAt: "2026-04-03T07:40:00.000Z",
+        createdBy: "Owner Rep Sun",
+        resolvedAt: null,
+        resolvedBy: null
+      }
+    ],
+    roundHistory: [
+      buildRoundEntry({
+        id: "insp-003-round-1",
+        roundNumber: 1,
+        actualDate: "2026-04-02",
+        submittedResult: "QCC",
+        submittedAt: "2026-04-02T09:00:00.000Z",
+        submittedBy: "user-inspector-wang",
+        inspectorDisplayName: "Owner Rep Sun",
+        notes: "Initial pass with tracking note.",
+        source: "n8n",
+        commentIds: ["insp-003-comment-1"]
+      }),
+      buildRoundEntry({
+        id: "insp-003-round-2",
+        roundNumber: 2,
+        actualDate: null,
+        submittedResult: "OWC",
+        submittedAt: "2026-04-03T07:45:00.000Z",
+        submittedBy: "user-inspector-wang",
+        inspectorDisplayName: "Owner Rep Sun",
+        notes: "Waiting for MT upload.",
+        source: "n8n",
+        commentIds: ["insp-003-comment-2"]
+      })
+    ]
+  },
+  "insp-004": {
+    id: "insp-004",
+    projectCode: "P-002",
+    projectName: "CSSC Containment Series",
+    hullNumber: "H-2751",
+    shipName: "NB2751",
+    itemName: "Hull Block Fairing Review",
+    discipline: "HULL",
+    source: "manual",
+    yardQc: "Zhao Liu",
+    plannedDate: "2026-04-03",
+    actualDate: "2026-04-03",
+    currentRound: 1,
+    currentRoundId: "round-insp-004-r1",
+    version: 1,
+    workflowStatus: "closed",
+    resolvedResult: "AA",
+    lastRoundResult: "AA",
+    openCommentCount: 0,
+    pendingFinalAcceptance: false,
+    waitingForNextRound: false,
+    comments: [],
+    roundHistory: [
+      buildRoundEntry({
+        id: "insp-004-round-1",
+        roundNumber: 1,
+        actualDate: "2026-04-03",
+        submittedResult: "AA",
+        submittedAt: "2026-04-03T09:30:00.000Z",
+        submittedBy: "user-inspector-luo",
+        inspectorDisplayName: "Class Surveyor Luo",
+        notes: null,
+        source: "manual",
+        commentIds: []
+      })
+    ]
+  },
+  "insp-005": {
+    id: "insp-005",
+    projectCode: "P-003",
+    projectName: "Jiangnan Product Carrier",
+    hullNumber: "H-2802",
+    shipName: "NB2802",
+    itemName: "Electrical Cable Penetration Seal",
+    discipline: "ELEC",
+    source: "manual",
+    yardQc: "Chen Qi",
+    plannedDate: "2026-04-03",
+    actualDate: "2026-04-03",
+    currentRound: 1,
+    currentRoundId: "round-insp-005-r1",
+    version: 2,
+    workflowStatus: "open",
+    resolvedResult: null,
+    lastRoundResult: "RJ",
+    openCommentCount: 3,
+    pendingFinalAcceptance: false,
+    waitingForNextRound: true,
+    comments: [
+      {
+        id: "insp-005-comment-1",
+        roundNumber: 1,
+        status: "open",
+        message: "Sealant coverage incomplete at upper penetration edge.",
+        createdAt: "2026-04-03T06:55:00.000Z",
+        createdBy: "Class Surveyor Hu",
+        resolvedAt: null,
+        resolvedBy: null
+      },
+      {
+        id: "insp-005-comment-2",
+        roundNumber: 1,
+        status: "open",
+        message: "Firestop batch certificate missing from package.",
+        createdAt: "2026-04-03T07:00:00.000Z",
+        createdBy: "Class Surveyor Hu",
+        resolvedAt: null,
+        resolvedBy: null
+      },
+      {
+        id: "insp-005-comment-3",
+        roundNumber: 1,
+        status: "open",
+        message: "Cable tray support spacing exceeds approved drawing.",
+        createdAt: "2026-04-03T07:04:00.000Z",
+        createdBy: "Class Surveyor Hu",
+        resolvedAt: null,
+        resolvedBy: null
+      }
+    ],
+    roundHistory: [
+      buildRoundEntry({
+        id: "insp-005-round-1",
+        roundNumber: 1,
+        actualDate: "2026-04-03",
+        submittedResult: "RJ",
+        submittedAt: "2026-04-03T07:05:00.000Z",
+        submittedBy: "user-inspector-hu",
+        inspectorDisplayName: "Class Surveyor Hu",
+        notes: "Rework required before reinspection.",
+        source: "manual",
+        commentIds: [
+          "insp-005-comment-1",
+          "insp-005-comment-2",
+          "insp-005-comment-3"
+        ]
+      })
+    ]
+  }
+};
+
+export function createMockDashboardSnapshot(): DashboardSnapshot {
+  return {
+    generatedAt: "2026-04-03T09:00:00.000Z",
+    summary: {
+      pendingToday: MOCK_ITEMS.filter((item) => item.workflowStatus === "pending").length,
+      completedToday: MOCK_ITEMS.filter((item) => item.currentResult === "AA").length,
+      openComments: MOCK_ITEMS.reduce((count, item) => count + item.openComments, 0),
+      reinspectionQueue: MOCK_ITEMS.filter((item) => item.currentResult === "OWC").length,
+      projectProgress: 68
+    },
+    items: MOCK_ITEMS
+  };
+}
+
+export function createMockInspectionDetails(): Record<string, InspectionItemDetailResponse> {
+  return Object.fromEntries(
+    Object.entries(MOCK_INSPECTION_DETAILS).map(([id, detail]) => [
+      id,
+      {
+        ...detail,
+        comments: detail.comments.map((comment) => ({ ...comment })),
+        roundHistory: detail.roundHistory.map((entry) => ({
+          ...entry,
+          commentIds: [...entry.commentIds]
+        }))
+      }
+    ])
+  );
+}
+
+export function createMockInspectionDetail(
+  id: string
+): InspectionItemDetailResponse | null {
+  return createMockInspectionDetails()[id] ?? null;
+}
+
+export function syncListItemWithDetail(
+  item: InspectionListItem,
+  detail: InspectionItemDetailResponse
+): InspectionListItem {
+  return {
+    ...item,
+    currentResult: detail.resolvedResult ?? detail.lastRoundResult,
+    workflowStatus: detail.workflowStatus,
+    openComments: countOpenComments(detail.comments),
+    currentRound: detail.currentRound
+  };
+}

@@ -349,8 +349,9 @@ stateDiagram-v2
 ```text
 检验员提交 Round N 的结果时：
 ├── result = AA（接受）
+│   ├── 硬约束：AA 不能产生新的开放意见，且提交后系统中不能存在未关闭意见
 │   ├── 无开放意见 → item.workflow_status = closed, resolved_result = AA
-│   └── 有历史开放意见 → item.workflow_status = open（等待意见逐步关闭）, resolved_result 保持待定
+│   └── 若仍有历史开放意见 → 不得直接视为最终接受；item.workflow_status = open，resolved_result 保持待定，直到全部意见关闭后才自动转 AA
 ├── result = QCC（带意见接受）
 │   ├── 检验员可同时附加新意见
 │   └── item.workflow_status = open（等待意见逐步关闭，无需新 Round）
@@ -375,6 +376,8 @@ stateDiagram-v2
 
 > [!IMPORTANT]
 > **自动 AA 规则**：当某个 INSPECTION_ITEM 的所有 COMMENT 状态均为 `closed`（即 `open_comments_count = 0`）时，系统自动将 `resolved_result` 更新为 `AA`，`workflow_status` 更新为 `closed`；`last_round_result` 保留最近轮次真实提交结果。此规则在每次关闭意见时由统一业务服务层触发检查。
+
+> **AA 约束**：`AA` 代表该检验项在当前时点不存在开放意见。因此接口层、服务层和前端提交校验都应禁止“AA + 新增开放意见”的组合；若历史上仍有未关闭意见，也不得把该条目直接结算为 `resolved_result = AA`。
 
 ### 4.4 数据条目关系说明
 
@@ -654,6 +657,30 @@ d:\Code\nbins\
 ├── tsconfig.base.json
 └── README.md
 ```
+
+---
+
+## 0. 当前实现状态（2026-04-03）
+
+当前仓库已从纯设计阶段推进到 **可演示 MVP 基线**。
+
+已落地：
+
+- `packages/shared`：共享枚举、inspection detail 契约、mock data helpers
+- `packages/api`：Hono API、inspection repository/service/persistence 分层、结果提交与 optimistic locking
+- `packages/web`：检验列表、详情区、round history、comments、结果提交演示
+- `AA / QCC / OWC / RJ / CX` 的关键业务语义已在前后端同步体现
+- `pnpm typecheck`、`pnpm build`、`pnpm --filter @nbins/api test` 已通过
+
+尚未落地：
+
+- D1 / Drizzle 真持久化
+- 前端直连真实 API
+- comment close / resolve 完整闭环
+- 登录认证与 RBAC
+- 正式 PDF / n8n 自动导入发送
+
+> 也就是说，当前代码库适合做“业务主线演示”和“下一阶段工程扩展”，还不是生产环境完成版。
 
 ---
 

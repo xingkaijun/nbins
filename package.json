@@ -1,0 +1,13 @@
+{
+  "name": "nbins",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.8.1",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev:web": "pnpm --filter @nbins/web dev",
+    "dev:api": "pnpm --filter @nbins/api dev",
+    "typecheck": "pnpm -r typecheck"
+  }
+}
+
