@@ -9,10 +9,8 @@ This milestone proves the D1 runtime wiring under `wrangler dev` (local mode) wi
 ## Quick start (recommended)
 
 ```bash
-# Generate schema SQL + apply to local D1
-pnpm d1:bootstrap
-
 # Start the API in D1 mode (local dev + persistence)
+# (auto-runs local D1 bootstrap on first run / safe to re-run)
 pnpm dev:api:d1
 ```
 
