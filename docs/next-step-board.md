@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 03:00 Asia/Shanghai
+> Updated: 2026-04-04 03:12 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -20,8 +20,8 @@
 - [x] Add `pnpm d1:gen` root script to regenerate `packages/api/src/db/d1-bootstrap.sql`
 - [x] Add `pnpm d1:bootstrap` root script to wrap the above
 - [x] Add `pnpm dev:api:d1` script that sets `D1_DRIVER=d1` and runs wrangler local dev
-- [ ] Add one integration test to confirm seeded snapshot inserted on first D1 read
-- [ ] Commit + push
+- [x] Add one integration test to confirm seeded snapshot inserted on first D1 read
+- [x] Commit + push
 
 ## Rules
 

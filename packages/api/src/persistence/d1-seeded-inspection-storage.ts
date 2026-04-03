@@ -5,11 +5,11 @@ import { createSeedInspectionStorageSnapshot } from "./seed.ts";
 import { D1InspectionStorage } from "./d1-inspection-storage.ts";
 
 export class D1SeededInspectionStorage implements InspectionStorage {
-  private readonly inner: D1InspectionStorage;
+  private readonly inner: InspectionStorage;
   private seeded = false;
 
-  constructor(db: D1Database) {
-    this.inner = new D1InspectionStorage(db);
+  constructor(dbOrInner: D1Database | InspectionStorage) {
+    this.inner = isInspectionStorage(dbOrInner) ? dbOrInner : new D1InspectionStorage(dbOrInner);
   }
 
   async read(): Promise<InspectionStorageSnapshot> {
@@ -35,4 +35,13 @@ export class D1SeededInspectionStorage implements InspectionStorage {
 
     this.seeded = true;
   }
+}
+
+function isInspectionStorage(value: unknown): value is InspectionStorage {
+  if (!value || typeof value !== "object") {
+    return false;
+  }
+
+  const candidate = value as InspectionStorage;
+  return typeof candidate.read === "function" && typeof candidate.write === "function";
 }
