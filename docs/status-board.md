@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 05:33 Asia/Shanghai
+> Updated: 2026-04-04 06:31 Asia/Shanghai
 > Overall status: **MVP baseline implemented, with core inspection flow working and D1 runtime integration advanced to an adapter plus driver-switch stage**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.

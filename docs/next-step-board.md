@@ -1,29 +1,27 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 05:48 Asia/Shanghai
+> Updated: 2026-04-04 06:31 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M6 — Improve D1 persistence ergonomics (narrower writes)
-**Goal:** Reduce snapshot rewrite footgun by narrowing *write* operations to real D1 tables/queries (keep read path stable).
+### M7 — Replace snapshot model with real persistence (scoped)
+**Goal:** After M6 proved at least one narrow write path, progressively migrate the remaining snapshot bridge to real D1 queries (read + write), in a controlled, test-driven way.
 
-**Definition of Done:**
-- Replace at least one snapshot rewrite with narrow D1 writes
+**Definition of Done (for M7 initial slice):**
+- Add at least one **narrow D1 read** path for a high-value endpoint (recommended: `GET /api/inspections/:id`)
 - Keep mock path unchanged
 - Validation passes (`pnpm qa`)
 - Changes committed + pushed
 
+## Task Breakdown (M7 initial slice)
 
-## Task Breakdown
-
-- [x] Pick the smallest safe target write path (recommended: result submission PUT)
-- [x] Design minimal D1 table writes needed for that path (no full repo snapshot rewrite)
-- [x] Implement narrow write(s) in D1 storage adapter
-- [x] Update/extend tests to cover D1 narrow write behavior
-- [x] Keep `docs/status-board.md` in sync
+- [ ] Pick the smallest safe narrow-read target (recommended: `GET /api/inspections/:id`)
+- [ ] Define a minimal storage/repository interface to support narrow reads (keep the existing `read()` snapshot path intact)
+- [ ] Implement narrow read(s) in the D1 storage adapter (seeded wrapper included)
+- [ ] Add/extend tests to prove the narrow-read path is used for D1 and does not regress mock
+- [ ] Keep `docs/status-board.md` in sync
 - [ ] Commit + push
-
 
 ## Rules
 
@@ -35,6 +33,7 @@
 
 ## Recent Completed Milestones
 
+- [x] M6 — Improve D1 persistence ergonomics (narrower writes) (commit: `87ae4e8`)
 - [x] M3 — Prove D1 runtime path under Wrangler dev (local smoke + docs) (commits: `f09c8ff`, `fb0775e`, `5ec6bfa`, `a0bd69c`)
 - [x] M2 — D1 dev docs + bootstrap SQL generator (commits: `1af7280`, `c2af8d9`, `1340d1f`)
 - [x] M1 — D1 adapter + driver switch (commits: `58a0d94`, `3eaca21`)
@@ -43,16 +42,4 @@
 
 ## Notes
 
-- Current D1 path is a snapshot bridge (read/write entire repository snapshot). That is acceptable for proving wiring; narrow queries can follow after we confirm runtime behavior.
-
-
-## Next Milestone
-
-### M7 — Replace snapshot model with real persistence (scoped)
-**Goal:** After M6 proves at least one narrow write path, progressively migrate the rest of the snapshot model to real D1 queries (read + write), in a controlled, test-driven way.
-
-**Candidate Tasks:**
-- [ ] Identify the next 2–3 highest-value operations to migrate
-- [ ] Add query helpers + tests
-- [ ] Reduce snapshot footprint
-- [ ] Keep docs/status-board consistent
+- Current D1 path is still a snapshot bridge for most reads/writes. Narrow queries should replace that incrementally, starting with the highest-value endpoints.
