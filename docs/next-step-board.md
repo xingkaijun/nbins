@@ -18,7 +18,7 @@
 
 - [x] Implement batch user fetch in `D1InspectionStorage.readInspectionDetail()`
 - [x] Update/extend SQL-recording tests to enforce single users query
-- [ ] Keep `docs/status-board.md` in sync (if status meaningfully changes)
+- [x] Keep `docs/status-board.md` in sync (if status meaningfully changes)
 - [x] Commit + push
 
 ## Rules
