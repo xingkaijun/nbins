@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 01:30 Asia/Shanghai
+> Updated: 2026-04-04 01:32 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -22,7 +22,7 @@
 
 - [x] T1. Add D1 binding and driver env docs for local dev (wrangler config + commands)
 - [x] T2. Add minimal script/command for schema bootstrap against bound D1 (local)
-- [ ] T3. Add a focused integration-ish test or a dev check note for D1 path (no network)
+- [x] T3. Add a focused integration-ish test or a dev check note for D1 path (no network)
 - [x] T4. Validate mock default remains stable
 - [x] T5. Run full validation (`typecheck`, `build`, `api test`)
 - [x] T6. Commit and push
