@@ -21,7 +21,7 @@
 - [x] Land the next smallest safe D1 runtime increment
 - [x] Verify mock remains default and behavior is unchanged for the MVP flow
 - [x] Run full validation (`pnpm typecheck && pnpm build && pnpm --filter @nbins/api test`)
-- [ ] Commit + push
+- [x] Commit + push
 - [x] Update `docs/status-board.md` and this execution board
 
 ## Rules
