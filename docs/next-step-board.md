@@ -5,7 +5,7 @@
 
 ## Active Milestone
 
-### M3 — Prove D1 runtime path under Wrangler dev (actual run + persistence)
+### M3 — Prove D1 runtime path under Wrangler dev (actual run + persistence) ✅
 **Goal:** Actually run `wrangler dev` with a real D1 binding, bootstrap schema, and demonstrate that writes persist (no mock fallback).
 
 **Definition of Done:**
@@ -44,3 +44,15 @@
 ## Notes
 
 - Current D1 path is a snapshot bridge (read/write entire repository snapshot). That is acceptable for proving wiring; narrow queries can follow after we confirm runtime behavior.
+
+## Next Milestone
+
+### M4 — Make D1 demo usable: seed + docs + one-liner bootstrap
+**Goal:** Make it trivial to run D1 mode locally with seeded demo data and a single bootstrap command, without 500s.
+
+**Candidate Tasks:**
+- [ ] Ensure D1 dev starts with schema present (document: run `pnpm --filter @nbins/api run gen:bootstrap-sql -- src/db/d1-bootstrap.sql` then `pnpm --filter @nbins/api exec node packages/api/scripts/bootstrap-local-d1.mjs`)
+- [ ] Add `pnpm d1:bootstrap` root script to wrap the above
+- [ ] Add `pnpm dev:api:d1` script that sets `D1_DRIVER=d1` + warns if schema missing
+- [ ] Add one integration test to confirm seeded snapshot inserted on first D1 read
+- [ ] Commit + push
