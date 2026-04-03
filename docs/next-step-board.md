@@ -1,25 +1,28 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 06:31 Asia/Shanghai
+> Updated: 2026-04-04 06:55 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M7.2 — Reduce D1 narrow-read query count (batch user fetch)
-**Goal:** Keep narrow D1 reads, but reduce query count by batching user lookups (avoid N+1 `SELECT users` calls).
+### M8 — Broaden D1 route/runtime coverage beyond current narrow slices
+**Goal:** Continue moving the D1 runtime path from a snapshot bridge toward more targeted reads/writes, while keeping mock as the safe default path.
 
 **Definition of Done:**
-- `readInspectionDetail()` fetches all needed users via a single D1 query (e.g. `WHERE id IN (...)`)
-- Tests assert executed SQL no longer includes multiple `SELECT * FROM "users" WHERE "id" = ?` calls
+- One additional meaningful D1 runtime hotspot is narrowed or simplified
+- Existing MVP routes remain stable with mock as default
 - Validation passes (`pnpm qa`)
 - Changes committed + pushed
+- `docs/status-board.md` stays aligned with the newly landed capability
 
 ## Task Breakdown
 
-- [x] Implement batch user fetch in `D1InspectionStorage.readInspectionDetail()`
-- [x] Update/extend SQL-recording tests to enforce single users query
-- [x] Keep `docs/status-board.md` in sync (if status meaningfully changes)
-- [x] Commit + push
+- [ ] Identify the next highest-value remaining D1 hotspot after M7.2
+- [ ] Land the next smallest safe D1 runtime increment
+- [ ] Verify mock remains default and behavior is unchanged for the MVP flow
+- [ ] Run full validation (`pnpm qa`)
+- [ ] Commit + push
+- [ ] Update `docs/status-board.md` and this execution board
 
 ## Rules
 
@@ -31,7 +34,7 @@
 
 ## Recent Completed Milestones
 
-- [x] M7.2 — Batch user fetch for inspection detail reads (commit: `e6e8b69`)
+- [x] M7.2 — Batch user fetch for inspection detail reads
 - [x] M7.1 — Narrow D1 reads for inspection detail GET (commit: `b3e8f80`)
 - [x] M6 — Improve D1 persistence ergonomics (narrower writes) (commit: `87ae4e8`)
 - [x] M3 — Prove D1 runtime path under Wrangler dev (local smoke + docs) (commits: `f09c8ff`, `fb0775e`, `5ec6bfa`, `a0bd69c`)
