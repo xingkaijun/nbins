@@ -1,7 +1,7 @@
 # NBINS Status Board
 
-> Updated: 2026-04-03
-> Overall status: **MVP baseline implemented, with core inspection flow working and several platform capabilities still in foundation/planning stage**
+> Updated: 2026-04-04
+> Overall status: **MVP baseline implemented, with core inspection flow working and D1 runtime integration advanced to an adapter plus driver-switch stage**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
 
@@ -19,8 +19,8 @@ This board is intended to be more concrete than the phase table in the README. I
 | Shared contracts | ✅ | Shared TypeScript contracts and demo data utilities exist and are used by API and web |
 | API | ✅ | Hono API exposes inspection detail read and current-round result submission |
 | Domain rules | ✅ | Core inspection result semantics are encoded and covered by tests |
-| Persistence | 🟡 | Repository and storage abstractions exist, but runtime persistence is still mock/in-memory |
-| D1 foundation | 🟡 | D1 schema metadata, SQL generation, and bootstrap helper exist, but no live D1-backed repository is wired |
+| Persistence | 🟡 | Repository/storage now support async mock or D1-backed snapshots, but mock remains the default runtime path |
+| D1 foundation | 🟡 | D1 schema metadata, SQL generation, bootstrap helper, and a runtime storage adapter now exist, but D1 is not yet the default shipped path |
 | Frontend workspace | 🟡 | React/Vite workbench is functional, but parts of the experience still fall back to shared mock data |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
 | Auth / RBAC | ❌ | Roles are defined in shared types, but no login, JWT, or authorization enforcement exists in code |
@@ -117,11 +117,13 @@ What is in place:
 - Storage contracts and record shapes exist.
 - Repository logic reads from and writes to a storage abstraction.
 - Mock baseline data supports realistic API behavior and optimistic locking.
+- Storage reads and writes are now async so the same repository path can work with D1 I/O.
+- Runtime storage selection is centralized and keeps mock as the safe default path.
 
 What is still missing:
 
-- No database-backed storage implementation is wired into runtime routes yet.
-- No migration or persistence lifecycle beyond the in-memory mock store is active.
+- No production migration or seed lifecycle exists beyond schema bootstrap.
+- No deployed D1 environment is verified end to end in this repo yet.
 
 Representative files:
 
@@ -133,7 +135,7 @@ Representative files:
 
 Delivery read:
 
-- Persistence architecture has started, but production persistence has not.
+- Persistence architecture now has a real D1-compatible runtime path, but the shipped MVP still intentionally defaults to mock storage.
 
 ## D1 Foundation
 
@@ -144,11 +146,13 @@ What is in place:
 - D1/SQLite-compatible schema metadata is defined.
 - SQL create-table statements can be generated from that schema metadata.
 - A bootstrap helper exists to execute schema creation against a D1 database.
+- A D1-backed inspection storage adapter can read and rewrite the current repository snapshot model.
+- Route/runtime wiring can switch between mock and D1 via bindings while preserving the default mock flow.
 
 What is still missing:
 
-- No live D1 binding is used for inspection routes.
-- No D1-backed repository or end-to-end persistence path is implemented.
+- No deployed D1-backed environment is exercised in integration tests.
+- The runtime write strategy is still a coarse snapshot rewrite, not a narrower repository/query layer.
 
 Representative files:
 
@@ -159,7 +163,7 @@ Representative files:
 
 Delivery read:
 
-- The repo has a credible D1 starting point, but it is still a foundation layer, not a shipped storage path.
+- The repo has moved beyond pure D1 foundation work: there is now a live adapter and driver switch, but it is still an incremental bridge rather than the final persistence architecture.
 
 ## Frontend Workspace
 
@@ -270,12 +274,12 @@ Delivery read:
 ## Recommended Current Project Readout
 
 - `✅ Complete for MVP baseline`: shared contracts, core domain rules, detail/read API, result submission API, mock-backed repository flow, basic tests
-- `🟡 Partial / in progress`: persistence architecture, D1 foundation, frontend integration depth, production-grade data flow
+- `🟡 Partial / in progress`: persistence architecture hardening, D1 rollout, frontend integration depth, production-grade data flow
 - `❌ Not started in product code`: auth, RBAC, import pipeline, PDF reports, n8n automation
 
 ## Practical Next Priorities
 
-1. Replace mock runtime persistence with a D1-backed repository implementation.
+1. Exercise the D1-backed route path in a real Worker/D1 environment and harden the snapshot-write bridge.
 2. Move the frontend workbench from mixed demo/API mode to API-first data loading.
 3. Add comment close/resolve flow so the current inspection lifecycle can fully close in product code.
 4. Introduce auth and project-scoped RBAC before expanding beyond the MVP demo path.

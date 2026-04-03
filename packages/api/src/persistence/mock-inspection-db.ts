@@ -201,15 +201,15 @@ export class MockInspectionDatabase implements InspectionStorage {
     this.data = cloneStorageSnapshot(seed);
   }
 
-  read(): InspectionStorageSnapshot {
+  async read(): Promise<InspectionStorageSnapshot> {
     return this.data;
   }
 
-  write(next: InspectionStorageSnapshot): void {
+  async write(next: InspectionStorageSnapshot): Promise<void> {
     this.data = cloneStorageSnapshot(next);
   }
 
-  reset(seed: InspectionStorageSnapshot = BASELINE_DATA): void {
+  async reset(seed: InspectionStorageSnapshot = BASELINE_DATA): Promise<void> {
     this.data = cloneStorageSnapshot(seed);
   }
 }

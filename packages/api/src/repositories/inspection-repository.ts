@@ -20,16 +20,16 @@ export class InspectionRepository {
     this.db = db;
   }
 
-  getInspectionDetail(inspectionItemId: string): InspectionItemDetailResponse | null {
-    const selected = selectInspectionDetailRecord(this.db.read(), inspectionItemId);
+  async getInspectionDetail(inspectionItemId: string): Promise<InspectionItemDetailResponse | null> {
+    const selected = selectInspectionDetailRecord(await this.db.read(), inspectionItemId);
     return selected ? mapInspectionDetailFromStorage(selected) : null;
   }
 
-  submitCurrentRoundResult(
+  async submitCurrentRoundResult(
     inspectionItemId: string,
     submission: SubmitInspectionResultRequest
-  ): SubmitInspectionResultResponse {
-    const storage = cloneStorageSnapshot(this.db.read());
+  ): Promise<SubmitInspectionResultResponse> {
+    const storage = cloneStorageSnapshot(await this.db.read());
     const selected = selectInspectionDetailRecord(storage, inspectionItemId);
 
     if (!selected) {
@@ -104,9 +104,9 @@ export class InspectionRepository {
     itemRecord.version += 1;
     itemRecord.updatedAt = now;
 
-    this.db.write(storage);
+    await this.db.write(storage);
 
-    const refreshedDetail = this.getInspectionDetail(inspectionItemId);
+    const refreshedDetail = await this.getInspectionDetail(inspectionItemId);
 
     if (!refreshedDetail) {
       throw new Error("INSPECTION_ITEM_NOT_FOUND");
@@ -148,6 +148,6 @@ function createCommentRecord(input: {
 
 export function createInspectionRepositorySnapshot(
   db: InspectionStorage
-): InspectionStorageSnapshot {
-  return cloneStorageSnapshot(db.read());
+): Promise<InspectionStorageSnapshot> {
+  return db.read().then(cloneStorageSnapshot);
 }

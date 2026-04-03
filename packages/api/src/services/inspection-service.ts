@@ -12,14 +12,16 @@ export class InspectionService {
     this.repository = repository;
   }
 
-  readInspectionItemDetail(inspectionItemId: string): InspectionItemDetailResponse | null {
+  readInspectionItemDetail(
+    inspectionItemId: string
+  ): Promise<InspectionItemDetailResponse | null> {
     return this.repository.getInspectionDetail(inspectionItemId);
   }
 
   submitInspectionResult(
     inspectionItemId: string,
     request: SubmitInspectionResultRequest
-  ): SubmitInspectionResultResponse {
+  ): Promise<SubmitInspectionResultResponse> {
     assertValidSubmitInspectionResultRequest(request);
     return this.repository.submitCurrentRoundResult(inspectionItemId, request);
   }

@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-03 23:58 Asia/Shanghai
+> Updated: 2026-04-04 00:00 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -20,13 +20,13 @@
 
 ## Task Breakdown
 
-- [ ] T1. Review current D1 foundation files and define minimal runtime adapter shape
-- [ ] T2. Implement D1-backed storage adapter for repository-compatible read/write path
-- [ ] T3. Add driver/factory wiring so routes/app can choose mock vs D1 safely
-- [ ] T4. Verify mock remains default and MVP demo path is not broken
-- [ ] T5. Run full validation (`typecheck`, `build`, `api test`)
+- [x] T1. Review current D1 foundation files and define minimal runtime adapter shape
+- [x] T2. Implement D1-backed storage adapter for repository-compatible read/write path
+- [x] T3. Add driver/factory wiring so routes/app can choose mock vs D1 safely
+- [x] T4. Verify mock remains default and MVP demo path is not broken
+- [x] T5. Run full validation (`typecheck`, `build`, `api test`)
 - [ ] T6. Commit and push
-- [ ] T7. Update `docs/status-board.md`
+- [x] T7. Update `docs/status-board.md`
 
 ## Rules
 
@@ -40,3 +40,15 @@
 
 - [x] D1 schema bootstrap foundation (`2bb1116`)
 - [x] Fine-grained status board + README status surface (`7810669`)
+
+## Current Increment Notes
+
+- Storage contract is now async so the repository/service path can support D1 I/O without a separate codepath.
+- `D1InspectionStorage` implements snapshot read/write against the current D1 schema tables.
+- Runtime storage resolution keeps mock as the default and only uses D1 when `D1_DRIVER=d1` and `DB` are both available.
+- Route tests verify the default mock path still preserves writes across sequential requests.
+
+## Next Smallest Safe Increment After This
+
+- Exercise the D1-backed route path against a real Worker binding and schema bootstrap flow.
+- Replace coarse snapshot rewrite behavior with narrower D1 repository operations once the adapter path is proven.

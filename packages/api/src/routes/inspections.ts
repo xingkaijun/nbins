@@ -1,16 +1,18 @@
 import { Hono } from "hono";
-import { createMockInspectionDatabase } from "../persistence/mock-inspection-db.ts";
+import type { Bindings } from "../env.ts";
+import { createInspectionStorageResolver } from "../persistence/storage-factory.ts";
 import { InspectionRepository } from "../repositories/inspection-repository.ts";
 import { InspectionService } from "../services/inspection-service.ts";
 
-function createInspectionRoutes(): Hono {
-  const inspectionRoutes = new Hono();
-  const inspectionService = new InspectionService(
-    new InspectionRepository(createMockInspectionDatabase())
-  );
+function createInspectionRoutes(): Hono<{ Bindings: Bindings }> {
+  const inspectionRoutes = new Hono<{ Bindings: Bindings }>();
+  const resolveStorage = createInspectionStorageResolver();
 
-  inspectionRoutes.get("/:id", (c) => {
-    const detail = inspectionService.readInspectionItemDetail(c.req.param("id"));
+  inspectionRoutes.get("/:id", async (c) => {
+    const inspectionService = new InspectionService(
+      new InspectionRepository(resolveStorage(c.env))
+    );
+    const detail = await inspectionService.readInspectionItemDetail(c.req.param("id"));
 
     if (!detail) {
       return c.json(
@@ -29,6 +31,9 @@ function createInspectionRoutes(): Hono {
   });
 
   inspectionRoutes.put("/:id/rounds/current/result", async (c) => {
+    const inspectionService = new InspectionService(
+      new InspectionRepository(resolveStorage(c.env))
+    );
     let body: unknown;
 
     try {
@@ -54,7 +59,7 @@ function createInspectionRoutes(): Hono {
     }
 
     try {
-      const response = inspectionService.submitInspectionResult(
+      const response = await inspectionService.submitInspectionResult(
         c.req.param("id"),
         body as never
       );

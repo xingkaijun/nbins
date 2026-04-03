@@ -19,6 +19,47 @@ test("GET /api/inspections/:id returns inspection detail", async () => {
   assert.equal(payload.data.comments[0].status, "open");
 });
 
+test("GET /api/inspections/:id keeps mock as the default runtime driver", async () => {
+  const app = createTestApp();
+  const response = await app.request("http://localhost/api/inspections/insp-003");
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.id, "insp-003");
+  assert.equal(payload.data.version, 5);
+});
+
+test("default mock driver preserves writes across sequential requests", async () => {
+  const app = createTestApp();
+
+  const submitResponse = await app.request(
+    "http://localhost/api/inspections/insp-003/rounds/current/result",
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        result: "CX",
+        actualDate: "2026-04-03",
+        submittedAt: "2026-04-03T11:15:00.000Z",
+        submittedBy: "user-inspector-wang",
+        inspectorDisplayName: "Wang Wu",
+        expectedVersion: 5,
+        comments: []
+      })
+    }
+  );
+
+  assert.equal(submitResponse.status, 200);
+
+  const getResponse = await app.request("http://localhost/api/inspections/insp-003");
+  const payload = await getResponse.json();
+
+  assert.equal(getResponse.status, 200);
+  assert.equal(payload.data.workflowStatus, "cancelled");
+  assert.equal(payload.data.version, 6);
+});
+
 test("GET /api/inspections/:id returns 404 for unknown inspection items", async () => {
   const app = createTestApp();
   const response = await app.request("http://localhost/api/inspections/insp-missing");
