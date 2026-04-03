@@ -150,11 +150,13 @@ What is in place:
 - Prefer `pnpm dev:api:d1` for exercising D1 locally; `pnpm dev:api` stays on mock by default.
 - A D1-backed inspection storage adapter can read and rewrite the current repository snapshot model (with dev seeding when empty).
 - Route/runtime wiring can switch between mock and D1 via bindings while preserving the default mock flow.
+- The `PUT /api/inspections/:id/rounds/current/result` D1 path now uses narrow table updates for `inspection_rounds`, `inspection_items`, and inserted `comments`, instead of forcing a full snapshot rewrite.
+- Coverage now asserts that the D1 result-submission path avoids the snapshot rewrite/delete-all flow while keeping the mock driver behavior unchanged.
 
 What is still missing:
 
 - No deployed D1-backed environment is exercised in integration tests.
-- The runtime write strategy is still a coarse snapshot rewrite, not a narrower repository/query layer.
+- Only one D1 write path has been narrowed so far; the remaining write operations still rely on the coarse snapshot rewrite bridge.
 
 Representative files:
 

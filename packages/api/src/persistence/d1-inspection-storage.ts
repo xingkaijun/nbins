@@ -8,7 +8,10 @@ import type {
   ShipRecord,
   UserRecord
 } from "./records.ts";
-import type { InspectionStorage } from "./inspection-storage.ts";
+import type {
+  InspectionStorage,
+  SubmitCurrentRoundResultStorageMutation
+} from "./inspection-storage.ts";
 
 type JsonRow = Record<string, unknown>;
 
@@ -158,6 +161,67 @@ export class D1InspectionStorage implements InspectionStorage {
     }
 
     for (const record of next.comments) {
+      statements.push(
+        this.db
+          .prepare(
+            `INSERT INTO "comments" ("id", "inspectionItemId", "createdInRoundId", "closedInRoundId", "authorId", "content", "status", "closedBy", "closedAt", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .bind(
+            record.id,
+            record.inspectionItemId,
+            record.createdInRoundId,
+            record.closedInRoundId,
+            record.authorId,
+            record.content,
+            record.status,
+            record.closedBy,
+            record.closedAt,
+            record.createdAt,
+            record.updatedAt
+          )
+      );
+    }
+
+    await this.db.batch(statements);
+  }
+
+  async submitCurrentRoundResult(
+    mutation: SubmitCurrentRoundResultStorageMutation
+  ): Promise<void> {
+    const statements: D1PreparedStatement[] = [
+      this.db
+        .prepare(
+          `UPDATE "inspection_rounds"
+           SET "actualDate" = ?, "result" = ?, "inspectedBy" = ?, "notes" = ?, "updatedAt" = ?
+           WHERE "id" = ?`
+        )
+        .bind(
+          mutation.inspectionRound.actualDate,
+          mutation.inspectionRound.result,
+          mutation.inspectionRound.inspectedBy,
+          mutation.inspectionRound.notes,
+          mutation.inspectionRound.updatedAt,
+          mutation.inspectionRound.id
+        ),
+      this.db
+        .prepare(
+          `UPDATE "inspection_items"
+           SET "workflowStatus" = ?, "lastRoundResult" = ?, "resolvedResult" = ?, "openCommentsCount" = ?, "version" = ?, "updatedAt" = ?
+           WHERE "id" = ?`
+        )
+        .bind(
+          mutation.inspectionItem.workflowStatus,
+          mutation.inspectionItem.lastRoundResult,
+          mutation.inspectionItem.resolvedResult,
+          mutation.inspectionItem.openCommentsCount,
+          mutation.inspectionItem.version,
+          mutation.inspectionItem.updatedAt,
+          mutation.inspectionItem.id
+        )
+    ];
+
+    for (const record of mutation.createdComments) {
       statements.push(
         this.db
           .prepare(

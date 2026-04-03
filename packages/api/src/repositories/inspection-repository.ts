@@ -104,7 +104,15 @@ export class InspectionRepository {
     itemRecord.version += 1;
     itemRecord.updatedAt = now;
 
-    await this.db.write(storage);
+    if (this.db.submitCurrentRoundResult) {
+      await this.db.submitCurrentRoundResult({
+        inspectionItem: { ...itemRecord },
+        inspectionRound: { ...roundRecord },
+        createdComments: newCommentRecords.map((record) => ({ ...record }))
+      });
+    } else {
+      await this.db.write(storage);
+    }
 
     const refreshedDetail = await this.getInspectionDetail(inspectionItemId);
 

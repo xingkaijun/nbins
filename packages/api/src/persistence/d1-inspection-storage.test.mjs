@@ -38,6 +38,10 @@ class FakeD1Database {
       inspection_rounds: [],
       comments: []
     };
+    this.executedSql = [];
+    this.deletedTables = [];
+    this.updatedTables = [];
+    this.insertedTables = [];
   }
 
   prepare(sql) {
@@ -58,10 +62,35 @@ class FakeD1Database {
   }
 
   execute(sql, params) {
+    this.executedSql.push(sql);
+
     const deleteMatch = sql.match(/DELETE FROM "([^"]+)"/);
 
     if (deleteMatch) {
+      this.deletedTables.push(deleteMatch[1]);
       this.tables[deleteMatch[1]] = [];
+      return;
+    }
+
+    const updateMatch = sql.match(/UPDATE "([^"]+)"\s+SET\s+(.+?)\s+WHERE "id" = \?/s);
+
+    if (updateMatch) {
+      const [, tableName, rawAssignments] = updateMatch;
+      const assignments = rawAssignments
+        .split(",")
+        .map((assignment) => assignment.trim())
+        .map((assignment) => assignment.match(/"([^"]+)"/)?.[1] ?? null);
+      const id = params[params.length - 1];
+      const row = this.tables[tableName].find((entry) => entry.id === id);
+
+      if (!row) {
+        throw new Error(`Missing row ${tableName}.${id}`);
+      }
+
+      assignments.forEach((column, index) => {
+        row[column] = params[index];
+      });
+      this.updatedTables.push(tableName);
       return;
     }
 
@@ -75,6 +104,7 @@ class FakeD1Database {
     const columns = rawColumns.split(",").map((column) => column.trim().replaceAll('"', ""));
     const row = Object.fromEntries(columns.map((column, index) => [column, params[index]]));
     this.tables[tableName].push(row);
+    this.insertedTables.push(tableName);
   }
 }
 
@@ -87,4 +117,64 @@ test("D1InspectionStorage reads and writes repository snapshots", async () => {
   const snapshot = await storage.read();
 
   assert.deepEqual(snapshot, baseline);
+});
+
+test("D1InspectionStorage submitCurrentRoundResult updates only affected tables", async () => {
+  const db = new FakeD1Database();
+  const storage = new D1InspectionStorage(db);
+  const baseline = createBaselineInspectionStorage();
+
+  await storage.write(baseline);
+  db.executedSql = [];
+  db.deletedTables = [];
+  db.updatedTables = [];
+  db.insertedTables = [];
+
+  await storage.submitCurrentRoundResult({
+    inspectionItem: {
+      ...baseline.inspectionItems.find((record) => record.id === "insp-003"),
+      workflowStatus: "open",
+      lastRoundResult: "QCC",
+      resolvedResult: null,
+      openCommentsCount: 2,
+      version: 6,
+      updatedAt: "2026-04-03T11:00:00.000Z"
+    },
+    inspectionRound: {
+      ...baseline.inspectionRounds.find((record) => record.id === "round-insp-003-r2"),
+      actualDate: "2026-04-03",
+      result: "QCC",
+      inspectedBy: "user-inspector-wang",
+      notes: "Accepted with tracking comments.",
+      updatedAt: "2026-04-03T11:00:00.000Z"
+    },
+    createdComments: [
+      {
+        id: "insp-003-comment-round-insp-003-r2-1",
+        inspectionItemId: "insp-003",
+        createdInRoundId: "round-insp-003-r2",
+        closedInRoundId: null,
+        authorId: "user-inspector-wang",
+        content: "Monitor one repaired weld during close-out.",
+        status: "open",
+        closedBy: null,
+        closedAt: null,
+        createdAt: "2026-04-03T11:00:00.000Z",
+        updatedAt: "2026-04-03T11:00:00.000Z"
+      }
+    ]
+  });
+
+  assert.deepEqual(db.deletedTables, []);
+  assert.deepEqual(db.updatedTables, ["inspection_rounds", "inspection_items"]);
+  assert.deepEqual(db.insertedTables, ["comments"]);
+  assert.equal(
+    db.tables.inspection_items.find((record) => record.id === "insp-003").version,
+    6
+  );
+  assert.equal(
+    db.tables.inspection_rounds.find((record) => record.id === "round-insp-003-r2").result,
+    "QCC"
+  );
+  assert.equal(db.tables.comments.length, baseline.comments.length + 1);
 });

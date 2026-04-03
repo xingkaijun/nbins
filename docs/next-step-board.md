@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 05:32 Asia/Shanghai
+> Updated: 2026-04-04 05:48 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -17,11 +17,11 @@
 
 ## Task Breakdown
 
-- [ ] Pick the smallest safe target write path (recommended: result submission PUT)
-- [ ] Design minimal D1 table writes needed for that path (no full repo snapshot rewrite)
-- [ ] Implement narrow write(s) in D1 storage adapter
-- [ ] Update/extend tests to cover D1 narrow write behavior
-- [ ] Keep `docs/status-board.md` in sync
+- [x] Pick the smallest safe target write path (recommended: result submission PUT)
+- [x] Design minimal D1 table writes needed for that path (no full repo snapshot rewrite)
+- [x] Implement narrow write(s) in D1 storage adapter
+- [x] Update/extend tests to cover D1 narrow write behavior
+- [x] Keep `docs/status-board.md` in sync
 - [ ] Commit + push
 
 
@@ -56,4 +56,3 @@
 - [ ] Add query helpers + tests
 - [ ] Reduce snapshot footprint
 - [ ] Keep docs/status-board consistent
-

@@ -1,6 +1,109 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../index.ts";
+import { createSeedInspectionStorageSnapshot } from "../persistence/seed.ts";
+
+class FakePreparedStatement {
+  #db;
+  #sql;
+  #params = [];
+
+  constructor(db, sql) {
+    this.#db = db;
+    this.#sql = sql;
+  }
+
+  bind(...params) {
+    this.#params = params;
+    return this;
+  }
+
+  async all() {
+    return { results: this.#db.select(this.#sql) };
+  }
+
+  async run() {
+    this.#db.execute(this.#sql, this.#params);
+    return { success: true };
+  }
+}
+
+class FakeD1Database {
+  constructor() {
+    this.tables = {
+      users: [],
+      projects: [],
+      ships: [],
+      inspection_items: [],
+      inspection_rounds: [],
+      comments: []
+    };
+    this.deletedTables = [];
+    this.updatedTables = [];
+    this.insertedTables = [];
+  }
+
+  prepare(sql) {
+    return new FakePreparedStatement(this, sql);
+  }
+
+  async batch(statements) {
+    for (const statement of statements) {
+      await statement.run();
+    }
+
+    return [];
+  }
+
+  select(sql) {
+    const [, tableName] = sql.match(/FROM "([^"]+)"/) ?? [];
+    return [...this.tables[tableName]];
+  }
+
+  execute(sql, params) {
+    const deleteMatch = sql.match(/DELETE FROM "([^"]+)"/);
+
+    if (deleteMatch) {
+      this.deletedTables.push(deleteMatch[1]);
+      this.tables[deleteMatch[1]] = [];
+      return;
+    }
+
+    const updateMatch = sql.match(/UPDATE "([^"]+)"\s+SET\s+(.+?)\s+WHERE "id" = \?/s);
+
+    if (updateMatch) {
+      const [, tableName, rawAssignments] = updateMatch;
+      const assignments = rawAssignments
+        .split(",")
+        .map((assignment) => assignment.trim())
+        .map((assignment) => assignment.match(/"([^"]+)"/)?.[1] ?? null);
+      const id = params[params.length - 1];
+      const row = this.tables[tableName].find((entry) => entry.id === id);
+
+      if (!row) {
+        throw new Error(`Missing row ${tableName}.${id}`);
+      }
+
+      assignments.forEach((column, index) => {
+        row[column] = params[index];
+      });
+      this.updatedTables.push(tableName);
+      return;
+    }
+
+    const insertMatch = sql.match(/INSERT INTO "([^"]+)" \(([^)]+)\)/);
+
+    if (!insertMatch) {
+      throw new Error(`Unsupported SQL: ${sql}`);
+    }
+
+    const [, tableName, rawColumns] = insertMatch;
+    const columns = rawColumns.split(",").map((column) => column.trim().replaceAll('"', ""));
+    const row = Object.fromEntries(columns.map((column, index) => [column, params[index]]));
+    this.tables[tableName].push(row);
+    this.insertedTables.push(tableName);
+  }
+}
 
 function createTestApp() {
   return createApp();
@@ -99,6 +202,78 @@ test("PUT /api/inspections/:id/rounds/current/result accepts QCC with comments",
   assert.equal(payload.data.item.waitingForNextRound, false);
   assert.equal(payload.data.item.openCommentCount, 2);
   assert.equal(payload.data.item.version, 6);
+});
+
+test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", async () => {
+  const app = createApp();
+  const db = new FakeD1Database();
+  const seed = createSeedInspectionStorageSnapshot();
+
+  for (const user of seed.users) {
+    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+  }
+
+  for (const project of seed.projects) {
+    db.tables.projects.push({ ...project, recipients: JSON.stringify(project.recipients) });
+  }
+
+  for (const ship of seed.ships) {
+    db.tables.ships.push({ ...ship });
+  }
+
+  for (const item of seed.inspectionItems) {
+    db.tables.inspection_items.push({ ...item });
+  }
+
+  for (const round of seed.inspectionRounds) {
+    db.tables.inspection_rounds.push({ ...round });
+  }
+
+  for (const comment of seed.comments) {
+    db.tables.comments.push({ ...comment });
+  }
+
+  db.deletedTables = [];
+  db.updatedTables = [];
+  db.insertedTables = [];
+
+  const response = await app.request(
+    "http://localhost/api/inspections/insp-003/rounds/current/result",
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        result: "QCC",
+        actualDate: "2026-04-03",
+        submittedAt: "2026-04-03T11:00:00.000Z",
+        submittedBy: "user-inspector-wang",
+        inspectorDisplayName: "Wang Wu",
+        notes: "Accepted with tracking comments.",
+        expectedVersion: 5,
+        comments: [{ message: "Monitor one repaired weld during close-out." }]
+      })
+    },
+    {
+      D1_DRIVER: "d1",
+      DB: db
+    }
+  );
+
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.deepEqual(db.deletedTables, []);
+  assert.deepEqual(db.updatedTables, ["inspection_rounds", "inspection_items"]);
+  assert.deepEqual(db.insertedTables, ["comments"]);
+  assert.equal(
+    db.tables.inspection_items.find((record) => record.id === "insp-003").version,
+    6
+  );
+  assert.equal(
+    db.tables.inspection_rounds.find((record) => record.id === "round-insp-003-r2").result,
+    "QCC"
+  );
 });
 
 test("PUT /api/inspections/:id/rounds/current/result accepts CX without adding comments", async () => {
