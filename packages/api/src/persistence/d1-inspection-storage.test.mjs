@@ -19,7 +19,7 @@ class FakePreparedStatement {
   }
 
   async all() {
-    return { results: this.#db.select(this.#sql) };
+    return { results: this.#db.select(this.#sql, this.#params) };
   }
 
   async run() {
@@ -56,9 +56,22 @@ class FakeD1Database {
     return [];
   }
 
-  select(sql) {
+  select(sql, params) {
+    return this.#selectInternal(sql, params);
+  }
+
+  #selectInternal(sql, params) {
+    this.executedSql.push(sql);
     const [, tableName] = sql.match(/FROM "([^"]+)"/) ?? [];
-    return [...this.tables[tableName]];
+    const rows = [...this.tables[tableName]];
+    const whereMatch = sql.match(/WHERE "([^"]+)" = \?/);
+
+    if (!whereMatch) {
+      return rows;
+    }
+
+    const [, column] = whereMatch;
+    return rows.filter((row) => row[column] === params[0]);
   }
 
   execute(sql, params) {
@@ -177,4 +190,33 @@ test("D1InspectionStorage submitCurrentRoundResult updates only affected tables"
     "QCC"
   );
   assert.equal(db.tables.comments.length, baseline.comments.length + 1);
+});
+
+test("D1InspectionStorage readInspectionDetail selects only item-scoped records", async () => {
+  const db = new FakeD1Database();
+  const storage = new D1InspectionStorage(db);
+  const baseline = createBaselineInspectionStorage();
+
+  await storage.write(baseline);
+  db.executedSql = [];
+
+  const detail = await storage.readInspectionDetail("insp-003");
+
+  assert.equal(detail?.item.id, "insp-003");
+  assert.equal(detail?.project.code, "P-002");
+  assert.deepEqual(
+    db.executedSql,
+    [
+      'SELECT * FROM "inspection_items" WHERE "id" = ?',
+      'SELECT * FROM "ships" WHERE "id" = ?',
+      'SELECT * FROM "projects" WHERE "id" = ?',
+      'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
+      'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
+      'SELECT * FROM "users" WHERE "id" = ?'
+    ]
+  );
+  assert.equal(
+    db.executedSql.some((sql) => /^SELECT \* FROM "(users|projects|ships|inspection_items|inspection_rounds|comments)"$/.test(sql)),
+    false
+  );
 });

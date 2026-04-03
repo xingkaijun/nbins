@@ -21,6 +21,13 @@ export class InspectionRepository {
   }
 
   async getInspectionDetail(inspectionItemId: string): Promise<InspectionItemDetailResponse | null> {
+    if (this.db.readInspectionDetail) {
+      const selected = await this.db.readInspectionDetail(inspectionItemId);
+      if (selected) {
+        return mapInspectionDetailFromStorage(selected);
+      }
+    }
+
     const selected = selectInspectionDetailRecord(await this.db.read(), inspectionItemId);
     return selected ? mapInspectionDetailFromStorage(selected) : null;
   }

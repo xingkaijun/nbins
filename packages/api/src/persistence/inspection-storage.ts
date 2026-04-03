@@ -2,7 +2,10 @@ import type {
   CommentRecord,
   InspectionItemRecord,
   InspectionRoundRecord,
-  InspectionStorageSnapshot
+  ProjectRecord,
+  InspectionStorageSnapshot,
+  ShipRecord,
+  UserRecord
 } from "./records.ts";
 
 export interface SubmitCurrentRoundResultStorageMutation {
@@ -11,9 +14,21 @@ export interface SubmitCurrentRoundResultStorageMutation {
   createdComments: CommentRecord[];
 }
 
+export interface InspectionDetailStorageRecord {
+  item: InspectionItemRecord;
+  ship: ShipRecord;
+  project: ProjectRecord;
+  rounds: InspectionRoundRecord[];
+  comments: CommentRecord[];
+  users: UserRecord[];
+}
+
 export interface InspectionStorage {
   read(): Promise<InspectionStorageSnapshot>;
   write(next: InspectionStorageSnapshot): Promise<void>;
+  readInspectionDetail?(
+    inspectionItemId: string
+  ): Promise<InspectionDetailStorageRecord | null>;
   submitCurrentRoundResult?(
     mutation: SubmitCurrentRoundResultStorageMutation
   ): Promise<void>;

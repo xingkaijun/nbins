@@ -19,7 +19,7 @@ class FakePreparedStatement {
   }
 
   async all() {
-    return { results: this.#db.select(this.#sql) };
+    return { results: this.#db.select(this.#sql, this.#params) };
   }
 
   async run() {
@@ -38,6 +38,7 @@ class FakeD1Database {
       inspection_rounds: [],
       comments: []
     };
+    this.executedSql = [];
     this.deletedTables = [];
     this.updatedTables = [];
     this.insertedTables = [];
@@ -55,9 +56,18 @@ class FakeD1Database {
     return [];
   }
 
-  select(sql) {
+  select(sql, params) {
+    this.executedSql.push(sql);
     const [, tableName] = sql.match(/FROM "([^"]+)"/) ?? [];
-    return [...this.tables[tableName]];
+    const rows = [...this.tables[tableName]];
+    const whereMatch = sql.match(/WHERE "([^"]+)" = \?/);
+
+    if (!whereMatch) {
+      return rows;
+    }
+
+    const [, column] = whereMatch;
+    return rows.filter((row) => row[column] === params[0]);
   }
 
   execute(sql, params) {
@@ -273,6 +283,63 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   assert.equal(
     db.tables.inspection_rounds.find((record) => record.id === "round-insp-003-r2").result,
     "QCC"
+  );
+});
+
+test("GET /api/inspections/:id uses narrow D1 reads", async () => {
+  const app = createApp();
+  const db = new FakeD1Database();
+  const seed = createSeedInspectionStorageSnapshot();
+
+  for (const user of seed.users) {
+    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+  }
+
+  for (const project of seed.projects) {
+    db.tables.projects.push({ ...project, recipients: JSON.stringify(project.recipients) });
+  }
+
+  for (const ship of seed.ships) {
+    db.tables.ships.push({ ...ship });
+  }
+
+  for (const item of seed.inspectionItems) {
+    db.tables.inspection_items.push({ ...item });
+  }
+
+  for (const round of seed.inspectionRounds) {
+    db.tables.inspection_rounds.push({ ...round });
+  }
+
+  for (const comment of seed.comments) {
+    db.tables.comments.push({ ...comment });
+  }
+
+  db.executedSql = [];
+
+  const response = await app.request("http://localhost/api/inspections/insp-003", {}, {
+    D1_DRIVER: "d1",
+    DB: db
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.id, "insp-003");
+  assert.equal(
+    db.executedSql.some((sql) => /^SELECT \* FROM "(users|projects|ships|inspection_items|inspection_rounds|comments)"$/.test(sql)),
+    false
+  );
+  assert.deepEqual(
+    db.executedSql,
+    [
+      'SELECT * FROM "inspection_items" WHERE "id" = ?',
+      'SELECT * FROM "ships" WHERE "id" = ?',
+      'SELECT * FROM "projects" WHERE "id" = ?',
+      'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
+      'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
+      'SELECT * FROM "users" WHERE "id" = ?'
+    ]
   );
 });
 

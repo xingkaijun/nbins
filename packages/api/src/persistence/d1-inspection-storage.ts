@@ -9,6 +9,7 @@ import type {
   UserRecord
 } from "./records.ts";
 import type {
+  InspectionDetailStorageRecord,
   InspectionStorage,
   SubmitCurrentRoundResultStorageMutation
 } from "./inspection-storage.ts";
@@ -39,6 +40,63 @@ export class D1InspectionStorage implements InspectionStorage {
       inspectionItems: inspectionItems.map(mapInspectionItemRecord),
       inspectionRounds: inspectionRounds.map(mapInspectionRoundRecord),
       comments: comments.map(mapCommentRecord)
+    };
+  }
+
+  async readInspectionDetail(
+    inspectionItemId: string
+  ): Promise<InspectionDetailStorageRecord | null> {
+    const itemRow = await this.selectFirst(
+      `SELECT * FROM "inspection_items" WHERE "id" = ?`,
+      inspectionItemId
+    );
+
+    if (!itemRow) {
+      return null;
+    }
+
+    const item = mapInspectionItemRecord(itemRow);
+    const shipRow = await this.selectRequired(
+      `SELECT * FROM "ships" WHERE "id" = ?`,
+      item.shipId
+    );
+    const ship = mapShipRecord(shipRow);
+    const project = mapProjectRecord(
+      await this.selectRequired(`SELECT * FROM "projects" WHERE "id" = ?`, ship.projectId)
+    );
+    const [roundRows, commentRows] = await Promise.all([
+      this.selectMany(
+        `SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?`,
+        item.id
+      ),
+      this.selectMany(`SELECT * FROM "comments" WHERE "inspectionItemId" = ?`, item.id)
+    ]);
+    const rounds = roundRows.map(mapInspectionRoundRecord);
+    const comments = commentRows.map(mapCommentRecord);
+    const userIds = Array.from(
+      new Set(
+        [
+          ...rounds.map((record) => record.inspectedBy),
+          ...comments.map((record) => record.authorId),
+          ...comments.map((record) => record.closedBy)
+        ].filter((value): value is string => typeof value === "string" && value.length > 0)
+      )
+    );
+
+    return {
+      item,
+      ship,
+      project,
+      rounds: rounds.sort((left, right) => left.roundNumber - right.roundNumber),
+      comments: comments.sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+      users:
+        userIds.length === 0
+          ? []
+          : await Promise.all(
+              userIds.map(async (userId) =>
+                mapUserRecord(await this.selectRequired(`SELECT * FROM "users" WHERE "id" = ?`, userId))
+              )
+            )
     };
   }
 
@@ -250,6 +308,26 @@ export class D1InspectionStorage implements InspectionStorage {
   private async selectAll(tableName: string): Promise<JsonRow[]> {
     const result = await this.db.prepare(`SELECT * FROM "${tableName}"`).all<JsonRow>();
     return result.results;
+  }
+
+  private async selectMany(sql: string, ...params: unknown[]): Promise<JsonRow[]> {
+    const result = await this.db.prepare(sql).bind(...params).all<JsonRow>();
+    return result.results;
+  }
+
+  private async selectFirst(sql: string, ...params: unknown[]): Promise<JsonRow | null> {
+    const [row] = await this.selectMany(sql, ...params);
+    return row ?? null;
+  }
+
+  private async selectRequired(sql: string, ...params: unknown[]): Promise<JsonRow> {
+    const row = await this.selectFirst(sql, ...params);
+
+    if (!row) {
+      throw new Error(`Expected row for query: ${sql}`);
+    }
+
+    return row;
   }
 }
 

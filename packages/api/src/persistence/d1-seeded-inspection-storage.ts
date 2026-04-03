@@ -1,6 +1,7 @@
 import type { D1Database } from "@cloudflare/workers-types";
 import type { InspectionStorageSnapshot } from "./records.ts";
 import type {
+  InspectionDetailStorageRecord,
   InspectionStorage,
   SubmitCurrentRoundResultStorageMutation
 } from "./inspection-storage.ts";
@@ -23,6 +24,29 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   async write(next: InspectionStorageSnapshot): Promise<void> {
     await this.ensureSeeded();
     return this.inner.write(next);
+  }
+
+  async readInspectionDetail(
+    inspectionItemId: string
+  ): Promise<InspectionDetailStorageRecord | null> {
+    if (this.inner.readInspectionDetail) {
+      const detail = await this.inner.readInspectionDetail(inspectionItemId);
+
+      if (detail) {
+        this.seeded = true;
+        return detail;
+      }
+
+      if (this.seeded) {
+        return null;
+      }
+
+      await this.ensureSeeded();
+      return this.inner.readInspectionDetail(inspectionItemId);
+    }
+
+    await this.ensureSeeded();
+    return null;
   }
 
   async submitCurrentRoundResult(
