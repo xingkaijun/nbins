@@ -16,9 +16,10 @@
 
 ## Task Breakdown
 
-- [ ] Ensure D1 dev starts with schema present (document: run `pnpm --filter @nbins/api run gen:bootstrap-sql -- src/db/d1-bootstrap.sql` then `pnpm --filter @nbins/api exec node packages/api/scripts/bootstrap-local-d1.mjs`)
-- [ ] Add `pnpm d1:bootstrap` root script to wrap the above
-- [ ] Add `pnpm dev:api:d1` script that sets `D1_DRIVER=d1` + warns if schema missing
+- [x] Ensure D1 dev starts with schema present (via `pnpm d1:bootstrap` and documented smoke)
+- [x] Add `pnpm d1:gen` root script to regenerate `packages/api/src/db/d1-bootstrap.sql`
+- [x] Add `pnpm d1:bootstrap` root script to wrap the above
+- [x] Add `pnpm dev:api:d1` script that sets `D1_DRIVER=d1` and runs wrangler local dev
 - [ ] Add one integration test to confirm seeded snapshot inserted on first D1 read
 - [ ] Commit + push
 

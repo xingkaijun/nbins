@@ -6,6 +6,16 @@ This milestone proves the D1 runtime wiring under `wrangler dev` (local mode) wi
 
 - `pnpm i` at repo root.
 
+## Quick start (recommended)
+
+```bash
+# Generate schema SQL + apply to local D1
+pnpm d1:bootstrap
+
+# Start the API in D1 mode (local dev + persistence)
+pnpm dev:api:d1
+```
+
 ## Run worker with local D1 persistence
 
 ```bash
