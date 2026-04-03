@@ -139,6 +139,21 @@ function createTestApp() {
   return createApp();
 }
 
+test("GET /api/inspections returns inspection list snapshot", async () => {
+  const app = createTestApp();
+  const response = await app.request("http://localhost/api/inspections");
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(Array.isArray(payload.data.items), true);
+  assert.equal(payload.data.items.length, 2);
+  assert.equal(payload.data.items[0].id, "insp-002");
+  assert.equal(payload.data.items[1].id, "insp-003");
+  assert.equal(payload.data.items[1].currentResult, "OWC");
+  assert.equal(payload.data.summary.openComments, 3);
+});
+
 test("GET /api/inspections/:id returns inspection detail", async () => {
   const app = createTestApp();
   const response = await app.request("http://localhost/api/inspections/insp-002");
@@ -389,6 +404,62 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
     db.executedSql.includes('SELECT * FROM "users" WHERE "id" = ?'),
     false
   );
+});
+
+test("GET /api/inspections uses narrow D1 reads", async () => {
+  const app = createApp();
+  const db = new FakeD1Database();
+  const seed = createSeedInspectionStorageSnapshot();
+
+  for (const user of seed.users) {
+    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+  }
+
+  for (const project of seed.projects) {
+    db.tables.projects.push({ ...project, recipients: JSON.stringify(project.recipients) });
+  }
+
+  for (const ship of seed.ships) {
+    db.tables.ships.push({ ...ship });
+  }
+
+  for (const item of seed.inspectionItems) {
+    db.tables.inspection_items.push({ ...item });
+  }
+
+  for (const round of seed.inspectionRounds) {
+    db.tables.inspection_rounds.push({ ...round });
+  }
+
+  for (const comment of seed.comments) {
+    db.tables.comments.push({ ...comment });
+  }
+
+  db.executedSql = [];
+
+  const response = await app.request("http://localhost/api/inspections", {}, {
+    D1_DRIVER: "d1",
+    DB: db
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.items.length, 2);
+  assert.equal(
+    db.executedSql.some((sql) =>
+      /^SELECT \* FROM "(users|projects|ships|inspection_rounds|comments)"$/.test(sql)
+    ),
+    false
+  );
+  assert.equal(db.executedSql.includes('SELECT * FROM "inspection_items"'), true);
+  assert.deepEqual(db.executedSql, [
+    'SELECT * FROM "inspection_items"',
+    'SELECT * FROM "ships" WHERE "id" IN (?, ?)',
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?',
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?',
+    'SELECT * FROM "projects" WHERE "id" IN (?, ?)'
+  ]);
 });
 
 test("PUT /api/inspections/:id/rounds/current/result accepts CX without adding comments", async () => {

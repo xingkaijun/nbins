@@ -26,6 +26,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
       routes: [
         "/health",
         "/api/meta",
+        "/api/inspections",
         "/api/inspections/:id",
         "/api/inspections/:id/rounds/current/result",
         "/api/dev/inspection-item-submission",

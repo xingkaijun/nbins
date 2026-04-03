@@ -1,4 +1,5 @@
 import type {
+  DashboardSnapshot,
   InspectionItemDetailResponse,
   SubmitInspectionResultRequest,
   SubmitInspectionResultResponse
@@ -10,6 +11,10 @@ export class InspectionService {
 
   constructor(repository: InspectionRepository) {
     this.repository = repository;
+  }
+
+  listInspections(): Promise<DashboardSnapshot> {
+    return this.repository.listInspections();
   }
 
   readInspectionItemDetail(

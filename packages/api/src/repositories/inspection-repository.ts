@@ -1,5 +1,7 @@
 import type {
+  DashboardSnapshot,
   InspectionItemDetailResponse,
+  InspectionListItem,
   SubmitInspectionResultRequest,
   SubmitInspectionResultResponse
 } from "@nbins/shared";
@@ -23,6 +25,47 @@ export class InspectionRepository {
 
   constructor(db: InspectionStorage) {
     this.db = db;
+  }
+
+  async listInspections(): Promise<DashboardSnapshot> {
+    if (this.db.readInspectionList) {
+      const selected = await this.db.readInspectionList();
+
+      return {
+        generatedAt: selected.generatedAt,
+        summary: createDashboardSummary(selected.items.map(mapInspectionListItemRecord)),
+        items: selected.items.map(mapInspectionListItemRecord)
+      };
+    }
+
+    const snapshot = await this.db.read();
+    const items = snapshot.inspectionItems
+      .map((item) => {
+        const ship = snapshot.ships.find((record) => record.id === item.shipId);
+
+        if (!ship) {
+          return null;
+        }
+
+        const project = snapshot.projects.find((record) => record.id === ship.projectId);
+        const currentRound = snapshot.inspectionRounds.find(
+          (record) =>
+            record.inspectionItemId === item.id && record.roundNumber === item.currentRound
+        );
+
+        if (!project || !currentRound) {
+          return null;
+        }
+
+        return mapInspectionListItemRecord({ item, ship, project, currentRound });
+      })
+      .filter((record): record is InspectionListItem => record !== null);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      summary: createDashboardSummary(items),
+      items
+    };
   }
 
   async getInspectionDetail(inspectionItemId: string): Promise<InspectionItemDetailResponse | null> {
@@ -259,4 +302,37 @@ export function createInspectionRepositorySnapshot(
   db: InspectionStorage
 ): Promise<InspectionStorageSnapshot> {
   return db.read().then(cloneStorageSnapshot);
+}
+
+function mapInspectionListItemRecord(record: {
+  item: InspectionItemRecord;
+  ship: { hullNumber: string; shipName: string };
+  project: { code: string; name: string };
+  currentRound: InspectionRoundRecord;
+}): InspectionListItem {
+  return {
+    id: record.item.id,
+    projectCode: record.project.code,
+    projectName: record.project.name,
+    hullNumber: record.ship.hullNumber,
+    shipName: record.ship.shipName,
+    itemName: record.item.itemName,
+    discipline: record.item.discipline,
+    plannedDate: record.currentRound.plannedDate ?? "",
+    yardQc: record.currentRound.yardQc ?? "",
+    currentResult: record.item.resolvedResult ?? record.item.lastRoundResult,
+    workflowStatus: record.item.workflowStatus,
+    openComments: record.item.openCommentsCount,
+    currentRound: record.item.currentRound
+  };
+}
+
+function createDashboardSummary(items: InspectionListItem[]): DashboardSnapshot["summary"] {
+  return {
+    pendingToday: items.filter((item) => item.workflowStatus === "pending").length,
+    completedToday: items.filter((item) => item.currentResult === "AA").length,
+    openComments: items.reduce((count, item) => count + item.openComments, 0),
+    reinspectionQueue: items.filter((item) => item.currentResult === "OWC").length,
+    projectProgress: 0
+  };
 }

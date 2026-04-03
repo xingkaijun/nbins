@@ -29,9 +29,20 @@ export interface InspectionSubmissionContextRecord {
   openCommentCount: number;
 }
 
+export interface InspectionListStorageRecord {
+  generatedAt: string;
+  items: Array<{
+    item: InspectionItemRecord;
+    ship: ShipRecord;
+    project: ProjectRecord;
+    currentRound: InspectionRoundRecord;
+  }>;
+}
+
 export interface InspectionStorage {
   read(): Promise<InspectionStorageSnapshot>;
   write(next: InspectionStorageSnapshot): Promise<void>;
+  readInspectionList?(): Promise<InspectionListStorageRecord>;
   readInspectionDetail?(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null>;

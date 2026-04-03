@@ -9,6 +9,7 @@ import type {
   UserRecord
 } from "./records.ts";
 import type {
+  InspectionListStorageRecord,
   InspectionDetailStorageRecord,
   InspectionSubmissionContextRecord,
   InspectionStorage,
@@ -41,6 +42,57 @@ export class D1InspectionStorage implements InspectionStorage {
       inspectionItems: inspectionItems.map(mapInspectionItemRecord),
       inspectionRounds: inspectionRounds.map(mapInspectionRoundRecord),
       comments: comments.map(mapCommentRecord)
+    };
+  }
+
+  async readInspectionList(): Promise<InspectionListStorageRecord> {
+    const itemRows = await this.selectMany(`SELECT * FROM "inspection_items"`);
+    const items = itemRows.map(mapInspectionItemRecord);
+    const shipIds = Array.from(new Set(items.map((record) => record.shipId)));
+    const roundKeys = items.map((record) => [record.id, record.currentRound] as const);
+    const [ships, currentRounds] = await Promise.all([
+      shipIds.length === 0 ? [] : this.selectShipsByIds(shipIds),
+      Promise.all(
+        roundKeys.map(([inspectionItemId, roundNumber]) =>
+          this.selectRequired(
+            `SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?`,
+            inspectionItemId,
+            roundNumber
+          ).then(mapInspectionRoundRecord)
+        )
+      )
+    ]);
+    const projectIds = Array.from(new Set(ships.map((record) => record.projectId)));
+    const projects = projectIds.length === 0 ? [] : await this.selectProjectsByIds(projectIds);
+    const shipsById = new Map(ships.map((record) => [record.id, record]));
+    const projectsById = new Map(projects.map((record) => [record.id, record]));
+    const roundsByKey = new Map(
+      currentRounds.map((record) => [`${record.inspectionItemId}:${record.roundNumber}`, record])
+    );
+
+    return {
+      generatedAt: new Date().toISOString(),
+      items: items.map((item) => {
+        const ship = shipsById.get(item.shipId);
+
+        if (!ship) {
+          throw new Error(`Expected ship for inspection item ${item.id}`);
+        }
+
+        const project = projectsById.get(ship.projectId);
+
+        if (!project) {
+          throw new Error(`Expected project for ship ${ship.id}`);
+        }
+
+        const currentRound = roundsByKey.get(`${item.id}:${item.currentRound}`);
+
+        if (!currentRound) {
+          throw new Error(`Expected current round for inspection item ${item.id}`);
+        }
+
+        return { item, ship, project, currentRound };
+      })
     };
   }
 
@@ -385,6 +437,44 @@ export class D1InspectionStorage implements InspectionStorage {
       }
 
       return user;
+    });
+  }
+
+  private async selectShipsByIds(shipIds: string[]): Promise<ShipRecord[]> {
+    const placeholders = shipIds.map(() => "?").join(", ");
+    const rows = await this.selectMany(
+      `SELECT * FROM "ships" WHERE "id" IN (${placeholders})`,
+      ...shipIds
+    );
+    const shipsById = new Map(rows.map((row) => [stringValue(row.id), mapShipRecord(row)]));
+
+    return shipIds.map((shipId) => {
+      const ship = shipsById.get(shipId);
+
+      if (!ship) {
+        throw new Error(`Expected row for query: SELECT * FROM "ships" WHERE "id" IN (${placeholders})`);
+      }
+
+      return ship;
+    });
+  }
+
+  private async selectProjectsByIds(projectIds: string[]): Promise<ProjectRecord[]> {
+    const placeholders = projectIds.map(() => "?").join(", ");
+    const rows = await this.selectMany(
+      `SELECT * FROM "projects" WHERE "id" IN (${placeholders})`,
+      ...projectIds
+    );
+    const projectsById = new Map(rows.map((row) => [stringValue(row.id), mapProjectRecord(row)]));
+
+    return projectIds.map((projectId) => {
+      const project = projectsById.get(projectId);
+
+      if (!project) {
+        throw new Error(`Expected row for query: SELECT * FROM "projects" WHERE "id" IN (${placeholders})`);
+      }
+
+      return project;
     });
   }
 }

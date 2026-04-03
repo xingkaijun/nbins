@@ -8,6 +8,18 @@ function createInspectionRoutes(): Hono<{ Bindings: Bindings }> {
   const inspectionRoutes = new Hono<{ Bindings: Bindings }>();
   const resolveStorage = createInspectionStorageResolver();
 
+  inspectionRoutes.get("/", async (c) => {
+    const inspectionService = new InspectionService(
+      new InspectionRepository(resolveStorage(c.env))
+    );
+    const snapshot = await inspectionService.listInspections();
+
+    return c.json({
+      ok: true,
+      data: snapshot
+    });
+  });
+
   inspectionRoutes.get("/:id", async (c) => {
     const inspectionService = new InspectionService(
       new InspectionRepository(resolveStorage(c.env))
