@@ -7,7 +7,8 @@
     "build": "pnpm -r build",
     "dev:web": "pnpm --filter @nbins/web dev",
     "dev:api": "pnpm --filter @nbins/api dev",
+    "test:api": "pnpm --filter @nbins/api test",
+    "qa": "pnpm typecheck && pnpm build && pnpm test:api",
     "typecheck": "pnpm -r typecheck"
   }
 }
-

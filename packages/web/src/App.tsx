@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   COMMENT_STATUSES,
   DISCIPLINE_LABELS,
@@ -12,8 +12,11 @@ import {
   createMockInspectionDetails,
   syncListItemWithDetail
 } from "@nbins/shared";
+import { ApiError } from "./api";
+import { type DetailTransportMode, useInspectionDetail } from "./useInspectionDetail";
 
 const snapshot = createMockDashboardSnapshot();
+const initialMockDetails = createMockInspectionDetails();
 const navItems = ["Dashboard", "Projects", "Reports", "Import", "Admin"];
 const resultOptions = INSPECTION_RESULTS;
 const commentStatusLabels = {
@@ -138,17 +141,94 @@ function createSubmittedComments(
   }));
 }
 
+function createLocalSubmissionDetail(input: {
+  detail: InspectionItemDetailResponse;
+  selectedResult: InspectionResult;
+  preview: ReturnType<typeof buildSubmissionPreview>;
+  canAddComments: boolean;
+  draftComments: Array<{ id: string; message: string }>;
+  submittedBy: string;
+}): InspectionItemDetailResponse {
+  const { detail, selectedResult, preview, canAddComments, draftComments, submittedBy } = input;
+  const submittedAt = new Date().toISOString();
+  const actor = submittedBy.trim() || "Inspector Demo";
+  const nextComments =
+    canAddComments && draftComments.length > 0
+      ? createSubmittedComments(detail, actor, submittedAt, draftComments)
+      : [];
+  const nextHistoryEntry: InspectionItemDetailResponse["roundHistory"][number] = {
+    id: `${detail.id}-round-${detail.roundHistory.length + 1}`,
+    roundNumber: detail.currentRound,
+    actualDate: detail.actualDate,
+    submittedResult: selectedResult,
+    submittedAt,
+    submittedBy: actor,
+    inspectorDisplayName: actor,
+    notes: null,
+    source: detail.source,
+    commentIds: nextComments.map((comment) => comment.id)
+  };
+
+  return {
+    ...detail,
+    workflowStatus:
+      selectedResult === "CX"
+        ? "cancelled"
+        : preview.nextResult === "AA" && !preview.nextPendingFinalAcceptance
+          ? "closed"
+          : preview.nextOpenComments > 0 || preview.nextWaitingForNextRound
+            ? "open"
+            : "pending",
+    resolvedResult: preview.nextResult,
+    lastRoundResult: selectedResult,
+    openCommentCount: preview.nextOpenComments,
+    pendingFinalAcceptance: preview.nextPendingFinalAcceptance,
+    waitingForNextRound: preview.nextWaitingForNextRound,
+    comments: [...detail.comments, ...nextComments],
+    roundHistory: [...detail.roundHistory, nextHistoryEntry],
+    version: detail.version + 1
+  };
+}
+
+function buildActualDate(detail: InspectionItemDetailResponse): string | null {
+  return detail.actualDate ?? detail.plannedDate ?? null;
+}
+
+function syncDashboardItem(
+  listItems: InspectionListItem[],
+  detail: InspectionItemDetailResponse
+): InspectionListItem[] {
+  return listItems.map((item) =>
+    item.id === detail.id ? syncListItemWithDetail(item, detail) : item
+  );
+}
+
 export function App() {
   const [listItems, setListItems] = useState<InspectionListItem[]>(snapshot.items);
-  const [detailsById, setDetailsById] = useState<Record<string, InspectionItemDetailResponse>>(
-    () => createMockInspectionDetails()
-  );
+  const [mockDetailsById, setMockDetailsById] =
+    useState<Record<string, InspectionItemDetailResponse>>(initialMockDetails);
   const [selectedId, setSelectedId] = useState<string>(snapshot.items[1]?.id ?? snapshot.items[0]?.id ?? "");
   const [selectedResult, setSelectedResult] = useState<InspectionResult>("QCC");
   const [commentText, setCommentText] = useState("");
   const [submittedBy, setSubmittedBy] = useState("Inspector Demo");
+  const [clientNotice, setClientNotice] = useState<string | null>(null);
 
-  const selectedDetail = detailsById[selectedId];
+  const fallbackDetail = mockDetailsById[selectedId];
+  const {
+    detail: selectedDetail,
+    mode,
+    loading,
+    error,
+    submitError,
+    submitting,
+    refresh,
+    applyLocalDetail,
+    submit
+  } = useInspectionDetail({
+    inspectionItemId: selectedId,
+    fallbackDetail
+  });
+
   const draftComments = useMemo(() => buildCommentDrafts(commentText), [commentText]);
   const canAddComments = selectedResult === "QCC" || selectedResult === "OWC" || selectedResult === "RJ";
   const hasExistingOpenComments =
@@ -157,6 +237,10 @@ export function App() {
   const preview = selectedDetail
     ? buildSubmissionPreview(selectedDetail, selectedResult, draftComments)
     : null;
+
+  useEffect(() => {
+    setSelectedResult(selectedDetail?.lastRoundResult ?? "QCC");
+  }, [selectedDetail?.id, selectedDetail?.lastRoundResult]);
 
   const summaryCards = [
     { label: "Today Queue", value: listItems.filter((item) => item.workflowStatus === "pending").length.toString().padStart(2, "0") },
@@ -169,65 +253,92 @@ export function App() {
   function handleSelectItem(id: string): void {
     setSelectedId(id);
     setCommentText("");
-    setSelectedResult(detailsById[id]?.lastRoundResult ?? "QCC");
+    setClientNotice(null);
   }
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>): void {
+  function persistLocalDetail(nextDetail: InspectionItemDetailResponse): void {
+    setMockDetailsById((current) => ({
+      ...current,
+      [nextDetail.id]: nextDetail
+    }));
+    applyLocalDetail(nextDetail);
+    setListItems((current) => syncDashboardItem(current, nextDetail));
+  }
+
+  function persistResolvedDetail(nextDetail: InspectionItemDetailResponse): void {
+    setMockDetailsById((current) => ({
+      ...current,
+      [nextDetail.id]: nextDetail
+    }));
+    setListItems((current) => syncDashboardItem(current, nextDetail));
+  }
+
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
     if (!selectedDetail || !preview) {
       return;
     }
 
-    const submittedAt = new Date().toISOString();
-    const nextComments =
-      canAddComments && draftComments.length > 0
-        ? createSubmittedComments(selectedDetail, submittedBy.trim() || "Inspector Demo", submittedAt, draftComments)
-        : [];
-    const nextHistoryEntry: InspectionItemDetailResponse["roundHistory"][number] = {
-      id: `${selectedDetail.id}-round-${selectedDetail.roundHistory.length + 1}`,
-      roundNumber: selectedDetail.currentRound,
-      actualDate: selectedDetail.actualDate,
-      submittedResult: selectedResult,
-      submittedAt,
-      submittedBy: submittedBy.trim() || "Inspector Demo",
-      inspectorDisplayName: submittedBy.trim() || "Inspector Demo",
+    const actor = submittedBy.trim() || "Inspector Demo";
+    const request = {
+      result: selectedResult,
+      actualDate: buildActualDate(selectedDetail),
+      submittedBy: actor,
+      inspectorDisplayName: actor,
       notes: null,
-      source: selectedDetail.source,
-      commentIds: nextComments.map((comment) => comment.id)
+      expectedVersion: selectedDetail.version,
+      comments: canAddComments ? draftComments.map((comment) => ({ message: comment.message })) : []
     };
 
-    const nextDetail: InspectionItemDetailResponse = {
-      ...selectedDetail,
-      workflowStatus:
-        selectedResult === "CX"
-          ? "cancelled"
-          : preview.nextResult === "AA" && !preview.nextPendingFinalAcceptance
-            ? "closed"
-            : preview.nextOpenComments > 0 || preview.nextWaitingForNextRound
-              ? "open"
-              : "pending",
-      resolvedResult: preview.nextResult,
-      lastRoundResult: selectedResult,
-      openCommentCount: preview.nextOpenComments,
-      pendingFinalAcceptance: preview.nextPendingFinalAcceptance,
-      waitingForNextRound: preview.nextWaitingForNextRound,
-      comments: [...selectedDetail.comments, ...nextComments],
-      roundHistory: [...selectedDetail.roundHistory, nextHistoryEntry]
-    };
+    setClientNotice(null);
 
-    setDetailsById((current) => ({
-      ...current,
-      [selectedDetail.id]: nextDetail
-    }));
-    setListItems((current) =>
-      current.map((item) =>
-        item.id === selectedDetail.id ? syncListItemWithDetail(item, nextDetail) : item
-      )
-    );
-    setCommentText("");
-    setSelectedResult(nextDetail.lastRoundResult ?? "QCC");
+    try {
+      const nextMode: DetailTransportMode = mode;
+
+      if (nextMode === "api") {
+        const nextDetail = await submit(request, { mode: nextMode });
+        persistResolvedDetail(nextDetail);
+        setClientNotice("Submitted to API successfully.");
+      } else {
+        const nextDetail = createLocalSubmissionDetail({
+          detail: selectedDetail,
+          selectedResult,
+          preview,
+          canAddComments,
+          draftComments,
+          submittedBy
+        });
+        persistLocalDetail(nextDetail);
+        setClientNotice("API unavailable. Submission applied in demo mode.");
+      }
+
+      setCommentText("");
+    } catch (submitRequestError) {
+      if (mode === "api" && submitRequestError instanceof ApiError && submitRequestError.status === 409) {
+        await refresh();
+      }
+
+      if (mode === "api") {
+        setClientNotice(null);
+        return;
+      }
+
+      const nextDetail = createLocalSubmissionDetail({
+        detail: selectedDetail,
+        selectedResult,
+        preview,
+        canAddComments,
+        draftComments,
+        submittedBy
+      });
+      persistLocalDetail(nextDetail);
+      setCommentText("");
+      setClientNotice("API unavailable. Submission applied in demo mode.");
+    }
   }
+
+  const transportLabel = mode === "api" ? "Live API" : "Demo fallback";
 
   return (
     <div className="shell">
@@ -263,6 +374,7 @@ export function App() {
           </div>
           <div className="heroMeta">
             <span>Updated {new Date(snapshot.generatedAt).toLocaleDateString("zh-CN")}</span>
+            <span className={`badge ${mode === "api" ? "" : "muted"}`}>{transportLabel}</span>
             <button type="button">Export Checklist</button>
           </div>
         </section>
@@ -337,6 +449,11 @@ export function App() {
 
           {selectedDetail ? (
             <section className="detailColumn">
+              {loading ? <div className="alert neutral">Loading selected inspection detail...</div> : null}
+              {error ? <div className="alert warning">{error}</div> : null}
+              {submitError ? <div className="alert error">{submitError}</div> : null}
+              {clientNotice ? <div className="alert success">{clientNotice}</div> : null}
+
               <article className="panel detailHero">
                 <div className="panelHeader">
                   <div>
@@ -383,6 +500,10 @@ export function App() {
                   <div className="statusPill">
                     <span>Planned date</span>
                     <strong>{selectedDetail.plannedDate}</strong>
+                  </div>
+                  <div className="statusPill">
+                    <span>Transport</span>
+                    <strong>{transportLabel}</strong>
                   </div>
                 </div>
               </article>
@@ -456,13 +577,14 @@ export function App() {
                   {preview ? <span className="badge">Next: {preview.nextWorkflowLabel}</span> : null}
                 </div>
 
-                <form className="submissionForm" onSubmit={handleSubmit}>
+                <form className="submissionForm" onSubmit={(event) => void handleSubmit(event)}>
                   <label className="field">
                     <span>Submitted By</span>
                     <input
                       value={submittedBy}
                       onChange={(event) => setSubmittedBy(event.target.value)}
                       placeholder="Inspector name"
+                      disabled={submitting}
                     />
                   </label>
 
@@ -480,6 +602,7 @@ export function App() {
                             value={result}
                             checked={selectedResult === result}
                             onChange={() => setSelectedResult(result)}
+                            disabled={submitting}
                           />
                           <span>{INSPECTION_RESULT_LABELS[result]}</span>
                         </label>
@@ -509,7 +632,7 @@ export function App() {
                           ? "One comment per line. Allowed for QCC / OWC / RJ."
                           : "Disabled for AA and CX."
                       }
-                      disabled={!canAddComments}
+                      disabled={!canAddComments || submitting}
                     />
                   </label>
 
@@ -519,32 +642,38 @@ export function App() {
                         ? "AA disables new comments by design."
                         : "CX records cancellation only and does not add comments."}
                     </p>
-                  ) : null}
+                  ) : (
+                    <p className="helperText">
+                      Each non-empty line creates one open comment in the current round.
+                    </p>
+                  )}
 
                   {preview ? (
                     <div className="previewGrid">
                       <div className="previewCard">
-                        <span>Next state</span>
-                        <strong>{preview.nextWorkflowLabel}</strong>
+                        <span>Resolved Result</span>
+                        <strong>{preview.nextResult ? INSPECTION_RESULT_LABELS[preview.nextResult] : "Pending"}</strong>
                       </div>
                       <div className="previewCard">
-                        <span>Open comments after submit</span>
+                        <span>Open Comments After Submit</span>
                         <strong>{preview.nextOpenComments}</strong>
-                      </div>
-                      <div className="previewCard">
-                        <span>Final acceptance</span>
-                        <strong>{preview.nextPendingFinalAcceptance ? "Pending" : "Not pending"}</strong>
                       </div>
                     </div>
                   ) : null}
 
-                  <button type="submit" className="submitButton">
-                    Submit Result
+                  <button className="submitButton" type="submit" disabled={submitting || loading}>
+                    {submitting ? "Submitting..." : mode === "api" ? "Submit Result" : "Submit In Demo Mode"}
                   </button>
                 </form>
               </article>
             </section>
-          ) : null}
+          ) : (
+            <section className="detailColumn">
+              <article className="panel emptyState">
+                No inspection detail is available for the selected item.
+              </article>
+            </section>
+          )}
         </section>
       </main>
     </div>
