@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 11:22 Asia/Shanghai
+> Updated: 2026-04-04 11:31 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -16,9 +16,9 @@
 
 ## Task Breakdown
 
-- [ ] Extract joined summary SQL constants into a single module (e.g. `packages/api/src/persistence/d1-inspection-sql.ts`)
-- [ ] Update storage + tests to import and use those constants
-- [ ] Run validation (`pnpm --filter @nbins/api test`)
+- [x] Extract joined summary SQL constants into a single module (e.g. `packages/api/src/persistence/d1-inspection-sql.ts`)
+- [x] Update storage + tests to import and use those constants
+- [x] Run validation (`pnpm --filter @nbins/api test`)
 - [ ] Commit + push
 
 ## Rules

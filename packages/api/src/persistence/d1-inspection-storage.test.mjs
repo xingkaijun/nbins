@@ -1,6 +1,10 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { D1InspectionStorage } from "./d1-inspection-storage.ts";
+import {
+  INSPECTION_DETAIL_SUMMARY_SQL,
+  INSPECTION_LIST_SUMMARY_SQL
+} from "./d1-inspection-sql.ts";
 import { createBaselineInspectionStorage } from "./mock-inspection-db.ts";
 
 class FakePreparedStatement {
@@ -191,78 +195,9 @@ class FakeD1Database {
   }
 }
 
-const DETAIL_SUMMARY_SQL = `SELECT
-         item."id" AS "item_id",
-         item."shipId" AS "item_shipId",
-         item."itemName" AS "item_itemName",
-         item."itemNameNormalized" AS "item_itemNameNormalized",
-         item."discipline" AS "item_discipline",
-         item."workflowStatus" AS "item_workflowStatus",
-         item."lastRoundResult" AS "item_lastRoundResult",
-         item."resolvedResult" AS "item_resolvedResult",
-         item."currentRound" AS "item_currentRound",
-         item."openCommentsCount" AS "item_openCommentsCount",
-         item."version" AS "item_version",
-         item."source" AS "item_source",
-         item."createdAt" AS "item_createdAt",
-         item."updatedAt" AS "item_updatedAt",
-         ship."id" AS "ship_id",
-         ship."projectId" AS "ship_projectId",
-         ship."hullNumber" AS "ship_hullNumber",
-         ship."shipName" AS "ship_shipName",
-         ship."shipType" AS "ship_shipType",
-         ship."status" AS "ship_status",
-         ship."createdAt" AS "ship_createdAt",
-         ship."updatedAt" AS "ship_updatedAt",
-         project."id" AS "project_id",
-         project."name" AS "project_name",
-         project."code" AS "project_code",
-         project."status" AS "project_status",
-         project."recipients" AS "project_recipients",
-         project."createdAt" AS "project_createdAt",
-         project."updatedAt" AS "project_updatedAt"
-       FROM "inspection_items" AS item
-       INNER JOIN "ships" AS ship ON ship."id" = item."shipId"
-       INNER JOIN "projects" AS project ON project."id" = ship."projectId"
-       WHERE item."id" = ?`;
-
-const LIST_SUMMARY_SQL = `SELECT
-         item."id" AS "item_id",
-         item."shipId" AS "item_shipId",
-         item."itemName" AS "item_itemName",
-         item."itemNameNormalized" AS "item_itemNameNormalized",
-         item."discipline" AS "item_discipline",
-         item."workflowStatus" AS "item_workflowStatus",
-         item."lastRoundResult" AS "item_lastRoundResult",
-         item."resolvedResult" AS "item_resolvedResult",
-         item."currentRound" AS "item_currentRound",
-         item."openCommentsCount" AS "item_openCommentsCount",
-         item."version" AS "item_version",
-         item."source" AS "item_source",
-         item."createdAt" AS "item_createdAt",
-         item."updatedAt" AS "item_updatedAt",
-         ship."id" AS "ship_id",
-         ship."projectId" AS "ship_projectId",
-         ship."hullNumber" AS "ship_hullNumber",
-         ship."shipName" AS "ship_shipName",
-         ship."shipType" AS "ship_shipType",
-         ship."status" AS "ship_status",
-         ship."createdAt" AS "ship_createdAt",
-         ship."updatedAt" AS "ship_updatedAt",
-         project."id" AS "project_id",
-         project."name" AS "project_name",
-         project."code" AS "project_code",
-         project."status" AS "project_status",
-         project."recipients" AS "project_recipients",
-         project."createdAt" AS "project_createdAt",
-         project."updatedAt" AS "project_updatedAt"
-       FROM "inspection_items" AS item
-       INNER JOIN "ships" AS ship ON ship."id" = item."shipId"
-       INNER JOIN "projects" AS project ON project."id" = ship."projectId"`;
-
 function assertUsesSingleJoinedDetailSummaryQuery(executedSql) {
   assert.equal(
-    executedSql.filter((sql) => sql === DETAIL_SUMMARY_SQL).length,
+    executedSql.filter((sql) => sql === INSPECTION_DETAIL_SUMMARY_SQL).length,
     1
   );
   assert.equal(
@@ -279,7 +214,7 @@ function assertUsesSingleJoinedDetailSummaryQuery(executedSql) {
 
 function assertUsesSingleJoinedListSummaryQuery(executedSql) {
   assert.equal(
-    executedSql.filter((sql) => sql === LIST_SUMMARY_SQL).length,
+    executedSql.filter((sql) => sql === INSPECTION_LIST_SUMMARY_SQL).length,
     1
   );
   assert.equal(
@@ -382,7 +317,7 @@ test("D1InspectionStorage readInspectionDetail selects only item-scoped records"
   assert.deepEqual(
     db.executedSql,
     [
-      DETAIL_SUMMARY_SQL,
+      INSPECTION_DETAIL_SUMMARY_SQL,
       'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
       'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
       'SELECT * FROM "users" WHERE "id" IN (?)'
@@ -438,7 +373,7 @@ test("D1InspectionStorage readInspectionList uses a single joined summary query"
 
   assert.equal(list.items.length, 2);
   assert.deepEqual(db.executedSql, [
-    LIST_SUMMARY_SQL,
+    INSPECTION_LIST_SUMMARY_SQL,
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?)'
   ]);
   assertUsesSingleJoinedListSummaryQuery(db.executedSql);
@@ -487,7 +422,7 @@ test("D1InspectionStorage readSubmittedInspectionDetail narrows the post-submit 
   assert.equal(detail?.item.id, "insp-003");
   assert.equal(detail?.project.code, "P-002");
   assert.deepEqual(db.executedSql, [
-    DETAIL_SUMMARY_SQL,
+    INSPECTION_DETAIL_SUMMARY_SQL,
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
     'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
     'SELECT * FROM "users" WHERE "id" IN (?)'
