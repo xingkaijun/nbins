@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 19:10 Asia/Shanghai
+> Updated: 2026-04-04 20:07 Asia/Shanghai
 > Overall status: **D1 integration stabilized with core bugfixes; sequence-based comment IDs (localId) implemented in the persistent layer, with core inspection MVP flow fully adapted.**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -267,6 +267,8 @@ Representative files:
 - `packages/api/src/auth/password.ts`
 - `packages/api/src/persistence/d1-inspection-storage.ts`
 - `packages/api/src/repositories/user-repository.ts`
+- `packages/api/src/repositories/project-membership-repository.ts`
+- `packages/api/src/services/project-authorization-service.ts`
 
 Delivery read:
 
