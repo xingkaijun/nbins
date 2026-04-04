@@ -42,6 +42,7 @@ export interface InspectionListStorageRecord {
 export interface InspectionStorage {
   read(): Promise<InspectionStorageSnapshot>;
   write(next: InspectionStorageSnapshot): Promise<void>;
+  readUserByUsername?(username: string): Promise<UserRecord | null>;
   readInspectionList?(): Promise<InspectionListStorageRecord>;
   readInspectionDetail?(
     inspectionItemId: string

@@ -263,6 +263,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
     comments: [
       {
         id: "insp-002-comment-1",
+        localId: 1,
         roundNumber: 1,
         localId: 1,
         status: "open",
@@ -274,6 +275,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       },
       {
         id: "insp-002-comment-2",
+        localId: 2,
         roundNumber: 1,
         localId: 2,
         status: "open",
@@ -326,6 +328,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
     comments: [
       {
         id: "insp-003-comment-1",
+        localId: 1,
         roundNumber: 1,
         localId: 1,
         status: "closed",
@@ -337,6 +340,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       },
       {
         id: "insp-003-comment-2",
+        localId: 2,
         roundNumber: 2,
         localId: 2,
         status: "open",
@@ -441,6 +445,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
     comments: [
       {
         id: "insp-005-comment-1",
+        localId: 1,
         roundNumber: 1,
         localId: 1,
         status: "open",
@@ -452,6 +457,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       },
       {
         id: "insp-005-comment-2",
+        localId: 2,
         roundNumber: 1,
         localId: 2,
         status: "open",
@@ -463,6 +469,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       },
       {
         id: "insp-005-comment-3",
+        localId: 3,
         roundNumber: 1,
         localId: 3,
         status: "open",
@@ -548,11 +555,13 @@ for (let index = 0; index < 30; index++) {
 
   const roundHistory = [];
   const comments = [];
+  let nextLocalId = 1;
   
   if (currentRound > 1) {
      const c1Id = `${id}-comment-r1-1`;
      comments.push({
         id: c1Id,
+        localId: nextLocalId++,
         roundNumber: 1,
         localId: comments.length + 1,
         status: "open" as const,
@@ -580,6 +589,7 @@ for (let index = 0; index < 30; index++) {
      const c2Id = `${id}-comment-r2-1`;
      comments.push({
         id: c2Id,
+        localId: nextLocalId++,
         roundNumber: 2,
         localId: comments.length + 1,
         status: "open" as const,
@@ -608,6 +618,7 @@ for (let index = 0; index < 30; index++) {
      if (currentResult === 'RJ' || currentResult === 'OWC' || currentResult === 'QCC') {
         comments.push({
           id: c3Id,
+          localId: nextLocalId++,
           roundNumber: currentRound,
           localId: comments.length + 1,
           status: "open" as const,

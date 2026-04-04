@@ -1,26 +1,33 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 11:55 Asia/Shanghai
+> Updated: 2026-04-04 15:35 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M14 — Fix seed/localId + keep D1 route tests stable (DONE)
-**Goal:** Ensure all seeded CommentRecords include numeric `localId` so D1 mapping stays strict, and make D1 seeding behavior not explode the narrow-query tests.
+### M15 — Add minimal auth login route + password hashing (no JWT yet)
+**Goal:** Implement a safe, test-covered `/api/auth/login` endpoint that authenticates seeded/mock users using PBKDF2 password hashes, and keeps D1 reads narrow.
 
 **Definition of Done:**
-- Baseline mock snapshot comments include `localId`
-- Seed snapshot generator assigns `localId` per inspection item
+- `POST /api/auth/login` exists and returns `{ ok: true, data: { user } }` on success
+- Invalid credentials return `401` with a generic error
+- Mock baseline users have real password hashes (no `dev-only`)
+- Seeded snapshot can authenticate at least one known user (`sys-user`)
+- D1 storage supports narrow user lookup by username
 - `pnpm --filter @nbins/api test` passes
+- `pnpm typecheck` passes
 - Changes committed + pushed
 
 ## Task Breakdown
 
-- [x] Add `localId` to baseline mock snapshot comments
-- [x] Assign `localId` during seed snapshot generation
-- [x] Keep D1 narrow-query tests stable (limit seed expansion + adjust expected list size)
-- [x] Run validation (`pnpm --filter @nbins/api test`)
-- [x] Commit + push
+- [x] Add password hashing utilities (`createPasswordHash`, `verifyPasswordHash`)
+- [x] Seed/mock users with PBKDF2 hashes for known dev passwords
+- [x] Add `POST /api/auth/login` route + service + user repository
+- [x] Add narrow D1 user lookup by username (storage interface + adapters)
+- [x] Add tests (password hash, login route, narrow D1 lookup)
+- [x] Update web demo to keep `localId` invariant in locally-simulated comments
+- [x] Run validation (`pnpm --filter @nbins/api test`, `pnpm typecheck`)
+- [ ] Commit + push
 
 ## Rules
 
@@ -42,7 +49,3 @@
 - [x] M7.2 — Batch user fetch for inspection detail reads (commit: `09ab34a`)
 - [x] M7.1 — Narrow D1 reads for inspection detail GET (commit: `b3e8f80`)
 - [x] M6 — Improve D1 persistence ergonomics (narrower writes) (commit: `87ae4e8`)
-
-## Notes
-
-- Note: `pnpm qa` is now unblocked after adding missing `ENGINE`/`CTNMT` disciplines to shared types.

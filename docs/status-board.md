@@ -23,7 +23,7 @@ This board is intended to be more concrete than the phase table in the README. I
 | D1 foundation | ✅ | D1 schema, bootstrap, and seeding are stable; added support for sequence-based `localId` for comments |
 | Frontend workspace | 🟡 | React/Vite workbench is functional, but parts of the experience still fall back to shared mock data |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
-| Auth / RBAC | ❌ | Roles are defined in shared types, but no login, JWT, or authorization enforcement exists in code |
+| Auth / RBAC | 🟡 | Login endpoint + password hashing implemented (no JWT or enforcement yet) |
 | Import / PDF / n8n | ❌ | Only planning/docs placeholders exist; no production workflow code yet |
 
 ## Engineering Foundation
@@ -243,26 +243,28 @@ Delivery read:
 
 What is in place:
 
-- **Frontend Login Portal**: A dedicated `/login` route with a production-grade authentication UI is implemented.
-- **Auth Flow**: Successful login triggers a redirect to the Project Hall.
-- Shared role constants and mock user records with discipline fields are fully integrated.
+- `POST /api/auth/login` exists (mock + D1 paths), returning basic user identity on success.
+- Password hashing utilities exist (PBKDF2-SHA256) and seeded/mock users now have real password hashes for dev credentials.
+- Narrow D1 lookup exists for users by username (no full snapshot read required).
 
 What is still missing:
 
-- Backend JWT issuance and middleware verification.
+- JWT issuance + middleware verification for protected routes.
 - Route guards for authenticated-only access.
-- Role-based UI visibility masking (beyond the scaffolded Admin pill).
+- Role-based authorization checks (beyond the scaffolding utilities).
+- Frontend login UI + session storage.
 
 Representative files:
 
-- `packages/shared/src/index.ts`
-- `packages/api/src/persistence/mock-inspection-db.ts`
-- `docs/architecture.md`
-- `docs/frontend-plan.md`
+- `packages/api/src/routes/auth.ts`
+- `packages/api/src/services/auth-service.ts`
+- `packages/api/src/auth/password.ts`
+- `packages/api/src/persistence/d1-inspection-storage.ts`
+- `packages/api/src/repositories/user-repository.ts`
 
 Delivery read:
 
-- Auth and authorization are defined in the design direction, but not implemented in product code.
+- Auth is now present as a minimal backend capability (login + hash verification), but it is not yet a session/JWT system and does not protect routes.
 
 ## Import / PDF / n8n
 

@@ -2,6 +2,10 @@ import type { InspectionStorageSnapshot } from "./records.ts";
 import type { InspectionStorage } from "./inspection-storage.ts";
 
 const NOW = "2026-04-03T09:00:00.000Z";
+const LI_SI_PASSWORD_HASH =
+  "pbkdf2_sha256$120000$6d6f636b2d6c692d73616c742d3031$53a16fb17e44d9ab4ff18c6e7f98d6fc8d1ed6f9716085a0f507a55ceaecd891";
+const WANG_WU_PASSWORD_HASH =
+  "pbkdf2_sha256$120000$6d6f636b2d77616e672d73616c742d3031$f5b19573d092f340ec36f187041b4fc6d78c00bbada4d3fbc38aa2081d513559";
 
 const BASELINE_DATA: InspectionStorageSnapshot = {
   users: [
@@ -9,7 +13,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
       id: "user-inspector-li",
       username: "li.si",
       displayName: "Li Si",
-      passwordHash: "dev-only",
+      passwordHash: LI_SI_PASSWORD_HASH,
       role: "inspector",
       disciplines: ["PAINT", "MACHINERY"],
       isActive: 1,
@@ -20,7 +24,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
       id: "user-inspector-wang",
       username: "wang.wu",
       displayName: "Wang Wu",
-      passwordHash: "dev-only",
+      passwordHash: WANG_WU_PASSWORD_HASH,
       role: "inspector",
       disciplines: ["CCS", "HULL"],
       isActive: 1,
@@ -216,6 +220,16 @@ export class MockInspectionDatabase implements InspectionStorage {
 
   async write(next: InspectionStorageSnapshot): Promise<void> {
     this.data = cloneStorageSnapshot(next);
+  }
+
+  async readUserByUsername(username: string) {
+    const normalizedUsername = username.trim().toLowerCase();
+
+    return (
+      this.data.users.find(
+        (user) => user.username.trim().toLowerCase() === normalizedUsername
+      ) ?? null
+    );
   }
 
   async reset(seed: InspectionStorageSnapshot = BASELINE_DATA): Promise<void> {

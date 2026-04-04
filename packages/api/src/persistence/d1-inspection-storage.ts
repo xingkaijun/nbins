@@ -83,6 +83,11 @@ export class D1InspectionStorage implements InspectionStorage {
     return this.readInspectionDetailRecord(inspectionItemId);
   }
 
+  async readUserByUsername(username: string): Promise<UserRecord | null> {
+    const row = await this.selectFirst(`SELECT * FROM "users" WHERE "username" = ?`, username);
+    return row ? mapUserRecord(row) : null;
+  }
+
   async readSubmittedInspectionDetail(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null> {

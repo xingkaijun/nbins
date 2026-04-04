@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createMockDashboardSnapshot } from "@nbins/shared";
 import type { Bindings } from "./env.ts";
+import { createAuthRoutes } from "./routes/auth.ts";
 import { devRoutes } from "./routes/dev.ts";
 import { createInspectionRoutes } from "./routes/inspections.ts";
 
@@ -41,6 +42,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
       routes: [
         "/health",
         "/api/meta",
+        "/api/auth/login",
         "/api/inspections",
         "/api/inspections/:id",
         "/api/inspections/:id/rounds/current/result",
@@ -53,6 +55,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
   });
 
   app.route("/api/dev", devRoutes);
+  app.route("/api/auth", createAuthRoutes());
   app.route("/api/inspections", createInspectionRoutes());
 
   return app;
