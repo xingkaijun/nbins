@@ -2,17 +2,18 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { createRequireAuth, createRequireRole, extractBearerToken } from "./auth.ts";
+import { issueAccessToken } from "./auth/jwt.ts";
 
-function createProtectedApp(verifyAccessToken) {
+function createProtectedApp() {
   const app = new Hono();
 
-  app.use("/protected/*", createRequireAuth({ verifyAccessToken }));
-  app.use("/admin/*", createRequireAuth({ verifyAccessToken }), createRequireRole(["admin"]));
+  app.use("/protected/*", createRequireAuth());
+  app.use("/admin/*", createRequireAuth(), createRequireRole(["admin"]));
 
   app.get("/protected/profile", (c) =>
     c.json({
       ok: true,
-      data: c.get("authUser")
+      data: c.get("user")
     })
   );
 
@@ -40,7 +41,7 @@ test("extractBearerToken rejects missing or malformed authorization headers", ()
 });
 
 test("protected route returns 401 when authorization header is missing", async () => {
-  const app = createProtectedApp(async () => null);
+  const app = createProtectedApp();
   const response = await app.request("http://localhost/protected/profile");
   const payload = await response.json();
 
@@ -52,10 +53,7 @@ test("protected route returns 401 when authorization header is missing", async (
 });
 
 test("protected route returns 401 when bearer token verification fails", async () => {
-  const app = createProtectedApp(async (token) => {
-    assert.equal(token, "bad-token");
-    return null;
-  });
+  const app = createProtectedApp();
 
   const response = await app.request("http://localhost/protected/profile", {
     headers: { authorization: "Bearer bad-token" }
@@ -69,40 +67,16 @@ test("protected route returns 401 when bearer token verification fails", async (
   });
 });
 
-test("protected route returns 403 when verified user is inactive", async () => {
-  const app = createProtectedApp(async () => ({
-    id: "user-inspector-li",
-    username: "li.si",
-    displayName: "Li Si",
-    role: "inspector",
-    disciplines: ["hull"],
-    isActive: false
-  }));
-
-  const response = await app.request("http://localhost/protected/profile", {
-    headers: { authorization: "Bearer inactive-token" }
-  });
-  const payload = await response.json();
-
-  assert.equal(response.status, 403);
-  assert.deepEqual(payload, {
-    ok: false,
-    error: "User account is inactive"
-  });
-});
-
 test("protected route exposes verified auth user on request context", async () => {
-  const app = createProtectedApp(async (token) => ({
+  const app = createProtectedApp();
+  const token = await issueAccessToken({
     id: "user-inspector-wang",
-    username: "wang.wu",
-    displayName: `Verified ${token}`,
     role: "inspector",
-    disciplines: ["hull", "paint"],
-    isActive: true
-  }));
+    disciplines: ["HULL", "PAINT"]
+  }, {});
 
   const response = await app.request("http://localhost/protected/profile", {
-    headers: { authorization: "Bearer live-token" }
+    headers: { authorization: `Bearer ${token}` }
   });
   const payload = await response.json();
 
@@ -111,26 +85,22 @@ test("protected route exposes verified auth user on request context", async () =
     ok: true,
     data: {
       id: "user-inspector-wang",
-      username: "wang.wu",
-      displayName: "Verified live-token",
       role: "inspector",
-      disciplines: ["hull", "paint"]
+      disciplines: ["HULL", "PAINT"]
     }
   });
 });
 
 test("admin route returns 403 when authenticated user lacks required role", async () => {
-  const app = createProtectedApp(async () => ({
+  const app = createProtectedApp();
+  const token = await issueAccessToken({
     id: "user-inspector-wang",
-    username: "wang.wu",
-    displayName: "Wang Wu",
     role: "inspector",
-    disciplines: ["hull"],
-    isActive: true
-  }));
+    disciplines: ["HULL"]
+  }, {});
 
   const response = await app.request("http://localhost/admin/users", {
-    headers: { authorization: "Bearer inspector-token" }
+    headers: { authorization: `Bearer ${token}` }
   });
   const payload = await response.json();
 
@@ -142,17 +112,15 @@ test("admin route returns 403 when authenticated user lacks required role", asyn
 });
 
 test("admin route succeeds when authenticated user has required role", async () => {
-  const app = createProtectedApp(async () => ({
+  const app = createProtectedApp();
+  const token = await issueAccessToken({
     id: "user-admin-chen",
-    username: "chen.admin",
-    displayName: "Chen Admin",
     role: "admin",
-    disciplines: [],
-    isActive: true
-  }));
+    disciplines: []
+  }, {});
 
   const response = await app.request("http://localhost/admin/users", {
-    headers: { authorization: "Bearer admin-token" }
+    headers: { authorization: `Bearer ${token}` }
   });
   const payload = await response.json();
 

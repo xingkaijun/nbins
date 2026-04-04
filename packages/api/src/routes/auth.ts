@@ -1,5 +1,6 @@
 import { Hono } from "hono";
 import type { Bindings } from "../env.ts";
+import { issueAccessToken } from "../auth/jwt.ts";
 import { createInspectionStorageResolver } from "../persistence/storage-factory.ts";
 import { UserRepository } from "../repositories/user-repository.ts";
 import { AuthService } from "../services/auth-service.ts";
@@ -38,14 +39,29 @@ function createAuthRoutes(): Hono<{ Bindings: Bindings }> {
         username: username.trim().toLowerCase(),
         password
       });
+      const token = await issueAccessToken(
+        {
+          id: result.user.id,
+          role: result.user.role,
+          disciplines: result.user.disciplines
+        },
+        c.env
+      );
 
       return c.json({
         ok: true,
-        data: result
+        data: {
+          ...result,
+          token
+        }
       });
     } catch (error) {
       if (error instanceof Error && error.message === "AUTH_INVALID_CREDENTIALS") {
         return c.json({ ok: false, error: "Invalid username or password" }, 401);
+      }
+
+      if (error instanceof Error && error.message === "JWT_SECRET is required when APP_ENV=production") {
+        return c.json({ ok: false, error: error.message }, 500);
       }
 
       throw error;

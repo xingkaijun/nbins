@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 15:46 Asia/Shanghai
+> Updated: 2026-04-04 16:35 Asia/Shanghai
 > Overall status: **D1 integration stabilized with core bugfixes; sequence-based comment IDs (localId) implemented in the persistent layer, with core inspection MVP flow fully adapted.**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -23,7 +23,7 @@ This board is intended to be more concrete than the phase table in the README. I
 | D1 foundation | ✅ | D1 schema, bootstrap, and seeding are stable; added support for sequence-based `localId` for comments |
 | Frontend workspace | 🟡 | React/Vite workbench is functional, but parts of the experience still fall back to shared mock data |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
-| Auth / RBAC | 🟡 | Login endpoint + password hashing implemented (no JWT or enforcement yet) |
+| Auth / RBAC | 🟡 | Login endpoint now returns JWT (Bearer token) + JWT verification middleware exists (inspection routes not protected yet) |
 | Import / PDF / n8n | ❌ | Only planning/docs placeholders exist; no production workflow code yet |
 
 ## Engineering Foundation
@@ -251,8 +251,7 @@ What is in place:
 
 What is still missing:
 
-- JWT issuance + real token verification for protected routes.
-- Wiring the auth helpers into actual protected API endpoints.
+- Wiring the auth helpers into actual protected API endpoints (starting with inspections routes).
 - Refresh/session lifecycle and logout/invalidation behavior.
 - Frontend login UI + session storage.
 
@@ -266,7 +265,7 @@ Representative files:
 
 Delivery read:
 
-- Auth is now present as a minimal backend capability (login + hash verification), but it is not yet a session/JWT system and does not protect routes.
+- Auth now supports JWT issuance and verification, but it does not yet protect any production API routes.
 
 ## Import / PDF / n8n
 
@@ -301,7 +300,7 @@ Delivery read:
 
 - `✅ Complete for MVP baseline`: shared contracts, core domain rules, multi-page routing, Dashboard UI, Project Hall, Login Portal.
 - `🟡 Partial / in progress`: persistence architecture hardening, D1 rollout, per-item report triggers, cross-module data syncing.
-- `❌ Not started in product code`: backend JWT auth, complex import pipeline, server-side PDF rendering.
+- `❌ Not started in product code`: protected-route enforcement + RBAC wiring, complex import pipeline, server-side PDF rendering.
 
 ## Practical Next Priorities
 

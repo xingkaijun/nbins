@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../index.ts";
 import { createPasswordHash, verifyPasswordHash } from "../auth/password.ts";
+import { verifyAccessToken } from "../auth/jwt.ts";
 import { createSeedInspectionStorageSnapshot } from "../persistence/seed.ts";
 
 class FakePreparedStatement {
@@ -74,14 +75,21 @@ test("POST /api/auth/login authenticates the default mock user", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
-  assert.deepEqual(payload.data, {
-    user: {
-      id: "user-inspector-li",
-      username: "li.si",
-      displayName: "Li Si",
-      role: "inspector",
-      disciplines: ["PAINT", "MACHINERY"]
-    }
+  assert.equal(typeof payload.data.token, "string");
+  assert.ok(payload.data.token.length > 20);
+  assert.deepEqual(payload.data.user, {
+    id: "user-inspector-li",
+    username: "li.si",
+    displayName: "Li Si",
+    role: "inspector",
+    disciplines: ["PAINT", "MACHINERY"]
+  });
+
+  const claims = await verifyAccessToken(payload.data.token, {});
+  assert.deepEqual(claims, {
+    id: "user-inspector-li",
+    role: "inspector",
+    disciplines: ["PAINT", "MACHINERY"]
   });
 });
 
@@ -148,4 +156,29 @@ test("POST /api/auth/login uses narrow D1 user lookup", async () => {
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
   assert.deepEqual(db.executedSql, ['SELECT * FROM "users" WHERE "username" = ?']);
+});
+
+test("POST /api/auth/login requires JWT_SECRET in production env", async () => {
+  const app = createApp();
+  const response = await app.request(
+    "http://localhost/api/auth/login",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "li.si",
+        password: "nbins-dev-li-2026"
+      })
+    },
+    {
+      APP_ENV: "production"
+    }
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 500);
+  assert.deepEqual(payload, {
+    ok: false,
+    error: "JWT_SECRET is required when APP_ENV=production"
+  });
 });

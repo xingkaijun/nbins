@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 16:10 Asia/Shanghai
+> Updated: 2026-04-04 16:35 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -20,11 +20,11 @@
 
 ## Task Breakdown
 
-- [ ] Decide token transport (Bearer header vs cookie) + secret handling
-- [ ] Implement JWT creation on login (include user id + role + disciplines)
-- [ ] Add auth middleware + typed context user
+- [x] Decide token transport (Bearer `Authorization` header for now) + secret handling (`JWT_SECRET` env var required in production, safe dev/test fallback in harness)
+- [x] Implement JWT creation on login (include user id + role + disciplines)
+- [x] Add auth middleware + typed context user
 - [ ] Protect inspections routes behind auth middleware
-- [ ] Update route tests (unauthenticated 401 + authenticated happy paths)
+- [x] Update route tests for login token issuance and auth middleware verification
 - [ ] Validation + commit + push
 
 ## Rules

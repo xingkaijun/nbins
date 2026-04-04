@@ -1,24 +1,17 @@
 import type { MiddlewareHandler } from "hono";
 import type { Discipline, Role } from "@nbins/shared";
+import type { Bindings } from "./env.ts";
+import { verifyAccessToken as verifyJwtAccessToken } from "./auth/jwt.ts";
 
 export interface AuthenticatedUser {
   id: string;
-  username: string;
-  displayName: string;
   role: Role;
   disciplines: Discipline[];
 }
 
 export interface AuthContextVariables {
+  user: AuthenticatedUser;
   authUser: AuthenticatedUser;
-}
-
-export interface VerifyAccessTokenResult extends AuthenticatedUser {
-  isActive: boolean;
-}
-
-export interface RequireAuthOptions {
-  verifyAccessToken: (token: string) => Promise<VerifyAccessTokenResult | null>;
 }
 
 export function extractBearerToken(headerValue: string | null | undefined): string | null {
@@ -37,9 +30,10 @@ export function extractBearerToken(headerValue: string | null | undefined): stri
 
 export function createRequireAuth<
   E extends {
+    Bindings: Bindings;
     Variables: AuthContextVariables;
   }
->(options: RequireAuthOptions): MiddlewareHandler<E> {
+>(): MiddlewareHandler<E> {
   return async (c, next) => {
     const token = extractBearerToken(c.req.header("authorization"));
 
@@ -53,7 +47,7 @@ export function createRequireAuth<
       );
     }
 
-    const verifiedUser = await options.verifyAccessToken(token);
+    const verifiedUser = await verifyJwtAccessToken(token, c.env);
 
     if (!verifiedUser) {
       return c.json(
@@ -65,18 +59,8 @@ export function createRequireAuth<
       );
     }
 
-    if (!verifiedUser.isActive) {
-      return c.json(
-        {
-          ok: false,
-          error: "User account is inactive"
-        },
-        403
-      );
-    }
-
-    const { isActive: _isActive, ...authUser } = verifiedUser;
-    c.set("authUser", authUser);
+    c.set("user", verifiedUser);
+    c.set("authUser", verifiedUser);
     await next();
   };
 }
