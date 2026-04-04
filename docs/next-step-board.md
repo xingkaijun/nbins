@@ -27,7 +27,7 @@
 - [x] Add tests (password hash, login route, narrow D1 lookup)
 - [x] Update web demo to keep `localId` invariant in locally-simulated comments
 - [x] Run validation (`pnpm --filter @nbins/api test`, `pnpm --filter @nbins/api typecheck`, `pnpm --filter @nbins/api build`)
-- [ ] Commit + push
+- [x] Commit + push
 
 ## Rules
 
