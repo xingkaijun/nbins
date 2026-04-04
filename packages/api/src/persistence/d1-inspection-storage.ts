@@ -46,37 +46,22 @@ export class D1InspectionStorage implements InspectionStorage {
   }
 
   async readInspectionList(): Promise<InspectionListStorageRecord> {
-    const itemRows = await this.selectMany(`SELECT * FROM "inspection_items"`);
-    const items = itemRows.map(mapInspectionItemRecord);
-    const shipIds = Array.from(new Set(items.map((record) => record.shipId)));
-    const inspectionItemIds = items.map((record) => record.id);
-    const [ships, currentRounds] = await Promise.all([
-      shipIds.length === 0 ? [] : this.selectShipsByIds(shipIds),
-      inspectionItemIds.length === 0 ? [] : this.selectRoundsByInspectionItemIds(inspectionItemIds)
-    ]);
-    const projectIds = Array.from(new Set(ships.map((record) => record.projectId)));
-    const projects = projectIds.length === 0 ? [] : await this.selectProjectsByIds(projectIds);
-    const shipsById = new Map(ships.map((record) => [record.id, record]));
-    const projectsById = new Map(projects.map((record) => [record.id, record]));
+    const summaryRows = await this.selectMany(INSPECTION_LIST_SUMMARY_SQL);
+    const inspectionItemIds = summaryRows.map((row) => stringValue(row.item_id));
     const roundsByKey = new Map(
-      currentRounds.map((record) => [`${record.inspectionItemId}:${record.roundNumber}`, record])
+      (
+        inspectionItemIds.length === 0
+          ? []
+          : await this.selectRoundsByInspectionItemIds(inspectionItemIds)
+      ).map((record) => [`${record.inspectionItemId}:${record.roundNumber}`, record])
     );
 
     return {
       generatedAt: new Date().toISOString(),
-      items: items.map((item) => {
-        const ship = shipsById.get(item.shipId);
-
-        if (!ship) {
-          throw new Error(`Expected ship for inspection item ${item.id}`);
-        }
-
-        const project = projectsById.get(ship.projectId);
-
-        if (!project) {
-          throw new Error(`Expected project for ship ${ship.id}`);
-        }
-
+      items: summaryRows.map((row) => {
+        const item = mapInspectionItemSummaryRecord(row);
+        const ship = mapShipSummaryRecord(row);
+        const project = mapProjectSummaryRecord(row);
         const currentRound = roundsByKey.get(`${item.id}:${item.currentRound}`);
 
         if (!currentRound) {
@@ -520,6 +505,40 @@ const INSPECTION_DETAIL_SUMMARY_SQL = `SELECT
        INNER JOIN "ships" AS ship ON ship."id" = item."shipId"
        INNER JOIN "projects" AS project ON project."id" = ship."projectId"
        WHERE item."id" = ?`;
+
+const INSPECTION_LIST_SUMMARY_SQL = `SELECT
+         item."id" AS "item_id",
+         item."shipId" AS "item_shipId",
+         item."itemName" AS "item_itemName",
+         item."itemNameNormalized" AS "item_itemNameNormalized",
+         item."discipline" AS "item_discipline",
+         item."workflowStatus" AS "item_workflowStatus",
+         item."lastRoundResult" AS "item_lastRoundResult",
+         item."resolvedResult" AS "item_resolvedResult",
+         item."currentRound" AS "item_currentRound",
+         item."openCommentsCount" AS "item_openCommentsCount",
+         item."version" AS "item_version",
+         item."source" AS "item_source",
+         item."createdAt" AS "item_createdAt",
+         item."updatedAt" AS "item_updatedAt",
+         ship."id" AS "ship_id",
+         ship."projectId" AS "ship_projectId",
+         ship."hullNumber" AS "ship_hullNumber",
+         ship."shipName" AS "ship_shipName",
+         ship."shipType" AS "ship_shipType",
+         ship."status" AS "ship_status",
+         ship."createdAt" AS "ship_createdAt",
+         ship."updatedAt" AS "ship_updatedAt",
+         project."id" AS "project_id",
+         project."name" AS "project_name",
+         project."code" AS "project_code",
+         project."status" AS "project_status",
+         project."recipients" AS "project_recipients",
+         project."createdAt" AS "project_createdAt",
+         project."updatedAt" AS "project_updatedAt"
+       FROM "inspection_items" AS item
+       INNER JOIN "ships" AS ship ON ship."id" = item."shipId"
+       INNER JOIN "projects" AS project ON project."id" = ship."projectId"`;
 
 function mapUserRecord(row: JsonRow): UserRecord {
   return {

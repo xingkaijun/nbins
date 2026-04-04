@@ -63,23 +63,22 @@ class FakeD1Database {
   #selectInternal(sql, params) {
     this.executedSql.push(sql);
     if (sql.includes('FROM "inspection_items" AS item')) {
-      const item = this.tables.inspection_items.find((record) => record.id === params[0]);
+      const items =
+        params.length === 0
+          ? this.tables.inspection_items
+          : this.tables.inspection_items.filter((record) => record.id === params[0]);
 
-      if (!item) {
-        return [];
-      }
+      return items.map((item) => {
+        const ship = this.tables.ships.find((record) => record.id === item.shipId);
+        const project = ship
+          ? this.tables.projects.find((record) => record.id === ship.projectId)
+          : null;
 
-      const ship = this.tables.ships.find((record) => record.id === item.shipId);
-      const project = ship
-        ? this.tables.projects.find((record) => record.id === ship.projectId)
-        : null;
+        if (!ship || !project) {
+          throw new Error(`Missing joined rows for inspection item ${item.id}`);
+        }
 
-      if (!ship || !project) {
-        throw new Error(`Missing joined rows for inspection item ${params[0]}`);
-      }
-
-      return [
-        {
+        return {
           item_id: item.id,
           item_shipId: item.shipId,
           item_itemName: item.itemName,
@@ -109,8 +108,8 @@ class FakeD1Database {
           project_recipients: project.recipients,
           project_createdAt: project.createdAt,
           project_updatedAt: project.updatedAt
-        }
-      ];
+        };
+      });
     }
 
     const countMatch = sql.match(/SELECT COUNT\(\*\) AS "count" FROM "([^"]+)"/);
@@ -227,6 +226,40 @@ const DETAIL_SUMMARY_SQL = `SELECT
        INNER JOIN "projects" AS project ON project."id" = ship."projectId"
        WHERE item."id" = ?`;
 
+const LIST_SUMMARY_SQL = `SELECT
+         item."id" AS "item_id",
+         item."shipId" AS "item_shipId",
+         item."itemName" AS "item_itemName",
+         item."itemNameNormalized" AS "item_itemNameNormalized",
+         item."discipline" AS "item_discipline",
+         item."workflowStatus" AS "item_workflowStatus",
+         item."lastRoundResult" AS "item_lastRoundResult",
+         item."resolvedResult" AS "item_resolvedResult",
+         item."currentRound" AS "item_currentRound",
+         item."openCommentsCount" AS "item_openCommentsCount",
+         item."version" AS "item_version",
+         item."source" AS "item_source",
+         item."createdAt" AS "item_createdAt",
+         item."updatedAt" AS "item_updatedAt",
+         ship."id" AS "ship_id",
+         ship."projectId" AS "ship_projectId",
+         ship."hullNumber" AS "ship_hullNumber",
+         ship."shipName" AS "ship_shipName",
+         ship."shipType" AS "ship_shipType",
+         ship."status" AS "ship_status",
+         ship."createdAt" AS "ship_createdAt",
+         ship."updatedAt" AS "ship_updatedAt",
+         project."id" AS "project_id",
+         project."name" AS "project_name",
+         project."code" AS "project_code",
+         project."status" AS "project_status",
+         project."recipients" AS "project_recipients",
+         project."createdAt" AS "project_createdAt",
+         project."updatedAt" AS "project_updatedAt"
+       FROM "inspection_items" AS item
+       INNER JOIN "ships" AS ship ON ship."id" = item."shipId"
+       INNER JOIN "projects" AS project ON project."id" = ship."projectId"`;
+
 function assertUsesSingleJoinedDetailSummaryQuery(executedSql) {
   assert.equal(
     executedSql.filter((sql) => sql === DETAIL_SUMMARY_SQL).length,
@@ -236,6 +269,25 @@ function assertUsesSingleJoinedDetailSummaryQuery(executedSql) {
     executedSql.some((sql) =>
       [
         'SELECT * FROM "inspection_items" WHERE "id" = ?',
+        'SELECT * FROM "ships" WHERE "id" = ?',
+        'SELECT * FROM "projects" WHERE "id" = ?'
+      ].includes(sql)
+    ),
+    false
+  );
+}
+
+function assertUsesSingleJoinedListSummaryQuery(executedSql) {
+  assert.equal(
+    executedSql.filter((sql) => sql === LIST_SUMMARY_SQL).length,
+    1
+  );
+  assert.equal(
+    executedSql.some((sql) =>
+      [
+        'SELECT * FROM "inspection_items"',
+        'SELECT * FROM "ships" WHERE "id" IN (?, ?)',
+        'SELECT * FROM "projects" WHERE "id" IN (?, ?)',
         'SELECT * FROM "ships" WHERE "id" = ?',
         'SELECT * FROM "projects" WHERE "id" = ?'
       ].includes(sql)
@@ -372,6 +424,24 @@ test("D1InspectionStorage readInspectionDetail returns empty users without issui
     db.executedSql.some((sql) => sql.startsWith('SELECT * FROM "users"')),
     false
   );
+});
+
+test("D1InspectionStorage readInspectionList uses a single joined summary query", async () => {
+  const db = new FakeD1Database();
+  const storage = new D1InspectionStorage(db);
+  const baseline = createBaselineInspectionStorage();
+
+  await storage.write(baseline);
+  db.executedSql = [];
+
+  const list = await storage.readInspectionList();
+
+  assert.equal(list.items.length, 2);
+  assert.deepEqual(db.executedSql, [
+    LIST_SUMMARY_SQL,
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?)'
+  ]);
+  assertUsesSingleJoinedListSummaryQuery(db.executedSql);
 });
 
 test("D1InspectionStorage readSubmissionContext selects only item-scoped records", async () => {
