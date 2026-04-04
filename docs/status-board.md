@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 09:25 Asia/Shanghai
+> Updated: 2026-04-04 11:18 Asia/Shanghai
 > Overall status: **MVP baseline implemented, with core inspection flow working and D1 runtime integration advanced to an adapter plus driver-switch stage**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -54,6 +54,8 @@ Delivery read:
 **Status: `✅`**
 
 What is in place:
+
+- Discipline enum now includes `ENGINE` and `CTNMT` to match existing mock/demo datasets.
 
 - Shared enums and types cover disciplines, roles, workflow statuses, inspection results, detail payloads, comments, and submit request/response shapes.
 - Shared demo data builders support the MVP demo path used across packages.
@@ -159,6 +161,8 @@ What is in place:
 - The `GET /api/inspections` D1 path now batches `inspection_rounds` reads with a single `inspectionItemId IN (...)` query for the listed items, instead of issuing one current-round query per inspection item.
 - Coverage asserts the narrow D1 write path, the narrow D1 submission-context read path, and the narrow D1 inspection-detail read path avoid the snapshot rewrite/delete-all flow and full-table reads, while keeping the mock driver behavior unchanged.
 - Coverage now also asserts the D1 inspections list route avoids full-table snapshot reads for `users`, `projects`, `ships`, `inspection_rounds`, and `comments`.
+Coverage now also asserts the D1 inspections list read uses a single joined summary query for `inspection_items`/`ships`/`projects` rather than separate lookups.
+Coverage now also asserts the D1 inspections detail read uses a single joined summary query for `inspection_items`/`ships`/`projects` rather than separate lookups.
 - The current narrow-read path now batches user fetches into a single `WHERE id IN (...)` query, removing the remaining per-user `SELECT` pattern from inspection detail reads.
 
 What is still missing:
