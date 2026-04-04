@@ -18,6 +18,9 @@ erDiagram
         string id PK
         string code UK
         string name
+        string owner
+        string shipyard
+        string class
         string status
     }
     ships {
@@ -85,6 +88,9 @@ erDiagram
 | `id` | TEXT | 项目主键标识 | 主键 (PRIMARY KEY) |
 | `name` | TEXT | 工程/项目全称 | NOT NULL |
 | `code` | TEXT | 项目简写代号 (如 P-001) | 唯一 (UNIQUE), NOT NULL |
+| `owner` | TEXT | 收件对应的船东方实体名称 | NULLABLE |
+| `shipyard` | TEXT | 对应的承建船厂实体 | NULLABLE |
+| `class` | TEXT | 适用的船级社 (如 ABS, DNV) | NULLABLE |
 | `status` | TEXT | 项目状态 (active, archived) | 默认 'active' |
 | `recipients` | TEXT (JSON) | 接收项目通报通知的默认对象列表 | 默认 `'[]'` |
 | `createdAt` | TEXT | - | NOT NULL |

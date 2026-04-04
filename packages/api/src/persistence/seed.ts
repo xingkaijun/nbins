@@ -35,6 +35,9 @@ export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot
             name: detail.projectName,
             code: detail.projectCode,
             status: "active",
+            owner: "Mock Owner",
+            shipyard: "Mock Shipyard",
+            class: "ABS",
             recipients: [],
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()

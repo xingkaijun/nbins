@@ -17,6 +17,9 @@ export interface ProjectRecord {
   name: string;
   code: string;
   status: "active" | "archived";
+  owner: string | null;
+  shipyard: string | null;
+  class: string | null;
   recipients: string[];
   createdAt: string;
   updatedAt: string;

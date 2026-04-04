@@ -497,6 +497,9 @@ function mapProjectRecord(row: JsonRow): ProjectRecord {
     name: stringValue(row.name),
     code: stringValue(row.code),
     status: stringValue(row.status) as ProjectRecord["status"],
+    owner: nullableStringValue(row.owner),
+    shipyard: nullableStringValue(row.shipyard),
+    class: nullableStringValue(row.class),
     recipients: jsonArrayValue(row.recipients),
     createdAt: stringValue(row.createdAt),
     updatedAt: stringValue(row.updatedAt)
@@ -541,6 +544,9 @@ function mapProjectSummaryRecord(row: JsonRow): ProjectRecord {
     name: stringValue(row.project_name),
     code: stringValue(row.project_code),
     status: stringValue(row.project_status) as ProjectRecord["status"],
+    owner: nullableStringValue(row.project_owner),
+    shipyard: nullableStringValue(row.project_shipyard),
+    class: nullableStringValue(row.project_class),
     recipients: jsonArrayValue(row.project_recipients),
     createdAt: stringValue(row.project_createdAt),
     updatedAt: stringValue(row.project_updatedAt)

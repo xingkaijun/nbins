@@ -15,6 +15,9 @@ CREATE TABLE IF NOT EXISTS "projects" (
   "name" TEXT NOT NULL,
   "code" TEXT NOT NULL UNIQUE,
   "status" TEXT NOT NULL DEFAULT 'active',
+  "owner" TEXT,
+  "shipyard" TEXT,
+  "class" TEXT,
   "recipients" TEXT NOT NULL DEFAULT '[]',
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL

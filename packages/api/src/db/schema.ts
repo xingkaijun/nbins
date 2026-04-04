@@ -71,6 +71,9 @@ export const projectsTable = sqliteTable<{
   name: textColumn<string>(),
   code: textColumn<string>({ unique: true }),
   status: textColumn<"active" | "archived">({ default: "active" }),
+  owner: textColumn<string | null>({ nullable: true }),
+  shipyard: textColumn<string | null>({ nullable: true }),
+  class: textColumn<string | null>({ nullable: true }),
   recipients: textColumn<string[]>({ mode: "json", default: [] }),
   createdAt: textColumn<string>(),
   updatedAt: textColumn<string>()

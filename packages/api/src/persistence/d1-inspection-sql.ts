@@ -25,6 +25,9 @@ export const INSPECTION_DETAIL_SUMMARY_SQL = `SELECT
          project."name" AS "project_name",
          project."code" AS "project_code",
          project."status" AS "project_status",
+         project."owner" AS "project_owner",
+         project."shipyard" AS "project_shipyard",
+         project."class" AS "project_class",
          project."recipients" AS "project_recipients",
          project."createdAt" AS "project_createdAt",
          project."updatedAt" AS "project_updatedAt"
@@ -60,6 +63,9 @@ export const INSPECTION_LIST_SUMMARY_SQL = `SELECT
          project."name" AS "project_name",
          project."code" AS "project_code",
          project."status" AS "project_status",
+         project."owner" AS "project_owner",
+         project."shipyard" AS "project_shipyard",
+         project."class" AS "project_class",
          project."recipients" AS "project_recipients",
          project."createdAt" AS "project_createdAt",
          project."updatedAt" AS "project_updatedAt"
