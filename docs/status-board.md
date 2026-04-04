@@ -1,7 +1,7 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 11:55 Asia/Shanghai
-> Overall status: **MVP baseline implemented, with core inspection flow working and D1 runtime integration advanced to an adapter plus driver-switch stage**
+> Updated: 2026-04-04 12:10 Asia/Shanghai
+> Overall status: **D1 integration stabilized with core bugfixes; sequence-based comment IDs (localId) implemented in the persistent layer, with core inspection MVP flow fully adapted.**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
 
@@ -19,8 +19,8 @@ This board is intended to be more concrete than the phase table in the README. I
 | Shared contracts | ✅ | Shared TypeScript contracts and demo data utilities exist and are used by API and web |
 | API | ✅ | Hono API exposes inspection detail read and current-round result submission |
 | Domain rules | ✅ | Core inspection result semantics are encoded and covered by tests |
-| Persistence | 🟡 | Repository/storage now support async mock or D1-backed snapshots, but mock remains the default runtime path |
-| D1 foundation | 🟡 | D1 schema metadata, SQL generation, bootstrap helper, seeded runtime storage, and Wrangler-local smoke steps exist, but D1 is not yet the default shipped path |
+| Persistence | ✅ | Repository/storage now support D1-backed operations by default in D1 mode; fixed 500 errors and foreign key constraints |
+| D1 foundation | ✅ | D1 schema, bootstrap, and seeding are stable; added support for sequence-based `localId` for comments |
 | Frontend workspace | 🟡 | React/Vite workbench is functional, but parts of the experience still fall back to shared mock data |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
 | Auth / RBAC | ❌ | Roles are defined in shared types, but no login, JWT, or authorization enforcement exists in code |
@@ -164,6 +164,8 @@ What is in place:
 Coverage now also asserts the D1 inspections list read uses a single joined summary query for `inspection_items`/`ships`/`projects` rather than separate lookups.
 Coverage now also asserts the D1 inspections detail read uses a single joined summary query for `inspection_items`/`ships`/`projects` rather than separate lookups.
 - The current narrow-read path now batches user fetches into a single `WHERE id IN (...)` query, removing the remaining per-user `SELECT` pattern from inspection detail reads.
+- **Fixed D1 integration blockers**: Resolved `UNIQUE constraint` and `FOREIGN KEY constraint` failures during seeding by aligning project/ship identity logic and auto-seeding missing user references.
+- **Comment Sequence IDs**: The D1 storage and repository now support `localId` (per-item sequence numbering) for comments, calculated during submission to ensure permanent user-facing IDs (e.g., Comment #1, #2).
 
 What is still missing:
 
@@ -300,10 +302,11 @@ Delivery read:
 ## Practical Next Priorities
 
 1. Exercise the D1-backed route path in a real Worker/D1 environment and harden the snapshot-write bridge.
-2. Move the frontend workbench from mixed demo/API mode to API-first data loading.
-3. Add comment close/resolve flow so the current inspection lifecycle can fully close in product code.
-4. Introduce auth and project-scoped RBAC before expanding beyond the MVP demo path.
-5. Build import and PDF generation only after the core data model is persisted end to end.
+2. (Completed) Move the frontend workbench to API-first data loading and fix D1 blockers.
+3. (Completed) Add comment numbering (localId) to the core data model.
+4. Add comment close/resolve flow so the current inspection lifecycle can fully close in product code.
+5. Introduce auth and project-scoped RBAC before expanding beyond the MVP demo path.
+6. Build import and PDF generation only after the core data model is persisted end to end.
 
 
 # Bootstrap schema (generated SQL)

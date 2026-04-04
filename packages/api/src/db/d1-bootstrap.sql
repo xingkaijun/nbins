@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS "comments" (
   "createdInRoundId" TEXT NOT NULL REFERENCES "inspection_rounds"("id"),
   "closedInRoundId" TEXT REFERENCES "inspection_rounds"("id"),
   "authorId" TEXT NOT NULL REFERENCES "users"("id"),
+  "localId" INTEGER NOT NULL DEFAULT 0,
   "content" TEXT NOT NULL,
   "status" TEXT NOT NULL DEFAULT 'open',
   "closedBy" TEXT REFERENCES "users"("id"),

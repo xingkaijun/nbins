@@ -137,6 +137,7 @@ export const commentsTable = sqliteTable<{
     references: "inspection_rounds.id"
   }),
   authorId: textColumn<string>({ references: "users.id" }),
+  localId: integerColumn<number>({ default: 0 }),
   content: textColumn<string>(),
   status: textColumn<"open" | "closed">({ default: "open" }),
   closedBy: textColumn<string | null>({ nullable: true, references: "users.id" }),

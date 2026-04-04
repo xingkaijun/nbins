@@ -12,8 +12,7 @@ export const DISCIPLINES = [
   "ELEC",
   "PAINT",
   "CCS",
-  "ENGINE",
-  "CTNMT"
+  "ENGINE"
 ] as const;
 
 export type Discipline = (typeof DISCIPLINES)[number];
@@ -26,8 +25,7 @@ export const DISCIPLINE_LABELS: Record<Discipline, string> = {
   ELEC: "ELEC",
   PAINT: "PAINT",
   CCS: "CCS",
-  ENGINE: "ENGINE",
-  CTNMT: "CTNMT"
+  ENGINE: "ENGINE"
 };
 
 export const INSPECTION_RESULTS = ["CX", "AA", "QCC", "OWC", "RJ"] as const;
@@ -242,6 +240,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       {
         id: "insp-002-comment-1",
         roundNumber: 1,
+        localId: 1,
         status: "open",
         message: "Stripe coat at nozzle edge needs one more touch-up.",
         createdAt: "2026-04-03T08:15:00.000Z",
@@ -252,6 +251,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       {
         id: "insp-002-comment-2",
         roundNumber: 1,
+        localId: 2,
         status: "open",
         message: "Holiday test record must be attached before final acceptance.",
         createdAt: "2026-04-03T08:19:00.000Z",
@@ -300,6 +300,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       {
         id: "insp-003-comment-1",
         roundNumber: 1,
+        localId: 1,
         status: "closed",
         message: "Toe grinding required at frame 72 insert joint.",
         createdAt: "2026-04-02T09:05:00.000Z",
@@ -310,6 +311,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       {
         id: "insp-003-comment-2",
         roundNumber: 2,
+        localId: 2,
         status: "open",
         message: "Reinspect after final MT result is uploaded.",
         createdAt: "2026-04-03T07:40:00.000Z",
@@ -407,6 +409,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       {
         id: "insp-005-comment-1",
         roundNumber: 1,
+        localId: 1,
         status: "open",
         message: "Sealant coverage incomplete at upper penetration edge.",
         createdAt: "2026-04-03T06:55:00.000Z",
@@ -417,6 +420,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       {
         id: "insp-005-comment-2",
         roundNumber: 1,
+        localId: 2,
         status: "open",
         message: "Firestop batch certificate missing from package.",
         createdAt: "2026-04-03T07:00:00.000Z",
@@ -427,6 +431,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
       {
         id: "insp-005-comment-3",
         roundNumber: 1,
+        localId: 3,
         status: "open",
         message: "Cable tray support spacing exceeds approved drawing.",
         createdAt: "2026-04-03T07:04:00.000Z",
@@ -513,6 +518,7 @@ for (let index = 0; index < 30; index++) {
      comments.push({
         id: c1Id,
         roundNumber: 1,
+        localId: comments.length + 1,
         status: "open" as const,
         message: "Defect found in previous round. Critical rectification required.",
         createdAt: new Date(Date.now() - 90000000).toISOString(),
@@ -539,6 +545,7 @@ for (let index = 0; index < 30; index++) {
      comments.push({
         id: c2Id,
         roundNumber: 2,
+        localId: comments.length + 1,
         status: "open" as const,
         message: "Still not complying with standards.",
         createdAt: new Date(Date.now() - 50000000).toISOString(),
@@ -566,6 +573,7 @@ for (let index = 0; index < 30; index++) {
         comments.push({
           id: c3Id,
           roundNumber: currentRound,
+          localId: comments.length + 1,
           status: "open" as const,
           message: `Issued from round ${currentRound}. Needs immediate attention.`,
           createdAt: new Date().toISOString(),

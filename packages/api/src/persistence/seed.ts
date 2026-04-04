@@ -77,6 +77,7 @@ export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot
     });
 
     // 转换评论
+    let commentLocalIdCounter = 1;
     for (const comment of detail.comments) {
         const nextLocalId = nextLocalIdByItemId.get(detail.id) ?? 1;
         nextLocalIdByItemId.set(detail.id, nextLocalId + 1);
