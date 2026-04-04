@@ -1,27 +1,25 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 11:18 Asia/Shanghai
+> Updated: 2026-04-04 11:22 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M12 — Collapse remaining D1 detail/list summary reads
-**Goal:** Continue shrinking the D1 read path by replacing remaining multi-step item/ship/project lookups with tighter joined summary reads, while keeping mock as the default runtime driver.
+### M13 — Deduplicate joined summary SQL constants
+**Goal:** Reduce duplication of the joined summary SQL strings across storage and route/persistence SQL-recording tests, while keeping assertions strict (string-equal) and behavior unchanged.
 
 **Definition of Done:**
-- One or more remaining D1 detail/list summary paths use a joined summary query instead of separate item/ship/project lookups
-- Mock remains the default runtime path and unchanged in behavior
-- Tests prove the narrowed D1 read behavior without touching frontend files
-- Validation passes (`pnpm qa`)
+- Joined summary SQL strings are defined in one place in `packages/api` and reused
+- Tests still assert exact SQL strings executed (no overly loose matching)
+- Validation passes (`pnpm --filter @nbins/api test`)
 - Changes committed + pushed
 
 ## Task Breakdown
 
-- [x] Implement a joined summary read for `readInspectionDetail()` (commit: `63f44ee`)
-- [x] Implement the next safe joined/narrow summary improvement for `readInspectionList()` (commit: `813310c`)
-- [x] Update D1 SQL-recording tests to lock in the reduced query shape (commit: `813310c`)
-- [x] Run validation (`pnpm qa`)
-- [x] Commit + push (commit: `813310c`)
+- [ ] Extract joined summary SQL constants into a single module (e.g. `packages/api/src/persistence/d1-inspection-sql.ts`)
+- [ ] Update storage + tests to import and use those constants
+- [ ] Run validation (`pnpm --filter @nbins/api test`)
+- [ ] Commit + push
 
 ## Rules
 
@@ -33,6 +31,7 @@
 
 ## Recent Completed Milestones
 
+- [x] M12 — Collapse remaining D1 detail/list summary reads (detail + list joined summary reads) (commits: `63f44ee`, `813310c`, `a74c0de`)
 - [x] M11 — Narrow post-submit detail refresh path (commit: `bf317bc`)
 - [x] M10 — Batch list round reads for inspections route (commit: `83e89af`)
 - [x] M9 — Add inspections list route + narrow D1 reads (commit: `966da65`)
