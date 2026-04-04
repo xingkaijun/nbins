@@ -15,7 +15,7 @@
 
 ## Recently Completed
 
-- [x] Phase A — Frontend auth integration + comment close UI (commit TBD)
+- [x] Phase A — Frontend auth integration + comment close UI (commit: `1fe715a`)
   - [x] Add frontend auth/token helper (`localStorage`-backed)
   - [x] Wire `web/src/api.ts` bearer header + 401 handling
   - [x] Connect login page to `/api/auth/login`
