@@ -1,33 +1,31 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 15:46 Asia/Shanghai
+> Updated: 2026-04-04 16:05 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M15 — Add minimal auth login route + password hashing (no JWT yet)
-**Goal:** Implement a safe, test-covered `/api/auth/login` endpoint that authenticates seeded/mock users using PBKDF2 password hashes, and keeps D1 reads narrow.
+### M16 — Add JWT session + protect inspection routes
+**Goal:** Turn the minimal login endpoint into a real session mechanism (JWT) and require auth for `/api/inspections*` (and any other sensitive endpoints).
 
 **Definition of Done:**
-- `POST /api/auth/login` exists and returns `{ ok: true, data: { user } }` on success
-- Invalid credentials return `401` with a generic error
-- Mock baseline users have real password hashes (no `dev-only`)
-- Seeded snapshot can authenticate at least one known user (`sys-user`)
-- D1 storage supports narrow user lookup by username
+- `POST /api/auth/login` returns a signed JWT (and/or sets cookie) on success
+- Auth middleware verifies JWT and sets `ctx.var.user` (or equivalent)
+- `/api/inspections` and `/api/inspections/:id` require authentication (401 when missing/invalid)
+- Route tests updated/added for both authorized and unauthorized cases
+- Keep D1 reads narrow (no `SELECT * FROM "users"` etc.)
 - `pnpm --filter @nbins/api test` passes
 - `pnpm typecheck` passes
 - Changes committed + pushed
 
 ## Task Breakdown
 
-- [x] Add password hashing utilities (`createPasswordHash`, `verifyPasswordHash`)
-- [x] Seed/mock users with PBKDF2 hashes for known dev passwords
-- [x] Add `POST /api/auth/login` route + service + user repository
-- [x] Add narrow D1 user lookup by username (storage interface + adapters)
-- [x] Add tests (password hash, login route, narrow D1 lookup)
-- [x] Update web demo to keep `localId` invariant in locally-simulated comments
-- [x] Run validation (`pnpm --filter @nbins/api test`, `pnpm --filter @nbins/api typecheck`, `pnpm --filter @nbins/api build`)
-- [x] Commit + push
+- [ ] Decide token transport (Bearer header vs cookie) + secret handling
+- [ ] Implement JWT creation on login (include user id + role + disciplines)
+- [ ] Add auth middleware + typed context user
+- [ ] Protect inspections routes behind auth middleware
+- [ ] Update route tests (unauthenticated 401 + authenticated happy paths)
+- [ ] Validation + commit + push
 
 ## Rules
 
@@ -39,6 +37,7 @@
 
 ## Recent Completed Milestones
 
+- [x] M15 — Add minimal auth login route + password hashing (no JWT yet) (commits: `3f101b9`, `73787a2`, `eb8344d`)
 - [x] M14 — Fix seed/localId + keep D1 route tests stable (commit: `947464d`)
 - [x] M13 — Deduplicate joined summary SQL constants (commit: `fc219b6`)
 - [x] M12 — Collapse remaining D1 detail/list summary reads (detail + list joined summary reads) (commits: `63f44ee`, `813310c`, `a74c0de`)
