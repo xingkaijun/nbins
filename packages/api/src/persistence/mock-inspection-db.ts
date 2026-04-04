@@ -154,6 +154,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
   comments: [
     {
       id: "comment-insp-002-1",
+      localId: 1,
       inspectionItemId: "insp-002",
       createdInRoundId: "round-insp-002-r1",
       closedInRoundId: null,
@@ -167,6 +168,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
     },
     {
       id: "comment-insp-002-2",
+      localId: 2,
       inspectionItemId: "insp-002",
       createdInRoundId: "round-insp-002-r1",
       closedInRoundId: null,
@@ -180,6 +182,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
     },
     {
       id: "comment-insp-003-1",
+      localId: 1,
       inspectionItemId: "insp-003",
       createdInRoundId: "round-insp-003-r1",
       closedInRoundId: null,

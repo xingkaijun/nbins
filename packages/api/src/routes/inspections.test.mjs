@@ -501,7 +501,7 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
-  assert.equal(payload.data.items.length, 2);
+  assert.equal(payload.data.items.length, 5);
   assert.equal(
     db.executedSql.some((sql) =>
       /^SELECT \* FROM "(users|projects|ships|inspection_rounds|comments)"$/.test(sql)
@@ -510,7 +510,7 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
   );
   assert.deepEqual(db.executedSql, [
     INSPECTION_LIST_SUMMARY_SQL,
-    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?)'
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?, ?, ?, ?)'
   ]);
   assert.equal(db.executedSql.filter((sql) => sql === INSPECTION_LIST_SUMMARY_SQL).length, 1);
   assert.equal(

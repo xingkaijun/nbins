@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 11:31 Asia/Shanghai
+> Updated: 2026-04-04 11:55 Asia/Shanghai
 > Overall status: **MVP baseline implemented, with core inspection flow working and D1 runtime integration advanced to an adapter plus driver-switch stage**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -309,3 +309,7 @@ Delivery read:
 # Bootstrap schema (generated SQL)
 
 We generate the bootstrap SQL from the canonical schema metadata in `packages/api/src/db/sql.ts` to avoid hand-maintaining DDL snippets in docs.
+
+## 2026-04-04
+
+- M14: fixed D1 seed snapshots to include CommentRecord.localId and adjusted D1 route tests to match trimmed seed size (5 items).

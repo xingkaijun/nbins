@@ -5,10 +5,23 @@ import { ALL_MOCK_DETAILS } from "@nbins/shared";
 export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot {
   const snapshot = createBaselineInspectionStorage();
 
+  const nextLocalIdByItemId = new Map<string, number>();
+
+  for (const comment of snapshot.comments) {
+    const next = nextLocalIdByItemId.get(comment.inspectionItemId) ?? 1;
+    nextLocalIdByItemId.set(comment.inspectionItemId, Math.max(next, (comment.localId ?? 0) + 1));
+  }
+
   // 把所有自动生成的 shared 测试数据转换注入为 D1 种子数据库结构
   for (const detail of Object.values(ALL_MOCK_DETAILS)) {
+    const SEED_DETAIL_IDS = new Set(["insp-001", "insp-004", "insp-005"]);
+
     // 防止和原有 mock 数据冲突
     if (snapshot.inspectionItems.find(i => i.id === detail.id)) {
+        continue;
+    }
+
+    if (!SEED_DETAIL_IDS.has(detail.id)) {
         continue;
     }
 
@@ -65,12 +78,16 @@ export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot
 
     // 转换评论
     for (const comment of detail.comments) {
+        const nextLocalId = nextLocalIdByItemId.get(detail.id) ?? 1;
+        nextLocalIdByItemId.set(detail.id, nextLocalId + 1);
+
         snapshot.comments.push({
             id: comment.id,
             inspectionItemId: detail.id,
             createdInRoundId: `${detail.id}-round-${comment.roundNumber}`,
             closedInRoundId: comment.status === "closed" ? `${detail.id}-round-${detail.currentRound}` : null,
             authorId: "sys-user",
+            localId: nextLocalId,
             content: comment.message,
             status: comment.status,
             closedBy: comment.resolvedBy,

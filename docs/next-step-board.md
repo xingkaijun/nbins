@@ -1,25 +1,26 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 11:31 Asia/Shanghai
+> Updated: 2026-04-04 11:55 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M13 — Deduplicate joined summary SQL constants (DONE)
-**Goal:** Reduce duplication of the joined summary SQL strings across storage and route/persistence SQL-recording tests, while keeping assertions strict (string-equal) and behavior unchanged.
+### M14 — Fix seed/localId + keep D1 route tests stable
+**Goal:** Ensure all seeded CommentRecords include numeric `localId` so D1 mapping stays strict, and make D1 seeding behavior not explode the narrow-query tests.
 
 **Definition of Done:**
-- Joined summary SQL strings are defined in one place in `packages/api` and reused
-- Tests still assert exact SQL strings executed (no overly loose matching)
-- Validation passes (`pnpm --filter @nbins/api test`)
+- Baseline mock snapshot comments include `localId`
+- Seed snapshot generator assigns `localId` per inspection item
+- `pnpm --filter @nbins/api test` passes
 - Changes committed + pushed
 
 ## Task Breakdown
 
-- [x] Extract joined summary SQL constants into a single module (e.g. `packages/api/src/persistence/d1-inspection-sql.ts`)
-- [x] Update storage + tests to import and use those constants
+- [x] Add `localId` to baseline mock snapshot comments
+- [x] Assign `localId` during seed snapshot generation
+- [x] Keep D1 narrow-query tests stable (limit seed expansion + adjust expected list size)
 - [x] Run validation (`pnpm --filter @nbins/api test`)
-- [x] Commit + push
+- [ ] Commit + push
 
 ## Rules
 
@@ -44,6 +45,3 @@
 ## Notes
 
 - Note: `pnpm qa` is now unblocked after adding missing `ENGINE`/`CTNMT` disciplines to shared types.
-
-- M11 is complete and pushed; the next read-path work should stay in API/persistence only and avoid `packages/web/**` entirely.
-- This M12 slice is intentionally backend-only because the frontend is currently under manual editing.

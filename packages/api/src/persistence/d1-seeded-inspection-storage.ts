@@ -29,12 +29,22 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   }
 
   async readInspectionList(): Promise<InspectionListStorageRecord> {
-    await this.ensureSeeded();
-
     if (this.inner.readInspectionList) {
-      const snapshot = await this.inner.readInspectionList();
-      this.seeded = true;
-      return snapshot;
+      const list = await this.inner.readInspectionList();
+
+      if (list.items.length > 0) {
+        this.seeded = true;
+        return list;
+      }
+
+      if (!this.seeded) {
+        await this.inner.write(createSeedInspectionStorageSnapshot());
+        const seededList = await this.inner.readInspectionList();
+        this.seeded = true;
+        return seededList;
+      }
+
+      return list;
     }
 
     await this.ensureSeeded();
@@ -47,8 +57,6 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   async readInspectionDetail(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null> {
-    await this.ensureSeeded();
-
     if (this.inner.readInspectionDetail) {
       const detail = await this.inner.readInspectionDetail(inspectionItemId);
 
@@ -57,10 +65,14 @@ export class D1SeededInspectionStorage implements InspectionStorage {
         return detail;
       }
 
-      if (this.seeded) {
-        return null;
+      if (!this.seeded) {
+        await this.inner.write(createSeedInspectionStorageSnapshot());
+        const seededDetail = await this.inner.readInspectionDetail(inspectionItemId);
+        this.seeded = true;
+        return seededDetail;
       }
-      return this.inner.readInspectionDetail(inspectionItemId);
+
+      return null;
     }
 
     await this.ensureSeeded();
@@ -70,8 +82,6 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   async readSubmittedInspectionDetail(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null> {
-    await this.ensureSeeded();
-
     if (this.inner.readSubmittedInspectionDetail) {
       const detail = await this.inner.readSubmittedInspectionDetail(inspectionItemId);
 
@@ -80,10 +90,14 @@ export class D1SeededInspectionStorage implements InspectionStorage {
         return detail;
       }
 
-      if (this.seeded) {
-        return null;
+      if (!this.seeded) {
+        await this.inner.write(createSeedInspectionStorageSnapshot());
+        const seededDetail = await this.inner.readSubmittedInspectionDetail(inspectionItemId);
+        this.seeded = true;
+        return seededDetail;
       }
-      return this.inner.readSubmittedInspectionDetail(inspectionItemId);
+
+      return null;
     }
 
     return this.readInspectionDetail(inspectionItemId);
@@ -92,8 +106,6 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   async readSubmissionContext(
     inspectionItemId: string
   ): Promise<InspectionSubmissionContextRecord | null> {
-    await this.ensureSeeded();
-
     if (this.inner.readSubmissionContext) {
       const context = await this.inner.readSubmissionContext(inspectionItemId);
 
@@ -102,12 +114,14 @@ export class D1SeededInspectionStorage implements InspectionStorage {
         return context;
       }
 
-      if (this.seeded) {
-        return null;
+      if (!this.seeded) {
+        await this.inner.write(createSeedInspectionStorageSnapshot());
+        const seededContext = await this.inner.readSubmissionContext(inspectionItemId);
+        this.seeded = true;
+        return seededContext;
       }
 
-      await this.ensureSeeded();
-      return this.inner.readSubmissionContext(inspectionItemId);
+      return null;
     }
 
     await this.ensureSeeded();
@@ -117,9 +131,8 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   async submitCurrentRoundResult(
     mutation: SubmitCurrentRoundResultStorageMutation
   ): Promise<void> {
-    await this.ensureSeeded();
-
     if (!this.inner.submitCurrentRoundResult) {
+      await this.ensureSeeded();
       const snapshot = await this.inner.read();
       const inspectionItem = snapshot.inspectionItems.find(
         (record) => record.id === mutation.inspectionItem.id
@@ -139,7 +152,19 @@ export class D1SeededInspectionStorage implements InspectionStorage {
       return;
     }
 
-    return this.inner.submitCurrentRoundResult(mutation);
+    try {
+      await this.inner.submitCurrentRoundResult(mutation);
+      this.seeded = true;
+      return;
+    } catch (error) {
+      if (this.seeded) {
+        throw error;
+      }
+
+      await this.inner.write(createSeedInspectionStorageSnapshot());
+      this.seeded = true;
+      return this.inner.submitCurrentRoundResult(mutation);
+    }
   }
 
   private async ensureSeeded(): Promise<void> {
