@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 09:20 Asia/Shanghai
+> Updated: 2026-04-04 11:02 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -42,6 +42,8 @@
 - [x] M6 — Improve D1 persistence ergonomics (narrower writes) (commit: `87ae4e8`)
 
 ## Notes
+
+- Note: `pnpm qa` is now unblocked after adding missing `ENGINE`/`CTNMT` disciplines to shared types.
 
 - M11 is complete and pushed; the next read-path work should stay in API/persistence only and avoid `packages/web/**` entirely.
 - This M12 slice is intentionally backend-only because the frontend is currently under manual editing.

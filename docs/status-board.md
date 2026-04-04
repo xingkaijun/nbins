@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 09:25 Asia/Shanghai
+> Updated: 2026-04-04 11:01 Asia/Shanghai
 > Overall status: **MVP baseline implemented, with core inspection flow working and D1 runtime integration advanced to an adapter plus driver-switch stage**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -54,6 +54,8 @@ Delivery read:
 **Status: `✅`**
 
 What is in place:
+
+- Discipline enum now includes `ENGINE` and `CTNMT` to match existing mock/demo datasets.
 
 - Shared enums and types cover disciplines, roles, workflow statuses, inspection results, detail payloads, comments, and submit request/response shapes.
 - Shared demo data builders support the MVP demo path used across packages.
