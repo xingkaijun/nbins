@@ -20,7 +20,7 @@
 ## Recent Completed Milestones
 
 - [x] M19 — Add project-scoped authorization skeleton (project_members + membership lookup service)
-- [x] M20 — Apply allowed-project filtering to inspection list/detail read endpoints (commit: `TBD`)
+- [x] M20 — Apply allowed-project filtering to inspection list/detail read endpoints (commit: `347909e`)
 - [x] M18 — Harden bearer auth by revalidating JWT subject against current user state (commit: `7dd2d80`)
 
 - [x] M17 — Add /api/auth/me + narrow storage lookup for me endpoint (commits: `98725db`, `d49bb69`)

@@ -328,4 +328,4 @@ We generate the bootstrap SQL from the canonical schema metadata in `packages/ap
 
 - M14: fixed D1 seed snapshots to include CommentRecord.localId and adjusted D1 route tests to match trimmed seed size (5 items).
 - M15: added a minimal backend auth increment with `/api/auth/login`, PBKDF2 password hashing, narrow D1 user lookup by username, and auth helper scaffolding (`createRequireAuth` / `createRequireRole`), validated at the API package level.
-- M20: enforced minimal project-scoped authorization for read-only inspection list/detail endpoints by resolving allowed project memberships per authenticated user and filtering/404-hiding unauthorized inspection reads in both mock and D1 drivers (commit: `TBD`).
+- M20: enforced minimal project-scoped authorization for read-only inspection list/detail endpoints by resolving allowed project memberships per authenticated user and filtering/404-hiding unauthorized inspection reads in both mock and D1 drivers (commit: `347909e`).
