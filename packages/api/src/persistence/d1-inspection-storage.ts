@@ -91,48 +91,16 @@ export class D1InspectionStorage implements InspectionStorage {
   async readInspectionDetail(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null> {
-    const summaryRow = await this.selectFirst(
-      INSPECTION_DETAIL_SUMMARY_SQL,
-      inspectionItemId
-    );
-
-    if (!summaryRow) {
-      return null;
-    }
-
-    const [roundRows, commentRows] = await Promise.all([
-      this.selectMany(
-        `SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?`,
-        inspectionItemId
-      ),
-      this.selectMany(`SELECT * FROM "comments" WHERE "inspectionItemId" = ?`, inspectionItemId)
-    ]);
-    const rounds = roundRows.map(mapInspectionRoundRecord);
-    const comments = commentRows.map(mapCommentRecord);
-    const userIds = Array.from(
-      new Set(
-        [
-          ...rounds.map((record) => record.inspectedBy),
-          ...comments.map((record) => record.authorId),
-          ...comments.map((record) => record.closedBy)
-        ].filter((value): value is string => typeof value === "string" && value.length > 0)
-      )
-    );
-
-    return {
-      item: mapInspectionItemSummaryRecord(summaryRow),
-      ship: mapShipSummaryRecord(summaryRow),
-      project: mapProjectSummaryRecord(summaryRow),
-      rounds: rounds.sort((left, right) => left.roundNumber - right.roundNumber),
-      comments: comments.sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
-      users:
-        userIds.length === 0
-          ? []
-          : await this.selectUsersByIds(userIds)
-    };
+    return this.readInspectionDetailRecord(inspectionItemId);
   }
 
   async readSubmittedInspectionDetail(
+    inspectionItemId: string
+  ): Promise<InspectionDetailStorageRecord | null> {
+    return this.readInspectionDetailRecord(inspectionItemId);
+  }
+
+  private async readInspectionDetailRecord(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null> {
     const summaryRow = await this.selectFirst(
