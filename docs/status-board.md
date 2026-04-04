@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 12:10 Asia/Shanghai
+> Updated: 2026-04-04 15:46 Asia/Shanghai
 > Overall status: **D1 integration stabilized with core bugfixes; sequence-based comment IDs (localId) implemented in the persistent layer, with core inspection MVP flow fully adapted.**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -246,12 +246,14 @@ What is in place:
 - `POST /api/auth/login` exists (mock + D1 paths), returning basic user identity on success.
 - Password hashing utilities exist (PBKDF2-SHA256) and seeded/mock users now have real password hashes for dev credentials.
 - Narrow D1 lookup exists for users by username (no full snapshot read required).
+- Auth helper scaffolding now exists for bearer token extraction, authenticated-user context injection, and role checks (`createRequireAuth`, `createRequireRole`), with focused route/middleware tests.
+- API-level validation for this increment passes via `pnpm --filter @nbins/api test`, `pnpm --filter @nbins/api typecheck`, and `pnpm --filter @nbins/api build`.
 
 What is still missing:
 
-- JWT issuance + middleware verification for protected routes.
-- Route guards for authenticated-only access.
-- Role-based authorization checks (beyond the scaffolding utilities).
+- JWT issuance + real token verification for protected routes.
+- Wiring the auth helpers into actual protected API endpoints.
+- Refresh/session lifecycle and logout/invalidation behavior.
 - Frontend login UI + session storage.
 
 Representative files:
@@ -318,3 +320,4 @@ We generate the bootstrap SQL from the canonical schema metadata in `packages/ap
 ## 2026-04-04
 
 - M14: fixed D1 seed snapshots to include CommentRecord.localId and adjusted D1 route tests to match trimmed seed size (5 items).
+- M15: added a minimal backend auth increment with `/api/auth/login`, PBKDF2 password hashing, narrow D1 user lookup by username, and auth helper scaffolding (`createRequireAuth` / `createRequireRole`), validated at the API package level.

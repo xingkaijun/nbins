@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 15:35 Asia/Shanghai
+> Updated: 2026-04-04 15:46 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -26,7 +26,7 @@
 - [x] Add narrow D1 user lookup by username (storage interface + adapters)
 - [x] Add tests (password hash, login route, narrow D1 lookup)
 - [x] Update web demo to keep `localId` invariant in locally-simulated comments
-- [x] Run validation (`pnpm --filter @nbins/api test`, `pnpm typecheck`)
+- [x] Run validation (`pnpm --filter @nbins/api test`, `pnpm --filter @nbins/api typecheck`, `pnpm --filter @nbins/api build`)
 - [ ] Commit + push
 
 ## Rules

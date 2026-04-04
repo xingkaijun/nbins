@@ -203,14 +203,17 @@ export class D1InspectionStorage implements InspectionStorage {
       statements.push(
         this.db
           .prepare(
-            `INSERT INTO "projects" ("id", "name", "code", "status", "recipients", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO "projects" ("id", "name", "code", "status", "owner", "shipyard", "class", "recipients", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
             record.id,
             record.name,
             record.code,
             record.status,
+            record.owner,
+            record.shipyard,
+            record.class,
             JSON.stringify(record.recipients),
             record.createdAt,
             record.updatedAt
