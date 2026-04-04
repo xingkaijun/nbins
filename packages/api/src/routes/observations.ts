@@ -198,10 +198,15 @@ function createObservationRoutes(
     try {
       const id = c.req.param("id");
       const body = await c.req.json<{
+        shipId?: string;
         content?: string;
         type?: string;
         discipline?: string;
+        authorId?: string;
         date?: string;
+        status?: "open" | "closed";
+        closedBy?: string | null;
+        closedAt?: string | null;
       }>();
       const now = new Date().toISOString();
 
@@ -210,9 +215,14 @@ function createObservationRoutes(
         const params: unknown[] = [now];
 
         if (body.content !== undefined) sets.push('"content" = ?'), params.push(body.content);
+        if (body.shipId !== undefined) sets.push('"shipId" = ?'), params.push(body.shipId);
         if (body.type !== undefined) sets.push('"type" = ?'), params.push(body.type);
         if (body.discipline !== undefined) sets.push('"discipline" = ?'), params.push(body.discipline);
+        if (body.authorId !== undefined) sets.push('"authorId" = ?'), params.push(body.authorId);
         if (body.date !== undefined) sets.push('"date" = ?'), params.push(body.date);
+        if (body.status !== undefined) sets.push('"status" = ?'), params.push(body.status);
+        if (body.closedBy !== undefined) sets.push('"closedBy" = ?'), params.push(body.closedBy);
+        if (body.closedAt !== undefined) sets.push('"closedAt" = ?'), params.push(body.closedAt);
 
         params.push(id);
 
@@ -228,11 +238,16 @@ function createObservationRoutes(
         }
 
         if (body.content !== undefined) record.content = body.content;
+        if (body.shipId !== undefined) record.shipId = body.shipId;
         if (body.type !== undefined) record.type = body.type;
         if (body.discipline !== undefined) {
           record.discipline = body.discipline as ObservationRecord["discipline"];
         }
+        if (body.authorId !== undefined) record.authorId = body.authorId;
         if (body.date !== undefined) record.date = body.date;
+        if (body.status !== undefined) record.status = body.status;
+        if (body.closedBy !== undefined) record.closedBy = body.closedBy;
+        if (body.closedAt !== undefined) record.closedAt = body.closedAt;
         record.updatedAt = now;
       }
 

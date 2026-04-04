@@ -7,6 +7,7 @@ export interface UserRecord {
   passwordHash: string;
   role: Role;
   disciplines: Discipline[];
+  accessibleProjectIds: string[];
   isActive: 0 | 1;
   createdAt: string;
   updatedAt: string;

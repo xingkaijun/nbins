@@ -139,7 +139,11 @@ test("POST /api/auth/login uses narrow D1 user lookup", async () => {
   const seed = createSeedInspectionStorageSnapshot();
 
   for (const user of seed.users) {
-    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+    db.tables.users.push({ 
+      ...user, 
+      disciplines: JSON.stringify(user.disciplines),
+      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
+    });
   }
 
   const response = await app.request(
@@ -241,7 +245,11 @@ test("GET /api/auth/me uses narrow D1 user lookup by id", async () => {
   const seed = createSeedInspectionStorageSnapshot();
 
   for (const user of seed.users) {
-    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+    db.tables.users.push({ 
+      ...user, 
+      disciplines: JSON.stringify(user.disciplines),
+      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
+    });
   }
 
   const loginResponse = await app.request(
@@ -291,7 +299,11 @@ test("GET /api/auth/me rejects tokens for inactive users", async () => {
   const seed = createSeedInspectionStorageSnapshot();
 
   for (const user of seed.users) {
-    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+    db.tables.users.push({ 
+      ...user, 
+      disciplines: JSON.stringify(user.disciplines),
+      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
+    });
   }
 
   const loginResponse = await app.request(

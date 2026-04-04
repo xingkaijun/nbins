@@ -162,6 +162,7 @@ export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot
         passwordHash: uid === "sys-user" ? SYSTEM_USER_PASSWORD_HASH : "disabled",
         role: "inspector",
         disciplines: [],
+        accessibleProjectIds: [],
         isActive: 1,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()

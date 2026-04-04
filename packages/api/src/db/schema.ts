@@ -61,6 +61,7 @@ export const usersTable = sqliteTable<{
   passwordHash: textColumn<string>(),
   role: textColumn<Role>(),
   disciplines: textColumn<Discipline[]>({ mode: "json", default: [] }),
+  accessibleProjectIds: textColumn<string[]>({ mode: "json", default: [] }),
   isActive: integerColumn<0 | 1>({ default: 1 }),
   createdAt: textColumn<string>(),
   updatedAt: textColumn<string>()

@@ -188,8 +188,8 @@ export class D1InspectionStorage implements InspectionStorage {
       statements.push(
         this.db
           .prepare(
-            `INSERT INTO "users" ("id", "username", "displayName", "passwordHash", "role", "disciplines", "isActive", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO "users" ("id", "username", "displayName", "passwordHash", "role", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
             record.id,
@@ -198,6 +198,7 @@ export class D1InspectionStorage implements InspectionStorage {
             record.passwordHash,
             record.role,
             JSON.stringify(record.disciplines),
+            JSON.stringify(record.accessibleProjectIds),
             record.isActive,
             record.createdAt,
             record.updatedAt
@@ -534,6 +535,7 @@ function mapUserRecord(row: JsonRow): UserRecord {
     passwordHash: stringValue(row.passwordHash),
     role: stringValue(row.role) as UserRecord["role"],
     disciplines: jsonArrayValue(row.disciplines) as UserRecord["disciplines"],
+    accessibleProjectIds: jsonArrayValue(row.accessibleProjectIds),
     isActive: integerValue(row.isActive) as 0 | 1,
     createdAt: stringValue(row.createdAt),
     updatedAt: stringValue(row.updatedAt)

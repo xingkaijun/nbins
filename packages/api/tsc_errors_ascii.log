@@ -1,4 +1,0 @@
-src/domain/inspection-item-submission.ts(320,5): error TS2322: Type '"ENGINE"' is not assignable to type '"HULL" | "OUTFIT" | "MACHINERY" | "CHS" | "ELEC" | "PAINT" | "CCS"'.
-src/persistence/mock-inspection-db.ts(14,30): error TS2322: Type '"ENGINE"' is not assignable to type '"HULL" | "OUTFIT" | "MACHINERY" | "CHS" | "ELEC" | "PAINT" | "CCS"'.
-src/persistence/mock-inspection-db.ts(25,21): error TS2322: Type '"CTNMT"' is not assignable to type '"HULL" | "OUTFIT" | "MACHINERY" | "CHS" | "ELEC" | "PAINT" | "CCS"'.
-src/persistence/mock-inspection-db.ts(95,7): error TS2322: Type '"CTNMT"' is not assignable to type '"HULL" | "OUTFIT" | "MACHINERY" | "CHS" | "ELEC" | "PAINT" | "CCS"'.

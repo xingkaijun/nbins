@@ -72,7 +72,7 @@ test("protected route exposes verified auth user on request context", async () =
   const token = await issueAccessToken({
     id: "user-inspector-wang",
     role: "inspector",
-    disciplines: ["HULL", "PAINT"]
+    disciplines: ["CCS", "HULL"]
   }, {});
 
   const response = await app.request("http://localhost/protected/profile", {
@@ -86,7 +86,7 @@ test("protected route exposes verified auth user on request context", async () =
     data: {
       id: "user-inspector-wang",
       role: "inspector",
-      disciplines: ["HULL", "PAINT"]
+      disciplines: ["CCS", "HULL"]
     }
   });
 });

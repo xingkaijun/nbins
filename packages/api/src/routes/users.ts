@@ -43,7 +43,7 @@ function createUserRoutes(
         const where = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
         const result = await c.env.DB!
           .prepare(
-            `SELECT "id", "username", "displayName", "role", "disciplines", "isActive", "createdAt", "updatedAt"
+            `SELECT "id", "username", "displayName", "role", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt"
              FROM "users"${where} ORDER BY "createdAt" DESC`
           )
           .bind(...params)
@@ -79,7 +79,7 @@ function createUserRoutes(
       if (isD1Enabled(c.env)) {
         const userRow = await c.env.DB!
           .prepare(
-            `SELECT "id", "username", "displayName", "role", "disciplines", "isActive", "createdAt", "updatedAt"
+            `SELECT "id", "username", "displayName", "role", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt"
              FROM "users" WHERE "id" = ?`
           )
           .bind(id)
@@ -115,6 +115,7 @@ function createUserRoutes(
       password: string;
       role: string;
       disciplines?: string[];
+      accessibleProjectIds?: string[];
     }>();
 
     if (!body.username || !body.displayName || !body.password || !body.role) {
@@ -129,6 +130,7 @@ function createUserRoutes(
       passwordHash: await hashPassword(body.password),
       role: body.role as UserRecord["role"],
       disciplines: (body.disciplines ?? []) as UserRecord["disciplines"],
+      accessibleProjectIds: body.accessibleProjectIds ?? [],
       isActive: 1,
       createdAt: now,
       updatedAt: now
@@ -139,8 +141,8 @@ function createUserRoutes(
         await c.env.DB!
           .prepare(
             `INSERT INTO "users"
-             ("id", "username", "displayName", "passwordHash", "role", "disciplines", "isActive", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)`
+             ("id", "username", "displayName", "passwordHash", "role", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
           )
           .bind(
             record.id,
@@ -149,6 +151,7 @@ function createUserRoutes(
             record.passwordHash,
             record.role,
             JSON.stringify(record.disciplines),
+            JSON.stringify(record.accessibleProjectIds),
             record.createdAt,
             record.updatedAt
           )
@@ -183,6 +186,7 @@ function createUserRoutes(
         displayName?: string;
         role?: string;
         disciplines?: string[];
+        accessibleProjectIds?: string[];
         isActive?: boolean;
       }>();
       const now = new Date().toISOString();
@@ -196,6 +200,10 @@ function createUserRoutes(
         if (body.disciplines !== undefined) {
           sets.push('"disciplines" = ?');
           params.push(JSON.stringify(body.disciplines));
+        }
+        if (body.accessibleProjectIds !== undefined) {
+          sets.push('"accessibleProjectIds" = ?');
+          params.push(JSON.stringify(body.accessibleProjectIds));
         }
         if (body.isActive !== undefined) sets.push('"isActive" = ?'), params.push(body.isActive ? 1 : 0);
 
@@ -222,6 +230,9 @@ function createUserRoutes(
         if (body.role !== undefined) user.role = body.role as UserRecord["role"];
         if (body.disciplines !== undefined) {
           user.disciplines = body.disciplines as UserRecord["disciplines"];
+        }
+        if (body.accessibleProjectIds !== undefined) {
+          user.accessibleProjectIds = body.accessibleProjectIds;
         }
         if (body.isActive !== undefined) user.isActive = body.isActive ? 1 : 0;
         user.updatedAt = now;

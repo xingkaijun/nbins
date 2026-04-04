@@ -384,7 +384,11 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   const seed = createSeedInspectionStorageSnapshot();
 
   for (const user of seed.users) {
-    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+    db.tables.users.push({ 
+      ...user, 
+      disciplines: JSON.stringify(user.disciplines),
+      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
+    });
   }
 
   for (const project of seed.projects) {
@@ -486,7 +490,11 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   const seed = createSeedInspectionStorageSnapshot();
 
   for (const user of seed.users) {
-    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+    db.tables.users.push({ 
+      ...user, 
+      disciplines: JSON.stringify(user.disciplines),
+      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
+    });
   }
 
   for (const project of seed.projects) {
@@ -555,7 +563,11 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
   const seed = createSeedInspectionStorageSnapshot();
 
   for (const user of seed.users) {
-    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+    db.tables.users.push({ 
+      ...user, 
+      disciplines: JSON.stringify(user.disciplines),
+      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
+    });
   }
 
   for (const project of seed.projects) {
@@ -794,4 +806,60 @@ test("PUT /api/inspections/:id/rounds/current/result returns 404 for unknown ins
   assert.equal(response.status, 404);
   assert.equal(payload.ok, false);
   assert.equal(payload.error, "Inspection item not found");
+});
+
+test("PUT /api/inspections/:id/comments/:commentId/resolve resolves a comment and updates inspection status", async () => {
+  const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
+  
+  // 1. 获取初始状态
+  const initialResponse = await app.request("http://localhost/api/inspections/insp-002", { headers });
+  const initialPayload = await initialResponse.json();
+  const targetComment = initialPayload.data.comments.find(c => c.status === "open");
+  const initialVersion = initialPayload.data.version;
+
+  assert.ok(targetComment, "Should find an open comment to resolve");
+
+  // 2. 执行关闭操作
+  const resolveResponse = await app.request(
+    `http://localhost/api/inspections/insp-002/comments/${targetComment.id}/resolve`,
+    {
+      method: "PUT",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({
+        resolvedBy: "user-li-si",
+        expectedVersion: initialVersion
+      })
+    }
+  );
+  const resolvePayload = await resolveResponse.json();
+
+  assert.equal(resolveResponse.status, 200);
+  assert.equal(resolvePayload.ok, true);
+  assert.equal(resolvePayload.data.openCommentCount, initialPayload.data.openCommentCount - 1);
+
+  // 3. 验证持久化状态
+  const finalResponse = await app.request("http://localhost/api/inspections/insp-002", { headers });
+  const finalPayload = await finalResponse.json();
+  const resolvedComment = finalPayload.data.comments.find(c => c.id === targetComment.id);
+
+  assert.equal(resolvedComment.status, "closed");
+  assert.equal(resolvedComment.resolvedBy, "user-li-si");
+  assert.equal(finalPayload.data.version, initialVersion + 1);
+});
+
+test("PUT /api/inspections/:id/comments/:commentId/resolve returns 401 without bearer token", async () => {
+  const app = createTestApp();
+  const response = await app.request(
+    "http://localhost/api/inspections/insp-002/comments/any/resolve",
+    {
+      method: "PUT",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ resolvedBy: "tester", expectedVersion: 1 })
+    }
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(payload.ok, false);
 });

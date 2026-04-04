@@ -5,6 +5,7 @@ CREATE TABLE IF NOT EXISTS "users" (
   "passwordHash" TEXT NOT NULL,
   "role" TEXT NOT NULL,
   "disciplines" TEXT NOT NULL DEFAULT '[]',
+  "accessibleProjectIds" TEXT NOT NULL DEFAULT '[]',
   "isActive" INTEGER NOT NULL DEFAULT 1,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL

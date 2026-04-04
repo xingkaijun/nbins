@@ -16,6 +16,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
       passwordHash: LI_SI_PASSWORD_HASH,
       role: "inspector",
       disciplines: ["PAINT", "MACHINERY"],
+      accessibleProjectIds: ["project-hd-lng"],
       isActive: 1,
       createdAt: NOW,
       updatedAt: NOW
@@ -27,6 +28,19 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
       passwordHash: WANG_WU_PASSWORD_HASH,
       role: "inspector",
       disciplines: ["CCS", "HULL"],
+      accessibleProjectIds: ["project-cssc-series"],
+      isActive: 1,
+      createdAt: NOW,
+      updatedAt: NOW
+    },
+    {
+      id: "user-admin-chen",
+      username: "admin.chen",
+      displayName: "Chen Admin",
+      passwordHash: "disabled",
+      role: "admin",
+      disciplines: [],
+      accessibleProjectIds: [],
       isActive: 1,
       createdAt: NOW,
       updatedAt: NOW
@@ -247,7 +261,11 @@ export function createMockInspectionDatabase(seed?: InspectionStorageSnapshot): 
 
 export function cloneStorageSnapshot(snapshot: InspectionStorageSnapshot): InspectionStorageSnapshot {
   return {
-    users: snapshot.users.map((record) => ({ ...record, disciplines: [...record.disciplines] })),
+    users: snapshot.users.map((record) => ({
+      ...record,
+      disciplines: [...record.disciplines],
+      accessibleProjectIds: [...record.accessibleProjectIds]
+    })),
     projects: snapshot.projects.map((record) => ({ ...record, recipients: [...record.recipients] })),
     ships: snapshot.ships.map((record) => ({ ...record })),
     inspectionItems: snapshot.inspectionItems.map((record) => ({ ...record })),
