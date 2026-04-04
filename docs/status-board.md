@@ -1,7 +1,7 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 20:28 Asia/Shanghai
-> Overall status: **Backend MVP complete (70/70 tests green); resolve-comment API landed; D1 integration stabilized; frontend auth integration is the next critical milestone (api.ts lacks Bearer token injection).**
+> Updated: 2026-04-04 21:33 Asia/Shanghai
+> Overall status: **Backend MVP complete (70/70 tests green); frontend auth is now wired end-to-end (login → token persistence → bearer injection → 401 logout); dashboard can resolve comments from the UI using the existing backend route.**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
 
@@ -23,8 +23,8 @@ This board is intended to be more concrete than the phase table in the README. I
 | D1 foundation | ✅ | D1 schema, bootstrap, and seeding are stable; added support for sequence-based `localId` for comments |
 | Frontend workspace | ✅ | React/Vite workbench is functional, core pages linked to real D1 API |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
-| Auth / RBAC | 🟡 | Backend complete: JWT/middleware/role checks; inspections routes require bearer auth; /api/auth/me returns profile; Frontend Portal implemented; **Gap: frontend api.ts missing Authorization header; Login.tsx bypasses API.** |
-| Comment resolve | ✅ | Backend route + repository + tests done; **Frontend Dashboard UI not yet wired** |
+| Auth / RBAC | ✅ | Backend complete: JWT/middleware/role checks; inspections routes require bearer auth; /api/auth/me returns profile; Frontend wired: login uses /api/auth/login, token persisted (localStorage), API client injects Authorization, Layout guards protected routes + restores session, TopBar shows session + logout |
+| Comment resolve | ✅ | Backend route + repository + tests done; Frontend Dashboard UI now calls resolve-comment API and updates local state after each resolve |
 | Import / PDF / n8n | 🟡 | Manual batch import is LIVE; automated (n8n/PDF) workflows are planned |
 
 ## Engineering Foundation

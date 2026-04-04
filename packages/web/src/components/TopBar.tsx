@@ -1,5 +1,6 @@
-import React from 'react';
-import { NavLink, useLocation } from 'react-router-dom';
+import React from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
+import { clearAuthSession, useAuthSession } from "../auth";
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard" },
@@ -9,9 +10,16 @@ const navItems = [
 ];
 
 export function TopBar() {
-  const defaultUser = "Active Admin";
+  const session = useAuthSession();
   const location = useLocation();
+  const navigate = useNavigate();
   const isGlobalHall = location.pathname === "/" || location.pathname === "/admin";
+  const currentUser = session?.user;
+
+  function handleLogout(): void {
+    clearAuthSession();
+    navigate("/login", { replace: true });
+  }
 
   return (
     <header className="topbar">
@@ -59,9 +67,12 @@ export function TopBar() {
             </NavLink>
         </nav>
         <div className="contextChip">
-          <span>Active Context User</span>
-          <strong>{defaultUser.toUpperCase()}</strong>
+          <span>{currentUser?.role ?? "session"}</span>
+          <strong>{(currentUser?.displayName ?? currentUser?.username ?? "Unknown User").toUpperCase()}</strong>
         </div>
+        <button type="button" className="pill" onClick={handleLogout}>
+          Logout
+        </button>
       </div>
     </header>
   );

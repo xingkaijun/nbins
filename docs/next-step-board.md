@@ -1,13 +1,27 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 20:07 Asia/Shanghai
+> Updated: 2026-04-04 21:33 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-(none — M20 completed; choose next milestone)
+### Phase B — Auth UX polish + redirect behavior
+**Goal:** Small, safe UX improvements on top of Phase A auth wiring.
 
-(next: choose post-M20 follow-up milestone)
+**Planned slices:**
+- [ ] After successful login, redirect to the originally requested protected route (respect `location.state.from`).
+- [ ] When a 401 clears session, show a minimal notice on login page ("Session expired") if possible.
+- [ ] Validate `pnpm -w qa` and update docs before commit/push.
+
+## Recently Completed
+
+- [x] Phase A — Frontend auth integration + comment close UI (commit TBD)
+  - [x] Add frontend auth/token helper (`localStorage`-backed)
+  - [x] Wire `web/src/api.ts` bearer header + 401 handling
+  - [x] Connect login page to `/api/auth/login`
+  - [x] Add route/session guard + logout UX
+  - [x] Add comment-resolve action in dashboard UI
+  - [x] Validate `pnpm -w qa` and update docs
 
 ## Rules
 

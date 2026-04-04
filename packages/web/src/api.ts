@@ -11,11 +11,21 @@ import type {
   SubmitInspectionResultRequest,
   SubmitInspectionResultResponse
 } from "@nbins/shared";
+import { clearAuthSession, getAuthToken, type AuthUser } from "./auth";
 
 interface ApiEnvelope<T> {
   ok: boolean;
   data?: T;
   error?: string;
+}
+
+interface LoginResponse {
+  user: AuthUser;
+  token: string;
+}
+
+interface MeResponse {
+  user: AuthUser;
 }
 
 export interface ApiMeta {
@@ -86,10 +96,12 @@ function getApiBaseUrl(): string {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
     headers: {
       "Content-Type": "application/json",
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(init?.headers ?? {})
     }
   });
@@ -103,6 +115,10 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   if (!response.ok || !payload?.ok || payload.data === undefined) {
+    if (response.status === 401) {
+      clearAuthSession();
+    }
+
     throw new ApiError(
       payload?.error ?? `Request failed with status ${response.status}`,
       response.status
@@ -133,6 +149,18 @@ export async function fetchApiMeta(): Promise<ApiMeta> {
   }
 
   return (await response.json()) as ApiMeta;
+}
+
+export async function login(username: string, password: string): Promise<LoginResponse> {
+  return requestJson<LoginResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({ username, password })
+  });
+}
+
+export async function fetchCurrentUser(): Promise<AuthUser> {
+  const response = await requestJson<MeResponse>("/auth/me");
+  return response.user;
 }
 
 export async function fetchInspectionDetail(
