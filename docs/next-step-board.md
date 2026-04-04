@@ -1,16 +1,13 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 18:31 Asia/Shanghai
+> Updated: 2026-04-04 18:33 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-M17 — Add /api/auth/me + narrow storage lookup for me endpoint
+(none — M17 completed; choose next milestone)
 
-- [x] Add /api/auth/me endpoint (token->profile)
-- [x] Add storage narrow lookup readUserById + repository findById
-- [x] Add tests: 401 without bearer; ok returns profile; D1 narrow lookup asserts query
-- [x] Validate + commit + push (commit: `98725db`)
+- [x] M17 — Add /api/auth/me + narrow storage lookup for me endpoint (commits: `98725db`, `d49bb69`)
 
 (next: choose milestone)
 
