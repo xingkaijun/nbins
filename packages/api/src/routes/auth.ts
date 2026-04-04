@@ -1,12 +1,19 @@
 import { Hono } from "hono";
 import type { Bindings } from "../env.ts";
+import { createRequireAuth } from "../auth.ts";
+import type { AuthContextVariables } from "../auth.ts";
 import { issueAccessToken } from "../auth/jwt.ts";
 import { createInspectionStorageResolver } from "../persistence/storage-factory.ts";
 import { UserRepository } from "../repositories/user-repository.ts";
 import { AuthService } from "../services/auth-service.ts";
 
-function createAuthRoutes(): Hono<{ Bindings: Bindings }> {
-  const authRoutes = new Hono<{ Bindings: Bindings }>();
+type AuthRouteEnv = {
+  Bindings: Bindings;
+  Variables: AuthContextVariables;
+};
+
+function createAuthRoutes(): Hono<AuthRouteEnv> {
+  const authRoutes = new Hono<AuthRouteEnv>();
   const resolveStorage = createInspectionStorageResolver();
 
   authRoutes.post("/login", async (c) => {
@@ -62,6 +69,27 @@ function createAuthRoutes(): Hono<{ Bindings: Bindings }> {
 
       if (error instanceof Error && error.message === "JWT_SECRET is required when APP_ENV=production") {
         return c.json({ ok: false, error: error.message }, 500);
+      }
+
+      throw error;
+    }
+  });
+
+  authRoutes.get("/me", createRequireAuth(), async (c) => {
+    const authService = new AuthService(new UserRepository(resolveStorage(c.env)));
+
+    try {
+      const user = await authService.getUserProfile(c.get("authUser").id);
+
+      return c.json({
+        ok: true,
+        data: {
+          user
+        }
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_USER_NOT_FOUND") {
+        return c.json({ ok: false, error: "Authenticated user not found" }, 401);
       }
 
       throw error;

@@ -43,6 +43,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
         "/health",
         "/api/meta",
         "/api/auth/login",
+        "/api/auth/me",
         "/api/inspections",
         "/api/inspections/:id",
         "/api/inspections/:id/rounds/current/result",

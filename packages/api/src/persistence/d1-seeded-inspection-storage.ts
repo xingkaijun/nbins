@@ -28,6 +28,30 @@ export class D1SeededInspectionStorage implements InspectionStorage {
     return this.inner.write(next);
   }
 
+  async readUserById(id: string) {
+    if (this.inner.readUserById) {
+      const user = await this.inner.readUserById(id);
+
+      if (user) {
+        this.seeded = true;
+        return user;
+      }
+
+      if (!this.seeded) {
+        await this.inner.write(createSeedInspectionStorageSnapshot());
+        const seededUser = await this.inner.readUserById(id);
+        this.seeded = true;
+        return seededUser;
+      }
+
+      return null;
+    }
+
+    await this.ensureSeeded();
+    const snapshot = await this.inner.read();
+    return snapshot.users.find((user) => user.id === id) ?? null;
+  }
+
   async readUserByUsername(username: string) {
     if (this.inner.readUserByUsername) {
       const user = await this.inner.readUserByUsername(username);

@@ -38,11 +38,17 @@ class FakeAuthD1Database {
   select(sql, params) {
     this.executedSql.push(sql);
 
-    if (sql !== 'SELECT * FROM "users" WHERE "username" = ?') {
-      throw new Error(`Unsupported SQL: ${sql}`);
+    if (sql === 'SELECT * FROM "users" WHERE "username" = ?') {
+      return this.tables.users.filter((record) => record.username === params[0]);
     }
 
-    return this.tables.users.filter((record) => record.username === params[0]);
+    if (sql === 'SELECT * FROM "users" WHERE "id" = ?') {
+      return this.tables.users.filter((record) => record.id === params[0]);
+    }
+
+    {
+      throw new Error(`Unsupported SQL: ${sql}`);
+    }
   }
 }
 
@@ -181,4 +187,97 @@ test("POST /api/auth/login requires JWT_SECRET in production env", async () => {
     ok: false,
     error: "JWT_SECRET is required when APP_ENV=production"
   });
+});
+
+test("GET /api/auth/me returns 401 without bearer token", async () => {
+  const app = createApp();
+  const response = await app.request("http://localhost/api/auth/me");
+  const payload = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(payload, {
+    ok: false,
+    error: "Authorization header must use Bearer token"
+  });
+});
+
+test("GET /api/auth/me returns the authenticated user profile", async () => {
+  const app = createApp();
+  const loginResponse = await app.request("http://localhost/api/auth/login", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      username: "li.si",
+      password: "nbins-dev-li-2026"
+    })
+  });
+  const loginPayload = await loginResponse.json();
+
+  assert.equal(loginResponse.status, 200);
+
+  const response = await app.request("http://localhost/api/auth/me", {
+    headers: { authorization: `Bearer ${loginPayload.data.token}` }
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(payload, {
+    ok: true,
+    data: {
+      user: {
+        id: "user-inspector-li",
+        username: "li.si",
+        displayName: "Li Si",
+        role: "inspector",
+        disciplines: ["PAINT", "MACHINERY"]
+      }
+    }
+  });
+});
+
+test("GET /api/auth/me uses narrow D1 user lookup by id", async () => {
+  const app = createApp();
+  const db = new FakeAuthD1Database();
+  const seed = createSeedInspectionStorageSnapshot();
+
+  for (const user of seed.users) {
+    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+  }
+
+  const loginResponse = await app.request(
+    "http://localhost/api/auth/login",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "wang.wu",
+        password: "nbins-dev-wang-2026"
+      })
+    },
+    {
+      D1_DRIVER: "d1",
+      DB: db
+    }
+  );
+  const loginPayload = await loginResponse.json();
+
+  assert.equal(loginResponse.status, 200);
+
+  db.executedSql = [];
+
+  const response = await app.request(
+    "http://localhost/api/auth/me",
+    {
+      headers: { authorization: `Bearer ${loginPayload.data.token}` }
+    },
+    {
+      D1_DRIVER: "d1",
+      DB: db
+    }
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.deepEqual(db.executedSql, ['SELECT * FROM "users" WHERE "id" = ?']);
 });

@@ -222,6 +222,10 @@ export class MockInspectionDatabase implements InspectionStorage {
     this.data = cloneStorageSnapshot(next);
   }
 
+  async readUserById(id: string) {
+    return this.data.users.find((user) => user.id === id) ?? null;
+  }
+
   async readUserByUsername(username: string) {
     const normalizedUsername = username.trim().toLowerCase();
 

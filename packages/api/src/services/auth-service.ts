@@ -12,6 +12,14 @@ export interface LoginResult {
   };
 }
 
+export interface AuthenticatedUserProfile {
+  id: string;
+  username: string;
+  displayName: string;
+  role: UserRecord["role"];
+  disciplines: UserRecord["disciplines"];
+}
+
 export class AuthService {
   private readonly users: UserRepository;
 
@@ -33,13 +41,27 @@ export class AuthService {
     }
 
     return {
-      user: {
-        id: user.id,
-        username: user.username,
-        displayName: user.displayName,
-        role: user.role,
-        disciplines: [...user.disciplines]
-      }
+      user: this.toUserProfile(user)
+    };
+  }
+
+  async getUserProfile(userId: string): Promise<AuthenticatedUserProfile> {
+    const user = await this.users.findById(userId);
+
+    if (!user || user.isActive !== 1) {
+      throw new Error("AUTH_USER_NOT_FOUND");
+    }
+
+    return this.toUserProfile(user);
+  }
+
+  private toUserProfile(user: UserRecord): AuthenticatedUserProfile {
+    return {
+      id: user.id,
+      username: user.username,
+      displayName: user.displayName,
+      role: user.role,
+      disciplines: [...user.disciplines]
     };
   }
 }

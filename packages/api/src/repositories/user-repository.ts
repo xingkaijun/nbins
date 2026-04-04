@@ -8,6 +8,15 @@ export class UserRepository {
     this.storage = storage;
   }
 
+  async findById(id: string): Promise<UserRecord | null> {
+    if (this.storage.readUserById) {
+      return this.storage.readUserById(id);
+    }
+
+    const snapshot = await this.storage.read();
+    return snapshot.users.find((user) => user.id === id) ?? null;
+  }
+
   async findByUsername(username: string): Promise<UserRecord | null> {
     const normalizedUsername = username.trim().toLowerCase();
 
