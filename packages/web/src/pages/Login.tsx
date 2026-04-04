@@ -1,16 +1,36 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ApiError, login } from '../api';
 
 export function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    // 默认直接跳转大厅用于演示 MVP 闭环
-    if(username && password) {
+    setError('');
+
+    if (!username.trim() || !password) {
+      setError('Username and password are required.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await login(username, password);
       navigate('/');
+    } catch (loginError) {
+      if (loginError instanceof ApiError) {
+        setError(loginError.message);
+      } else {
+        setError('Login failed. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -62,7 +82,12 @@ export function Login() {
             <input 
               type="text" 
               value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              onChange={(e) => {
+                setUsername(e.target.value);
+                if (error) {
+                  setError('');
+                }
+              }}
               placeholder="Enter your inspector ID"
               style={{
                 width: '100%',
@@ -87,7 +112,12 @@ export function Login() {
             <input 
               type="password" 
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => {
+                setPassword(e.target.value);
+                if (error) {
+                  setError('');
+                }
+              }}
               placeholder="Enter your security phrase"
               style={{
                 width: '100%',
@@ -107,9 +137,26 @@ export function Login() {
               required
             />
           </div>
+
+          {error ? (
+            <div
+              style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #fecaca',
+                backgroundColor: '#fef2f2',
+                color: '#b91c1c',
+                fontSize: '12px',
+                fontWeight: 700
+              }}
+            >
+              {error}
+            </div>
+          ) : null}
           
           <button 
             type="submit"
+            disabled={isSubmitting}
             style={{
               marginTop: '12px',
               width: '100%',
@@ -120,16 +167,21 @@ export function Login() {
               borderRadius: '8px',
               fontSize: '13px',
               fontWeight: 800,
-              cursor: 'pointer',
               textTransform: 'uppercase',
               letterSpacing: '0.05em',
               transition: 'background-color 0.2s ease',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)'
+              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+              opacity: isSubmitting ? 0.7 : 1,
+              cursor: isSubmitting ? 'wait' : 'pointer'
             }}
-            onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'var(--nb-primary)'}
+            onMouseOver={(e) => {
+              if (!isSubmitting) {
+                e.currentTarget.style.backgroundColor = 'var(--nb-primary)';
+              }
+            }}
             onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--nb-text)'}
           >
-            Authenticate & Proceed
+            {isSubmitting ? 'Authenticating...' : 'Authenticate & Proceed'}
           </button>
         </form>
 

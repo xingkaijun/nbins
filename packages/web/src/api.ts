@@ -11,6 +11,7 @@ import type {
   SubmitInspectionResultRequest,
   SubmitInspectionResultResponse
 } from "@nbins/shared";
+import { clearAuthSession, getAuthToken, setAuthSession, type AuthUser } from "./auth";
 
 interface ApiEnvelope<T> {
   ok: boolean;
@@ -63,6 +64,11 @@ export interface UserRecord {
   updatedAt: string;
 }
 
+export interface LoginResponse {
+  user: AuthUser;
+  token: string;
+}
+
 export class ApiError extends Error {
   readonly status: number;
 
@@ -86,12 +92,18 @@ function getApiBaseUrl(): string {
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const token = getAuthToken();
+  const headers = new Headers(init?.headers);
+
+  headers.set("Content-Type", "application/json");
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
   const response = await fetch(`${getApiBaseUrl()}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(init?.headers ?? {})
-    }
+    headers
   });
 
   let payload: ApiEnvelope<T> | null = null;
@@ -126,13 +138,37 @@ function withQuery(path: string, params: Record<string, string | undefined>): st
 }
 
 export async function fetchApiMeta(): Promise<ApiMeta> {
-  const response = await fetch(`${getApiBaseUrl()}/meta`);
+  const token = getAuthToken();
+  const headers = new Headers();
+
+  if (token) {
+    headers.set("Authorization", `Bearer ${token}`);
+  }
+
+  const response = await fetch(`${getApiBaseUrl()}/meta`, { headers });
 
   if (!response.ok) {
     throw new ApiError(`Request failed with status ${response.status}`, response.status);
   }
 
   return (await response.json()) as ApiMeta;
+}
+
+export async function login(username: string, password: string): Promise<LoginResponse> {
+  const response = await requestJson<LoginResponse>("/auth/login", {
+    method: "POST",
+    body: JSON.stringify({
+      username: username.trim(),
+      password
+    })
+  });
+
+  setAuthSession(response);
+  return response;
+}
+
+export function clearStoredAuth(): void {
+  clearAuthSession();
 }
 
 export async function fetchInspectionDetail(
