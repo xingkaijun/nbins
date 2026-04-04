@@ -1,27 +1,21 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 21:41 Asia/Shanghai
+> Updated: 2026-04-04 23:06 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### Phase B — Auth UX polish + redirect behavior
-**Goal:** Small, safe UX improvements on top of Phase A auth wiring.
+### Phase A — Frontend auth integration + comment close UI
+**Goal:** Finish the real frontend auth wiring in small validated slices before moving to broader auth UX polish.
 
 **Planned slices:**
-- [x] After successful login, redirect to the originally requested protected route (respect `location.state.from`).
-- [x] When a 401 clears session, show a minimal notice on login page ("Session expired") if possible.
-- [x] Validate `pnpm -w qa` and update docs before commit/push.
+- [x] Slice 1 — Add frontend auth/token helper, wire `api.ts` bearer injection, and connect `Login.tsx` to `/api/auth/login`.
+- [ ] Slice 2 — Add route/session guard + logout UX + post-login redirect/session-expired notice.
+- [ ] Slice 3 — Add dashboard comment-resolve action and revalidate the end-to-end flow.
 
 ## Recently Completed
 
-- [x] Phase A — Frontend auth integration + comment close UI (commit: `1fe715a`)
-  - [x] Add frontend auth/token helper (`localStorage`-backed)
-  - [x] Wire `web/src/api.ts` bearer header + 401 handling
-  - [x] Connect login page to `/api/auth/login`
-  - [x] Add route/session guard + logout UX
-  - [x] Add comment-resolve action in dashboard UI
-  - [x] Validate `pnpm -w qa` and update docs
+- [x] Phase A / Slice 1 — Real login + token persistence + bearer API injection (commit: `TBD`)
 
 ## Rules
 
