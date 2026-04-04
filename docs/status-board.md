@@ -17,14 +17,14 @@ This board is intended to be more concrete than the phase table in the README. I
 |------|--------|--------------|
 | Engineering foundation | ✅ | Monorepo, package scripts, and typecheck/build structure are in place |
 | Shared contracts | ✅ | Shared TypeScript contracts and demo data utilities exist and are used by API and web |
-| API | ✅ | Hono API exposes inspection detail read and current-round result submission |
+| API | ✅ | Hono API exposes CRUD for projects/ships/users and batch inspection import |
 | Domain rules | ✅ | Core inspection result semantics are encoded and covered by tests |
-| Persistence | ✅ | Repository/storage now support D1-backed operations by default in D1 mode; fixed 500 errors and foreign key constraints |
+| Persistence | ✅ | D1 persistence is active across core routes (listing, detail, batch import) |
 | D1 foundation | ✅ | D1 schema, bootstrap, and seeding are stable; added support for sequence-based `localId` for comments |
-| Frontend workspace | 🟡 | React/Vite workbench is functional, but parts of the experience still fall back to shared mock data |
+| Frontend workspace | ✅ | React/Vite workbench is functional, core pages linked to real D1 API |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
-| Auth / RBAC | ❌ | Roles are defined in shared types, but no login, JWT, or authorization enforcement exists in code |
-| Import / PDF / n8n | ❌ | Only planning/docs placeholders exist; no production workflow code yet |
+| Auth / RBAC | 🟡 | Frontend Portal implemented; backend middleware/JWT pending |
+| Import / PDF / n8n | 🟡 | Manual batch import is LIVE; automated (n8n/PDF) workflows are planned |
 
 ## Engineering Foundation
 
@@ -88,7 +88,8 @@ Representative files:
 
 Delivery read:
 
-- The API already supports the core inspection-detail and result-submission use case needed for an MVP walkthrough.
+- The API already supports the core inspection-detail, result-submission, and bulk manual import needed for an operational MVP.
+- **New endpoints**: `POST /api/inspections/batch`, `GET/POST/PUT /api/projects`, `GET/POST/PUT /api/ships`, `GET/PUT /api/users`.
 
 ## Domain Rules
 
@@ -211,7 +212,8 @@ Representative files:
 
 Delivery read:
 
-- The frontend is a usable MVP demo surface for one inspection workflow, not yet a full operational workspace.
+- The frontend is now a usable operational surface. Dashboard, Observation detail, and Manual Import are linked to DB-backed Hono routes.
+- **Manual Import (`/import`)**: Optimized for 3-column Excel copy-paste with global date/discipline selection.
 
 ## Testing / Quality
 
@@ -270,16 +272,17 @@ Delivery read:
 
 What is in place:
 
-- Planning documents describe the intended import and automation direction.
+- **Manual Import Interface**: A Production-grade interface for bulk inspection entry is implemented and connected to the backend.
+- Planning documents describe the intended automated import and automation direction.
 - The `n8n/` folder exists as a placeholder for future workflow assets.
 - Source flags already distinguish `manual` versus `n8n` records in shared/API models.
 
 What is still missing:
 
-- No import endpoints or import parser.
 - No PDF generation service.
 - No webhook handlers for n8n.
 - No workflow exports or runnable automation assets.
+- Automated email-to-task pipeline (n8n integration).
 
 Representative files:
 

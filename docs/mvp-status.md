@@ -1,7 +1,7 @@
 # NBINS MVP 状态与演示说明
 
-> 更新时间：2026-04-03
-> 状态：**可演示 MVP 基线**
+> 更新时间：2026-04-04
+> 状态：**可演示 MVP 基线 (已打通基础数据与手动导入流程)**
 
 本文档用于回答两个问题：
 
@@ -53,8 +53,10 @@
 
 - Hono API
 - repository / service / persistence 分层
-- in-memory mock database
+- 已支持 Cloudflare D1 真实持久化 (部分核心路由已落地)
 - optimistic locking（`expectedVersion`）
+- **新增模块**: `projects`, `ships`, `users` 路由已完成 CRUD (Create/Read/Update)
+- **批量导入**: 支持 `POST /api/inspections/batch` 进行手动报验项快速录入
 
 ### 1.4 前端已实现
 
@@ -66,8 +68,9 @@
 - comments list
 - result submission form
 - preview 区块
+- **手动导入页面 (`/import`)**: 支持 Excel 复制粘贴 (Item, QC, Re-insp)，支持全局日期/专业配置，已对接真实 API 写入 DB。
 
-目前前端主要使用 shared mock data 做演示，不是完全依赖真实 API。
+目前核心页面已切换至调用真实 API。
 
 ---
 
@@ -198,11 +201,11 @@ curl -X PUT http://127.0.0.1:8787/api/inspections/insp-001/rounds/current/result
 
 下面这些还没有完成：
 
-- Cloudflare D1 / Drizzle 真持久化
-- 前端改为读取真实 API
+- Cloudflare D1 / Drizzle 真持久化 (主线已覆盖，边缘表待补全)
+- 前端改为读取真实 API (首页/详情/导入已完成)
 - comment close / resolve 流程
-- 登录 / JWT / RBAC
-- import workflow 与正式 PDF 报告
+- 登录 / JWT / RBAC (前端 Portal 已完成，后端待接入)
+- 自动导入 (n8n) 与正式 PDF 报告渲染
 
 所以这版仓库应该定义为：
 
