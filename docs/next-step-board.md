@@ -1,24 +1,11 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 17:15 Asia/Shanghai
+> Updated: 2026-04-04 17:16 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M16 — Add JWT session + protect inspection routes
-**Goal:** Turn the minimal login endpoint into a real session mechanism (JWT) and require auth for `/api/inspections*` (and any other sensitive endpoints).
-
-**Definition of Done:**
-- `POST /api/auth/login` returns a signed JWT (and/or sets cookie) on success
-- Auth middleware verifies JWT and sets `ctx.var.user` (or equivalent)
-- `/api/inspections` and `/api/inspections/:id` require authentication (401 when missing/invalid)
-- Route tests updated/added for both authorized and unauthorized cases
-- Keep D1 reads narrow (no `SELECT * FROM "users"` etc.)
-- `pnpm --filter @nbins/api test` passes
-- `pnpm typecheck` passes
-- Changes committed + pushed
-
-## Task Breakdown
+(none — M16 completed; choose next milestone)
 
 - [x] Decide token transport (Bearer `Authorization` header for now) + secret handling (`JWT_SECRET` env var required in production, safe dev/test fallback in harness)
 - [x] Implement JWT creation on login (include user id + role + disciplines)
@@ -36,6 +23,8 @@
 5. After a successful push, if the active milestone still has unchecked tasks, immediately dispatch the next Codex task for the next smallest safe increment
 
 ## Recent Completed Milestones
+
+- [x] M16 — Add JWT session + protect inspection routes (commits: `7812e5d`, `7b473ff`, `46aecbb`)
 
 - [x] M15 — Add minimal auth login route + password hashing (no JWT yet) (commits: `3f101b9`, `73787a2`, `eb8344d`)
 - [x] M14 — Fix seed/localId + keep D1 route tests stable (commit: `947464d`)
