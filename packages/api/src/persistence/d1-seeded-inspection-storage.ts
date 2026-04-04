@@ -65,6 +65,28 @@ export class D1SeededInspectionStorage implements InspectionStorage {
     return null;
   }
 
+  async readSubmittedInspectionDetail(
+    inspectionItemId: string
+  ): Promise<InspectionDetailStorageRecord | null> {
+    if (this.inner.readSubmittedInspectionDetail) {
+      const detail = await this.inner.readSubmittedInspectionDetail(inspectionItemId);
+
+      if (detail) {
+        this.seeded = true;
+        return detail;
+      }
+
+      if (this.seeded) {
+        return null;
+      }
+
+      await this.ensureSeeded();
+      return this.inner.readSubmittedInspectionDetail(inspectionItemId);
+    }
+
+    return this.readInspectionDetail(inspectionItemId);
+  }
+
   async readSubmissionContext(
     inspectionItemId: string
   ): Promise<InspectionSubmissionContextRecord | null> {

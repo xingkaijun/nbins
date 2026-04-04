@@ -58,6 +58,57 @@ class FakeD1Database {
 
   select(sql, params) {
     this.executedSql.push(sql);
+    if (sql.includes('FROM "inspection_items" AS item')) {
+      const item = this.tables.inspection_items.find((record) => record.id === params[0]);
+
+      if (!item) {
+        return [];
+      }
+
+      const ship = this.tables.ships.find((record) => record.id === item.shipId);
+      const project = ship
+        ? this.tables.projects.find((record) => record.id === ship.projectId)
+        : null;
+
+      if (!ship || !project) {
+        throw new Error(`Missing joined rows for inspection item ${params[0]}`);
+      }
+
+      return [
+        {
+          item_id: item.id,
+          item_shipId: item.shipId,
+          item_itemName: item.itemName,
+          item_itemNameNormalized: item.itemNameNormalized,
+          item_discipline: item.discipline,
+          item_workflowStatus: item.workflowStatus,
+          item_lastRoundResult: item.lastRoundResult,
+          item_resolvedResult: item.resolvedResult,
+          item_currentRound: item.currentRound,
+          item_openCommentsCount: item.openCommentsCount,
+          item_version: item.version,
+          item_source: item.source,
+          item_createdAt: item.createdAt,
+          item_updatedAt: item.updatedAt,
+          ship_id: ship.id,
+          ship_projectId: ship.projectId,
+          ship_hullNumber: ship.hullNumber,
+          ship_shipName: ship.shipName,
+          ship_shipType: ship.shipType,
+          ship_status: ship.status,
+          ship_createdAt: ship.createdAt,
+          ship_updatedAt: ship.updatedAt,
+          project_id: project.id,
+          project_name: project.name,
+          project_code: project.code,
+          project_status: project.status,
+          project_recipients: project.recipients,
+          project_createdAt: project.createdAt,
+          project_updatedAt: project.updatedAt
+        }
+      ];
+    }
+
     const countMatch = sql.match(/SELECT COUNT\(\*\) AS "count" FROM "([^"]+)"/);
 
     if (countMatch) {
@@ -312,10 +363,47 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   assert.deepEqual(db.deletedTables, []);
   assert.deepEqual(db.updatedTables, ["inspection_rounds", "inspection_items"]);
   assert.deepEqual(db.insertedTables, ["comments"]);
-  assert.deepEqual(db.executedSql.slice(0, 3), [
+  assert.deepEqual(db.executedSql.slice(0, 7), [
     'SELECT * FROM "inspection_items" WHERE "id" = ?',
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?',
-    'SELECT COUNT(*) AS "count" FROM "comments" WHERE "inspectionItemId" = ? AND "status" = ?'
+    'SELECT COUNT(*) AS "count" FROM "comments" WHERE "inspectionItemId" = ? AND "status" = ?',
+    `SELECT
+         item."id" AS "item_id",
+         item."shipId" AS "item_shipId",
+         item."itemName" AS "item_itemName",
+         item."itemNameNormalized" AS "item_itemNameNormalized",
+         item."discipline" AS "item_discipline",
+         item."workflowStatus" AS "item_workflowStatus",
+         item."lastRoundResult" AS "item_lastRoundResult",
+         item."resolvedResult" AS "item_resolvedResult",
+         item."currentRound" AS "item_currentRound",
+         item."openCommentsCount" AS "item_openCommentsCount",
+         item."version" AS "item_version",
+         item."source" AS "item_source",
+         item."createdAt" AS "item_createdAt",
+         item."updatedAt" AS "item_updatedAt",
+         ship."id" AS "ship_id",
+         ship."projectId" AS "ship_projectId",
+         ship."hullNumber" AS "ship_hullNumber",
+         ship."shipName" AS "ship_shipName",
+         ship."shipType" AS "ship_shipType",
+         ship."status" AS "ship_status",
+         ship."createdAt" AS "ship_createdAt",
+         ship."updatedAt" AS "ship_updatedAt",
+         project."id" AS "project_id",
+         project."name" AS "project_name",
+         project."code" AS "project_code",
+         project."status" AS "project_status",
+         project."recipients" AS "project_recipients",
+         project."createdAt" AS "project_createdAt",
+         project."updatedAt" AS "project_updatedAt"
+       FROM "inspection_items" AS item
+       INNER JOIN "ships" AS ship ON ship."id" = item."shipId"
+       INNER JOIN "projects" AS project ON project."id" = ship."projectId"
+       WHERE item."id" = ?`,
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
+    'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
+    'SELECT * FROM "users" WHERE "id" IN (?)'
   ]);
   assert.equal(
     db.executedSql.some((sql) =>

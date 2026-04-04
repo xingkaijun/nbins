@@ -46,6 +46,9 @@ export interface InspectionStorage {
   readInspectionDetail?(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null>;
+  readSubmittedInspectionDetail?(
+    inspectionItemId: string
+  ): Promise<InspectionDetailStorageRecord | null>;
   readSubmissionContext?(
     inspectionItemId: string
   ): Promise<InspectionSubmissionContextRecord | null>;

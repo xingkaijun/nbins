@@ -141,6 +141,83 @@ export class D1InspectionStorage implements InspectionStorage {
     };
   }
 
+  async readSubmittedInspectionDetail(
+    inspectionItemId: string
+  ): Promise<InspectionDetailStorageRecord | null> {
+    const summaryRow = await this.selectFirst(
+      `SELECT
+         item."id" AS "item_id",
+         item."shipId" AS "item_shipId",
+         item."itemName" AS "item_itemName",
+         item."itemNameNormalized" AS "item_itemNameNormalized",
+         item."discipline" AS "item_discipline",
+         item."workflowStatus" AS "item_workflowStatus",
+         item."lastRoundResult" AS "item_lastRoundResult",
+         item."resolvedResult" AS "item_resolvedResult",
+         item."currentRound" AS "item_currentRound",
+         item."openCommentsCount" AS "item_openCommentsCount",
+         item."version" AS "item_version",
+         item."source" AS "item_source",
+         item."createdAt" AS "item_createdAt",
+         item."updatedAt" AS "item_updatedAt",
+         ship."id" AS "ship_id",
+         ship."projectId" AS "ship_projectId",
+         ship."hullNumber" AS "ship_hullNumber",
+         ship."shipName" AS "ship_shipName",
+         ship."shipType" AS "ship_shipType",
+         ship."status" AS "ship_status",
+         ship."createdAt" AS "ship_createdAt",
+         ship."updatedAt" AS "ship_updatedAt",
+         project."id" AS "project_id",
+         project."name" AS "project_name",
+         project."code" AS "project_code",
+         project."status" AS "project_status",
+         project."recipients" AS "project_recipients",
+         project."createdAt" AS "project_createdAt",
+         project."updatedAt" AS "project_updatedAt"
+       FROM "inspection_items" AS item
+       INNER JOIN "ships" AS ship ON ship."id" = item."shipId"
+       INNER JOIN "projects" AS project ON project."id" = ship."projectId"
+       WHERE item."id" = ?`,
+      inspectionItemId
+    );
+
+    if (!summaryRow) {
+      return null;
+    }
+
+    const [roundRows, commentRows] = await Promise.all([
+      this.selectMany(
+        `SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?`,
+        inspectionItemId
+      ),
+      this.selectMany(`SELECT * FROM "comments" WHERE "inspectionItemId" = ?`, inspectionItemId)
+    ]);
+    const rounds = roundRows.map(mapInspectionRoundRecord);
+    const comments = commentRows.map(mapCommentRecord);
+    const userIds = Array.from(
+      new Set(
+        [
+          ...rounds.map((record) => record.inspectedBy),
+          ...comments.map((record) => record.authorId),
+          ...comments.map((record) => record.closedBy)
+        ].filter((value): value is string => typeof value === "string" && value.length > 0)
+      )
+    );
+
+    return {
+      item: mapInspectionItemSummaryRecord(summaryRow),
+      ship: mapShipSummaryRecord(summaryRow),
+      project: mapProjectSummaryRecord(summaryRow),
+      rounds: rounds.sort((left, right) => left.roundNumber - right.roundNumber),
+      comments: comments.sort((left, right) => left.createdAt.localeCompare(right.createdAt)),
+      users:
+        userIds.length === 0
+          ? []
+          : await this.selectUsersByIds(userIds)
+    };
+  }
+
   async readSubmissionContext(
     inspectionItemId: string
   ): Promise<InspectionSubmissionContextRecord | null> {
@@ -506,6 +583,50 @@ function mapProjectRecord(row: JsonRow): ProjectRecord {
     recipients: jsonArrayValue(row.recipients),
     createdAt: stringValue(row.createdAt),
     updatedAt: stringValue(row.updatedAt)
+  };
+}
+
+function mapInspectionItemSummaryRecord(row: JsonRow): InspectionItemRecord {
+  return {
+    id: stringValue(row.item_id),
+    shipId: stringValue(row.item_shipId),
+    itemName: stringValue(row.item_itemName),
+    itemNameNormalized: stringValue(row.item_itemNameNormalized),
+    discipline: stringValue(row.item_discipline) as InspectionItemRecord["discipline"],
+    workflowStatus: stringValue(row.item_workflowStatus) as InspectionItemRecord["workflowStatus"],
+    lastRoundResult: nullableStringValue(row.item_lastRoundResult) as InspectionItemRecord["lastRoundResult"],
+    resolvedResult: nullableStringValue(row.item_resolvedResult) as InspectionItemRecord["resolvedResult"],
+    currentRound: integerValue(row.item_currentRound),
+    openCommentsCount: integerValue(row.item_openCommentsCount),
+    version: integerValue(row.item_version),
+    source: stringValue(row.item_source) as InspectionItemRecord["source"],
+    createdAt: stringValue(row.item_createdAt),
+    updatedAt: stringValue(row.item_updatedAt)
+  };
+}
+
+function mapShipSummaryRecord(row: JsonRow): ShipRecord {
+  return {
+    id: stringValue(row.ship_id),
+    projectId: stringValue(row.ship_projectId),
+    hullNumber: stringValue(row.ship_hullNumber),
+    shipName: stringValue(row.ship_shipName),
+    shipType: nullableStringValue(row.ship_shipType),
+    status: stringValue(row.ship_status) as ShipRecord["status"],
+    createdAt: stringValue(row.ship_createdAt),
+    updatedAt: stringValue(row.ship_updatedAt)
+  };
+}
+
+function mapProjectSummaryRecord(row: JsonRow): ProjectRecord {
+  return {
+    id: stringValue(row.project_id),
+    name: stringValue(row.project_name),
+    code: stringValue(row.project_code),
+    status: stringValue(row.project_status) as ProjectRecord["status"],
+    recipients: jsonArrayValue(row.project_recipients),
+    createdAt: stringValue(row.project_createdAt),
+    updatedAt: stringValue(row.project_updatedAt)
   };
 }
 

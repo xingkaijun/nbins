@@ -202,7 +202,11 @@ export class InspectionRepository {
       await this.db.write(storage);
     }
 
-    const refreshedDetail = await this.getInspectionDetail(inspectionItemId);
+    const refreshedDetail = this.db.readSubmittedInspectionDetail
+      ? await this.db.readSubmittedInspectionDetail(inspectionItemId).then((selected) =>
+          selected ? mapInspectionDetailFromStorage(selected) : null
+        )
+      : await this.getInspectionDetail(inspectionItemId);
 
     if (!refreshedDetail) {
       throw new Error("INSPECTION_ITEM_NOT_FOUND");
