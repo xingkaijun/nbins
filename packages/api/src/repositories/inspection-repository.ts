@@ -139,6 +139,16 @@ export class InspectionRepository {
       ).length;
     }
 
+    const allComments = storage 
+      ? storage.comments 
+      : (await this.getInspectionDetail(inspectionItemId))?.comments ?? [];
+    
+    // 计算当前 inspection item 的最大 localId
+    const maxLocalId = allComments.reduce((max, c) => {
+        const cid = (c as any).localId || 0;
+        return Math.max(max, cid);
+    }, 0);
+
     const currentDetail = createSubmissionDetail({
       item: itemRecord,
       currentRound: roundRecord,
@@ -168,6 +178,7 @@ export class InspectionRepository {
         authorId: submission.submittedBy,
         now,
         content: comment.message,
+        localId: maxLocalId + index + 1,
         suffix: String(index + 1)
       })
     );
@@ -229,6 +240,7 @@ function createCommentRecord(input: {
   authorId: string;
   content: string;
   now: string;
+  localId: number;
   suffix: string;
 }): CommentRecord {
   return {
@@ -237,6 +249,7 @@ function createCommentRecord(input: {
     createdInRoundId: input.roundId,
     closedInRoundId: null,
     authorId: input.authorId,
+    localId: input.localId,
     content: input.content,
     status: "open",
     closedBy: null,
@@ -279,6 +292,7 @@ function createSubmissionDetail(input: {
     waitingForNextRound: state.waitingForNextRound,
     comments: Array.from({ length: input.openCommentCount }, (_, index) => ({
       id: `existing-open-comment-${index + 1}`,
+      localId: index + 1,
       roundNumber: input.item.currentRound,
       status: "open",
       message: "",

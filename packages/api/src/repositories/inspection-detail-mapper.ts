@@ -120,6 +120,7 @@ function mapCommentRecord(
 
   return {
     id: record.id,
+    localId: record.localId,
     roundNumber: createdRound.roundNumber,
     status: record.status,
     message: record.content,

@@ -72,6 +72,7 @@ export interface CommentRecord {
   createdInRoundId: string;
   closedInRoundId: string | null;
   authorId: string;
+  localId: number;
   content: string;
   status: "open" | "closed";
   closedBy: string | null;

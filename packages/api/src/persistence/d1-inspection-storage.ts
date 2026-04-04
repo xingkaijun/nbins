@@ -284,8 +284,8 @@ export class D1InspectionStorage implements InspectionStorage {
       statements.push(
         this.db
           .prepare(
-            `INSERT INTO "comments" ("id", "inspectionItemId", "createdInRoundId", "closedInRoundId", "authorId", "content", "status", "closedBy", "closedAt", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO "comments" ("id", "inspectionItemId", "createdInRoundId", "closedInRoundId", "authorId", "localId", "content", "status", "closedBy", "closedAt", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
             record.id,
@@ -293,6 +293,7 @@ export class D1InspectionStorage implements InspectionStorage {
             record.createdInRoundId,
             record.closedInRoundId,
             record.authorId,
+            record.localId,
             record.content,
             record.status,
             record.closedBy,
@@ -345,8 +346,8 @@ export class D1InspectionStorage implements InspectionStorage {
       statements.push(
         this.db
           .prepare(
-            `INSERT INTO "comments" ("id", "inspectionItemId", "createdInRoundId", "closedInRoundId", "authorId", "content", "status", "closedBy", "closedAt", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO "comments" ("id", "inspectionItemId", "createdInRoundId", "closedInRoundId", "authorId", "localId", "content", "status", "closedBy", "closedAt", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
             record.id,
@@ -354,6 +355,7 @@ export class D1InspectionStorage implements InspectionStorage {
             record.createdInRoundId,
             record.closedInRoundId,
             record.authorId,
+            record.localId,
             record.content,
             record.status,
             record.closedBy,
@@ -667,6 +669,7 @@ function mapCommentRecord(row: JsonRow): CommentRecord {
     createdInRoundId: stringValue(row.createdInRoundId),
     closedInRoundId: nullableStringValue(row.closedInRoundId),
     authorId: stringValue(row.authorId),
+    localId: integerValue(row.localId),
     content: stringValue(row.content),
     status: stringValue(row.status) as CommentRecord["status"],
     closedBy: nullableStringValue(row.closedBy),

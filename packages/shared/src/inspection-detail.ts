@@ -5,6 +5,7 @@ export type CommentStatus = (typeof COMMENT_STATUSES)[number];
 
 export interface InspectionItemComment {
   id: string;
+  localId: number;
   roundNumber: number;
   status: CommentStatus;
   message: string;
