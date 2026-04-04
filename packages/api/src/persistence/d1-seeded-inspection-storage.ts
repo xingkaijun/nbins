@@ -5,7 +5,8 @@ import type {
   InspectionDetailStorageRecord,
   InspectionSubmissionContextRecord,
   InspectionStorage,
-  SubmitCurrentRoundResultStorageMutation
+  SubmitCurrentRoundResultStorageMutation,
+  ResolveCommentStorageMutation
 } from "./inspection-storage.ts";
 import { createSeedInspectionStorageSnapshot } from "./seed.ts";
 import { D1InspectionStorage } from "./d1-inspection-storage.ts";
@@ -164,6 +165,40 @@ export class D1SeededInspectionStorage implements InspectionStorage {
       await this.inner.write(createSeedInspectionStorageSnapshot());
       this.seeded = true;
       return this.inner.submitCurrentRoundResult(mutation);
+    }
+  }
+
+  async resolveComment(mutation: ResolveCommentStorageMutation): Promise<void> {
+    if (!this.inner.resolveComment) {
+      await this.ensureSeeded();
+      const snapshot = await this.inner.read();
+      const inspectionItem = snapshot.inspectionItems.find(
+        (record) => record.id === mutation.inspectionItem.id
+      );
+      const comment = snapshot.comments.find((record) => record.id === mutation.comment.id);
+
+      if (!inspectionItem || !comment) {
+        throw new Error("INSPECTION_ITEM_OR_COMMENT_NOT_FOUND");
+      }
+
+      Object.assign(inspectionItem, mutation.inspectionItem);
+      Object.assign(comment, mutation.comment);
+      await this.inner.write(snapshot);
+      return;
+    }
+
+    try {
+      await this.inner.resolveComment(mutation);
+      this.seeded = true;
+      return;
+    } catch (error) {
+      if (this.seeded) {
+        throw error;
+      }
+
+      await this.inner.write(createSeedInspectionStorageSnapshot());
+      this.seeded = true;
+      return this.inner.resolveComment(mutation);
     }
   }
 

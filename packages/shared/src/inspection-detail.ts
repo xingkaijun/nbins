@@ -76,3 +76,12 @@ export interface SubmitInspectionResultResponse {
   createdRoundHistoryEntry: InspectionRoundHistoryEntry;
   createdComments: InspectionItemComment[];
 }
+
+export interface ResolveCommentRequest {
+  resolvedBy: string;
+  expectedVersion: number;
+}
+
+export interface ResolveCommentResponse {
+  item: InspectionItemDetailResponse;
+}

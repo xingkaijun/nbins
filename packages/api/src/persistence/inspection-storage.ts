@@ -14,6 +14,11 @@ export interface SubmitCurrentRoundResultStorageMutation {
   createdComments: CommentRecord[];
 }
 
+export interface ResolveCommentStorageMutation {
+  inspectionItem: InspectionItemRecord;
+  comment: CommentRecord;
+}
+
 export interface InspectionDetailStorageRecord {
   item: InspectionItemRecord;
   ship: ShipRecord;
@@ -55,5 +60,6 @@ export interface InspectionStorage {
   submitCurrentRoundResult?(
     mutation: SubmitCurrentRoundResultStorageMutation
   ): Promise<void>;
+  resolveComment?(mutation: ResolveCommentStorageMutation): Promise<void>;
   reset?(seed?: InspectionStorageSnapshot): Promise<void>;
 }

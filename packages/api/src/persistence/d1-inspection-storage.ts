@@ -13,7 +13,8 @@ import type {
   InspectionDetailStorageRecord,
   InspectionSubmissionContextRecord,
   InspectionStorage,
-  SubmitCurrentRoundResultStorageMutation
+  SubmitCurrentRoundResultStorageMutation,
+  ResolveCommentStorageMutation
 } from "./inspection-storage.ts";
 import {
   INSPECTION_DETAIL_SUMMARY_SQL,
@@ -54,7 +55,7 @@ export class D1InspectionStorage implements InspectionStorage {
     const inspectionItemIds = summaryRows.map((row) => stringValue(row.item_id));
     const roundsByKey = new Map(
       (
-        inspectionItemIds.length === 0
+         inspectionItemIds.length === 0
           ? []
           : await this.selectRoundsByInspectionItemIds(inspectionItemIds)
       ).map((record) => [`${record.inspectionItemId}:${record.roundNumber}`, record])
@@ -369,6 +370,41 @@ export class D1InspectionStorage implements InspectionStorage {
           )
       );
     }
+
+    await this.db.batch(statements);
+  }
+
+  async resolveComment(mutation: ResolveCommentStorageMutation): Promise<void> {
+    const statements: D1PreparedStatement[] = [
+      this.db
+        .prepare(
+          `UPDATE "comments"
+           SET "status" = ?, "closedBy" = ?, "closedAt" = ?, "closedInRoundId" = ?, "updatedAt" = ?
+           WHERE "id" = ?`
+        )
+        .bind(
+          mutation.comment.status,
+          mutation.comment.closedBy,
+          mutation.comment.closedAt,
+          mutation.comment.closedInRoundId,
+          mutation.comment.updatedAt,
+          mutation.comment.id
+        ),
+      this.db
+        .prepare(
+          `UPDATE "inspection_items"
+           SET "workflowStatus" = ?, "resolvedResult" = ?, "openCommentsCount" = ?, "version" = ?, "updatedAt" = ?
+           WHERE "id" = ?`
+        )
+        .bind(
+          mutation.inspectionItem.workflowStatus,
+          mutation.inspectionItem.resolvedResult,
+          mutation.inspectionItem.openCommentsCount,
+          mutation.inspectionItem.version,
+          mutation.inspectionItem.updatedAt,
+          mutation.inspectionItem.id
+        )
+    ];
 
     await this.db.batch(statements);
   }

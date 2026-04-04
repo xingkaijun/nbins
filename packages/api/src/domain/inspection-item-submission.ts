@@ -125,6 +125,7 @@ function buildComment(input: {
 }): InspectionItemComment {
   return {
     id: `${input.itemId}-comment-${input.roundNumber}-${input.index + 1}`,
+    localId: 0, // Placeholder
     roundNumber: input.roundNumber,
     status: "open",
     message: input.comment.message,
@@ -314,6 +315,9 @@ function createDemoItem(
     id: "insp-demo-001",
     projectCode: "P-001",
     projectName: "Hudong LNG Carrier",
+    projectOwner: null,
+    projectShipyard: null,
+    projectClass: null,
     hullNumber: "H-2748",
     shipName: "NB2748",
     itemName: "Main Engine Alignment",
@@ -344,6 +348,7 @@ function createExistingComment(input: {
 }): InspectionItemComment {
   return {
     id: input.id,
+    localId: 1, // Placeholder
     roundNumber: input.roundNumber,
     status: "open",
     message: input.message,

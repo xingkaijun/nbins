@@ -30,6 +30,17 @@ export class InspectionService {
     assertValidSubmitInspectionResultRequest(request);
     return this.repository.submitCurrentRoundResult(inspectionItemId, request);
   }
+
+  resolveComment(
+    inspectionItemId: string,
+    commentId: string,
+    request: { resolvedBy: string; expectedVersion: number }
+  ): Promise<InspectionItemDetailResponse> {
+    if (!request.resolvedBy.trim()) {
+      throw new Error("resolvedBy is required");
+    }
+    return this.repository.resolveComment(inspectionItemId, commentId, request);
+  }
 }
 
 function assertValidSubmitInspectionResultRequest(

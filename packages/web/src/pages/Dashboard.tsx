@@ -121,6 +121,7 @@ function createSubmittedComments(
 ): InspectionItemComment[] {
   return draftComments.map((comment, index) => ({
     id: `${detail.id}-comment-${detail.currentRound}-${detail.comments.length + index + 1}`,
+    localId: detail.comments.length + index + 1,
     roundNumber: detail.currentRound,
     status: "open",
     message: comment.message,
@@ -414,7 +415,7 @@ export function Dashboard() {
           preview,
           canAddComments,
           draftComments,
-          submittedBy: defaultUser
+          submittedBy: defaultUserDisplayName
         });
         persistLocalDetail(nextDetail);
         setClientNotice("API unavailable. Submission applied in demo mode.");
@@ -438,7 +439,7 @@ export function Dashboard() {
         preview,
         canAddComments,
         draftComments,
-        submittedBy: defaultUser
+        submittedBy: defaultUserDisplayName
       });
       persistLocalDetail(nextDetail);
       setCommentText("");

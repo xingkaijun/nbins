@@ -2,6 +2,7 @@ import { Hono } from "hono";
 import { cors } from "hono/cors";
 import { createMockDashboardSnapshot } from "@nbins/shared";
 import type { Bindings } from "./env.ts";
+import { createInspectionStorageResolver } from "./persistence/storage-factory.ts";
 import { devRoutes } from "./routes/dev.ts";
 import { createInspectionRoutes } from "./routes/inspections.ts";
 import { createObservationRoutes } from "./routes/observations.ts";
@@ -12,6 +13,7 @@ import { createUserRoutes } from "./routes/users.ts";
 
 function createApp(): Hono<{ Bindings: Bindings }> {
   const app = new Hono<{ Bindings: Bindings }>();
+  const resolveStorage = createInspectionStorageResolver();
 
   // 允许所有本地开发端口和本地域名进行跨域请求
   app.use(
@@ -69,12 +71,12 @@ function createApp(): Hono<{ Bindings: Bindings }> {
   });
 
   app.route("/api/dev", devRoutes);
-  app.route("/api/inspections", createInspectionRoutes());
+  app.route("/api/inspections", createInspectionRoutes(resolveStorage));
   app.route("/api/observation-types", createObservationTypeRoutes());
-  app.route("/api/projects", createProjectRoutes());
-  app.route("/api/ships", createShipRoutes());
-  app.route("/api/users", createUserRoutes());
-  app.route("/api", createObservationRoutes());
+  app.route("/api/projects", createProjectRoutes(resolveStorage));
+  app.route("/api/ships", createShipRoutes(resolveStorage));
+  app.route("/api/users", createUserRoutes(resolveStorage));
+  app.route("/api", createObservationRoutes(resolveStorage));
 
   return app;
 }

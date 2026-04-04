@@ -232,6 +232,110 @@ export class InspectionRepository {
       createdComments: refreshedDetail.comments.slice(-newCommentRecords.length)
     };
   }
+
+  async resolveComment(
+    inspectionItemId: string,
+    commentId: string,
+    request: { resolvedBy: string; expectedVersion: number }
+  ): Promise<InspectionItemDetailResponse> {
+    const detail = await this.getInspectionDetail(inspectionItemId);
+    const storage = this.db.readSubmissionContext ? null : cloneStorageSnapshot(await this.db.read());
+
+    if (!detail) {
+      throw new Error("INSPECTION_ITEM_NOT_FOUND");
+    }
+
+    if (detail.version !== request.expectedVersion) {
+      throw new Error("INSPECTION_ITEM_VERSION_CONFLICT");
+    }
+
+    const comment = detail.comments.find((c) => c.id === commentId);
+    if (!comment) {
+      throw new Error("COMMENT_NOT_FOUND");
+    }
+
+    if (comment.status === "closed") {
+      throw new Error("COMMENT_ALREADY_CLOSED");
+    }
+
+    const now = new Date().toISOString();
+    const nextOpenCommentCount = Math.max(0, detail.openCommentCount - 1);
+    const nextState = resolveInspectionItemState({
+      latestSubmittedResult: detail.lastRoundResult,
+      openCommentCount: nextOpenCommentCount
+    });
+
+    const refreshedItemRecord: InspectionItemRecord = storage
+      ? storage.inspectionItems.find((i) => i.id === inspectionItemId)!
+      : {
+          id: detail.id,
+          shipId: "", // 不会被 API 写入路径使用
+          itemName: detail.itemName,
+          itemNameNormalized: detail.itemName.toLowerCase().replace(/[^a-z0-9]/g, ""),
+          discipline: detail.discipline,
+          workflowStatus: nextState.workflowStatus,
+          lastRoundResult: nextState.lastRoundResult,
+          resolvedResult: nextState.resolvedResult,
+          currentRound: detail.currentRound,
+          openCommentsCount: nextState.openCommentCount,
+          version: detail.version + 1,
+          source: detail.source,
+          createdAt: "",
+          updatedAt: now
+        };
+
+    if (storage) {
+       refreshedItemRecord.workflowStatus = nextState.workflowStatus;
+       refreshedItemRecord.resolvedResult = nextState.resolvedResult;
+       refreshedItemRecord.openCommentsCount = nextState.openCommentCount;
+       refreshedItemRecord.version += 1;
+       refreshedItemRecord.updatedAt = now;
+    }
+
+    const refreshedCommentRecord: CommentRecord = storage
+      ? storage.comments.find((c) => c.id === commentId)!
+      : {
+          id: commentId,
+          inspectionItemId,
+          createdInRoundId: "", // 不会被 API 写入路径使用
+          closedInRoundId: detail.currentRoundId,
+          authorId: "", // 不会被 API 写入路径使用
+          localId: comment.localId,
+          content: comment.message,
+          status: "closed",
+          closedBy: request.resolvedBy,
+          closedAt: now,
+          createdAt: "",
+          updatedAt: now
+        };
+
+    if (storage) {
+      refreshedCommentRecord.status = "closed";
+      refreshedCommentRecord.closedBy = request.resolvedBy;
+      refreshedCommentRecord.closedAt = now;
+      refreshedCommentRecord.closedInRoundId = detail.currentRoundId;
+      refreshedCommentRecord.updatedAt = now;
+    }
+
+    if (this.db.resolveComment) {
+      await this.db.resolveComment({
+        inspectionItem: refreshedItemRecord,
+        comment: refreshedCommentRecord
+      });
+    } else {
+      if (!storage) {
+        throw new Error("INSPECTION_STORAGE_SNAPSHOT_REQUIRED");
+      }
+      await this.db.write(storage);
+    }
+
+    const refreshedDetail = await this.getInspectionDetail(inspectionItemId);
+    if (!refreshedDetail) {
+      throw new Error("INSPECTION_ITEM_NOT_FOUND");
+    }
+
+    return refreshedDetail;
+  }
 }
 
 function createCommentRecord(input: {
