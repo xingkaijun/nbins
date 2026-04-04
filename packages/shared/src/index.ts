@@ -83,6 +83,42 @@ export interface DashboardSnapshot {
   items: InspectionListItem[];
 }
 
+// ---- 巡检/试航意见模块 DTO ----
+
+/** 意见类型字典（用户可自定义扩展） */
+export interface ObservationType {
+  id: string;
+  code: string;
+  label: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 巡检/试航意见记录 */
+export interface ObservationItem {
+  id: string;
+  shipId: string;
+  type: string;
+  discipline: Discipline;
+  authorId: string;
+  authorName?: string;
+  date: string;
+  content: string;
+  status: "open" | "closed";
+  closedBy: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 预置的默认意见类型编码 */
+export const DEFAULT_OBSERVATION_TYPES = [
+  { code: "patrol", label: "巡检" },
+  { code: "sea_trial", label: "试航" },
+  { code: "dock_trial", label: "系泊试验" }
+] as const;
+
 export * from "./inspection-detail.ts";
 
 function countOpenComments(comments: InspectionItemComment[]): number {

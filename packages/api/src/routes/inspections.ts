@@ -25,6 +25,90 @@ function createInspectionRoutes(): Hono<{ Bindings: Bindings }> {
     }
   });
 
+  inspectionRoutes.post("/batch", async (c) => {
+    try {
+      const db = c.env.DB;
+      if (!db) {
+        return c.json({ ok: false, error: "数据库未配置" }, 500);
+      }
+
+      const body = await c.req.json<{
+        projectId: string;
+        shipId: string;
+        items: Array<{
+          itemName: string;
+          discipline: string;
+          plannedDate: string;
+          yardQc: string;
+          isReinspection: boolean;
+        }>;
+      }>();
+
+      if (!body.shipId || !Array.isArray(body.items) || body.items.length === 0) {
+        return c.json({ ok: false, error: "缺少 shipId 或 items 列表为空" }, 400);
+      }
+
+      const now = new Date().toISOString();
+      const statements = [];
+      let importedCount = 0;
+
+      for (const item of body.items) {
+        // 简单处理：如果是复检项，初始 currentRound=2，普通为1
+        const initialRound = item.isReinspection ? 2 : 1;
+        const itemId = crypto.randomUUID();
+        const roundId = crypto.randomUUID();
+
+        // 插入检验项
+        statements.push(
+          db.prepare(
+            `INSERT INTO "inspection_items" 
+             ("id", "shipId", "itemName", "itemNameNormalized", "discipline", "workflowStatus", "currentRound", "openCommentsCount", "version", "source", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, 1, 'manual', ?, ?)`
+          ).bind(
+            itemId,
+            body.shipId,
+            item.itemName,
+            item.itemName.toLowerCase().replace(/[^a-z0-9]/g, ""),
+            item.discipline,
+            initialRound,
+            now,
+            now
+          )
+        );
+
+        // 插入对应初始空的主轮次
+        statements.push(
+          db.prepare(
+            `INSERT INTO "inspection_rounds" 
+             ("id", "inspectionItemId", "roundNumber", "rawItemName", "plannedDate", "yardQc", "source", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, 'manual', ?, ?)`
+          ).bind(
+            roundId,
+            itemId,
+            initialRound,
+            item.itemName,
+            item.plannedDate || null,
+            item.yardQc || null,
+            now,
+            now
+          )
+        );
+        
+        importedCount++;
+      }
+
+      await db.batch(statements);
+
+      return c.json({
+        ok: true,
+        data: { imported: importedCount }
+      });
+    } catch (e: any) {
+      console.error("POST /batch error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
   inspectionRoutes.get("/:id", async (c) => {
     const inspectionService = new InspectionService(
       new InspectionRepository(resolveStorage(c.env))

@@ -4,6 +4,11 @@ import { createMockDashboardSnapshot } from "@nbins/shared";
 import type { Bindings } from "./env.ts";
 import { devRoutes } from "./routes/dev.ts";
 import { createInspectionRoutes } from "./routes/inspections.ts";
+import { createObservationRoutes } from "./routes/observations.ts";
+import { createObservationTypeRoutes } from "./routes/observation-types.ts";
+import { createProjectRoutes } from "./routes/projects.ts";
+import { createShipRoutes } from "./routes/ships.ts";
+import { createUserRoutes } from "./routes/users.ts";
 
 function createApp(): Hono<{ Bindings: Bindings }> {
   const app = new Hono<{ Bindings: Bindings }>();
@@ -44,6 +49,17 @@ function createApp(): Hono<{ Bindings: Bindings }> {
         "/api/inspections",
         "/api/inspections/:id",
         "/api/inspections/:id/rounds/current/result",
+        "/api/observation-types",
+        "/api/ships/:shipId/observations",
+        "/api/observations/:id",
+        "/api/observations/:id/close",
+        "/api/projects",
+        "/api/projects/:id",
+        "/api/ships",
+        "/api/ships/:id",
+        "/api/users",
+        "/api/users/:id",
+        "/api/users/:id/password",
         "/api/dev/inspection-item-submission",
         "/api/dev/inspection-item-submission/examples",
         "/api/dev/resolve-item-state",
@@ -54,6 +70,11 @@ function createApp(): Hono<{ Bindings: Bindings }> {
 
   app.route("/api/dev", devRoutes);
   app.route("/api/inspections", createInspectionRoutes());
+  app.route("/api/observation-types", createObservationTypeRoutes());
+  app.route("/api/projects", createProjectRoutes());
+  app.route("/api/ships", createShipRoutes());
+  app.route("/api/users", createUserRoutes());
+  app.route("/api", createObservationRoutes());
 
   return app;
 }

@@ -81,3 +81,27 @@ CREATE TABLE IF NOT EXISTS "comments" (
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS "observation_types" (
+  "id" TEXT PRIMARY KEY,
+  "code" TEXT NOT NULL UNIQUE,
+  "label" TEXT NOT NULL,
+  "sortOrder" INTEGER NOT NULL DEFAULT 0,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "observations" (
+  "id" TEXT PRIMARY KEY,
+  "shipId" TEXT NOT NULL REFERENCES "ships"("id"),
+  "type" TEXT NOT NULL,
+  "discipline" TEXT NOT NULL,
+  "authorId" TEXT NOT NULL REFERENCES "users"("id"),
+  "date" TEXT NOT NULL,
+  "content" TEXT NOT NULL,
+  "status" TEXT NOT NULL DEFAULT 'open',
+  "closedBy" TEXT REFERENCES "users"("id"),
+  "closedAt" TEXT,
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);

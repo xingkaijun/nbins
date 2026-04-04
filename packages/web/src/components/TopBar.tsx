@@ -3,6 +3,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard" },
+  { path: "/observations", label: "Observations" },
   { path: "/reports", label: "Reports" },
   { path: "/import", label: "Import" }
 ];

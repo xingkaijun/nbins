@@ -84,6 +84,34 @@ export interface CommentRecord {
   updatedAt: string;
 }
 
+// ---- 巡检/试航意见模块 ----
+
+/** 意见类型字典表记录 (如巡检、试航、系泊试验等，用户可自定义) */
+export interface ObservationTypeRecord {
+  id: string;
+  code: string;
+  label: string;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** 巡检/试航意见记录，挂在 Ship 维度下 */
+export interface ObservationRecord {
+  id: string;
+  shipId: string;
+  type: string;          // 关联 observation_types.code，不做外键强约束
+  discipline: Discipline;
+  authorId: string;
+  date: string;
+  content: string;
+  status: "open" | "closed";
+  closedBy: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface InspectionStorageSnapshot {
   users: UserRecord[];
   projects: ProjectRecord[];

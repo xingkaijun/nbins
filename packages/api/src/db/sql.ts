@@ -6,7 +6,9 @@ const TABLE_ORDER = [
   "ships",
   "inspectionItems",
   "inspectionRounds",
-  "comments"
+  "comments",
+  "observationTypes",
+  "observations"
 ] as const satisfies ReadonlyArray<keyof SchemaDefinition>;
 
 function quoteIdentifier(value: string): string {

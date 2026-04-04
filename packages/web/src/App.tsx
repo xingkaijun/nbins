@@ -7,6 +7,7 @@ import { Reports } from "./pages/Reports";
 import { Import } from "./pages/Import";
 import { Admin } from "./pages/Admin";
 import { Login } from "./pages/Login";
+import { Observations } from "./pages/Observations";
 
 export function App() {
   return (
@@ -19,6 +20,7 @@ export function App() {
           <Route path="dashboard" element={<Dashboard />} />
           <Route path="reports" element={<Reports />} />
           <Route path="import" element={<Import />} />
+          <Route path="observations" element={<Observations />} />
           <Route path="admin" element={<Admin />} />
         </Route>
       </Routes>

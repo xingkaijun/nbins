@@ -9,6 +9,8 @@ import type {
   CommentRecord,
   InspectionItemRecord,
   InspectionRoundRecord,
+  ObservationRecord,
+  ObservationTypeRecord,
   ProjectRecord,
   ShipRecord,
   UserRecord
@@ -149,13 +151,45 @@ export const commentsTable = sqliteTable<{
   updatedAt: textColumn<string>()
 });
 
+// ---- 巡检/试航意见模块 ----
+
+export const observationTypesTable = sqliteTable<{
+  [K in keyof ObservationTypeRecord]: ColumnDefinition<ObservationTypeRecord[K]>;
+}>("observation_types", {
+  id: textColumn<string>({ primaryKey: true }),
+  code: textColumn<string>({ unique: true }),
+  label: textColumn<string>(),
+  sortOrder: integerColumn<number>({ default: 0 }),
+  createdAt: textColumn<string>(),
+  updatedAt: textColumn<string>()
+});
+
+export const observationsTable = sqliteTable<{
+  [K in keyof ObservationRecord]: ColumnDefinition<ObservationRecord[K]>;
+}>("observations", {
+  id: textColumn<string>({ primaryKey: true }),
+  shipId: textColumn<string>({ references: "ships.id" }),
+  type: textColumn<string>(),
+  discipline: textColumn<Discipline>(),
+  authorId: textColumn<string>({ references: "users.id" }),
+  date: textColumn<string>(),
+  content: textColumn<string>(),
+  status: textColumn<"open" | "closed">({ default: "open" }),
+  closedBy: textColumn<string | null>({ nullable: true, references: "users.id" }),
+  closedAt: textColumn<string | null>({ nullable: true }),
+  createdAt: textColumn<string>(),
+  updatedAt: textColumn<string>()
+});
+
 export const schema = {
   users: usersTable,
   projects: projectsTable,
   ships: shipsTable,
   inspectionItems: inspectionItemsTable,
   inspectionRounds: inspectionRoundsTable,
-  comments: commentsTable
+  comments: commentsTable,
+  observationTypes: observationTypesTable,
+  observations: observationsTable
 } as const;
 
 export type SchemaTableName = keyof typeof schema;
