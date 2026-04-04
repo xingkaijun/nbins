@@ -11,12 +11,11 @@ import {
   createMockInspectionDetails,
   syncListItemWithDetail
 } from "@nbins/shared";
-import { ApiError } from "../api";
+import { ApiError, fetchInspectionList } from "../api";
 import { type DetailTransportMode, useInspectionDetail } from "../useInspectionDetail";
 
 const snapshot = createMockDashboardSnapshot();
 const initialMockDetails = createMockInspectionDetails();
-const navItems = ["Dashboard", "Projects", "Reports", "Import", "Admin"];
 const resultOptions = INSPECTION_RESULTS;
 const commentStatusLabels = {
   open: "Open",
@@ -213,17 +212,51 @@ function syncDashboardItem(
 }
 
 export function Dashboard() {
-  const [listItems, setListItems] = useState<InspectionListItem[]>(snapshot.items);
+  const [listItems, setListItems] = useState<InspectionListItem[]>([]);
+  const [listLoading, setListLoading] = useState(true);
+  const [listMode, setListMode] = useState<DetailTransportMode>("demo");
+  const [dataGeneratedAt, setDataGeneratedAt] = useState<string>(snapshot.generatedAt);
+
   const [mockDetailsById, setMockDetailsById] =
     useState<Record<string, InspectionItemDetailResponse>>(initialMockDetails);
   
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(snapshot.items[1]?.id ?? snapshot.items[0]?.id ?? null);
+  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    async function loadList() {
+      setListLoading(true);
+      try {
+        const response = await fetchInspectionList();
+        if (!active) return;
+        setListItems(response.items);
+        setDataGeneratedAt(response.generatedAt);
+        setListMode("api");
+        if (response.items.length > 0) {
+           setExpandedRowId(response.items[0]?.id ?? null);
+        }
+      } catch (err) {
+        if (!active) return;
+        setListMode("demo");
+        setListItems(snapshot.items);
+        setDataGeneratedAt(snapshot.generatedAt);
+        if (snapshot.items.length > 0) {
+           setExpandedRowId(snapshot.items[0]?.id ?? null);
+        }
+      } finally {
+        if (active) setListLoading(false);
+      }
+    }
+    void loadList();
+    return () => { active = false; };
+  }, []);
   const [selectedResult, setSelectedResult] = useState<InspectionResult>("QCC");
   const [commentText, setCommentText] = useState("");
   const [clientNotice, setClientNotice] = useState<string | null>(null);
 
   // Default Current User Context
-  const defaultUser = "Active Admin";
+  const defaultUserId = "user-inspector-li"; // 必须存在于 users 表中，避免 Foreign Key 约束报错
+  const defaultUserDisplayName = "Active Admin";
 
   const localToday = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
   const [filterDate, setFilterDate] = useState<string>(localToday);
@@ -348,7 +381,7 @@ export function Dashboard() {
     if (checkedCommentsToClose.size > 0 && mode !== "api") {
       mutatedDetailBeforeLocalWrite.comments = mutatedDetailBeforeLocalWrite.comments.map(c => {
          if (checkedCommentsToClose.has(c.id)) {
-           return { ...c, status: "closed", resolvedAt: new Date().toISOString(), resolvedBy: defaultUser };
+           return { ...c, status: "closed", resolvedAt: new Date().toISOString(), resolvedBy: defaultUserDisplayName };
          }
          return c;
       });
@@ -357,8 +390,8 @@ export function Dashboard() {
     const request = {
       result: selectedResult,
       actualDate: buildActualDate(selectedDetail),
-      submittedBy: defaultUser,
-      inspectorDisplayName: defaultUser,
+      submittedBy: defaultUserId,
+      inspectorDisplayName: defaultUserDisplayName,
       notes: null,
       expectedVersion: selectedDetail.version,
       comments: canAddComments ? draftComments.map((comment) => ({ message: comment.message })) : []
@@ -414,7 +447,7 @@ export function Dashboard() {
     }
   }
 
-  const transportLabel = mode === "api" ? "LIVE API" : "DEMO FALLBACK";
+  const listTransportLabel = listMode === "api" ? "LIVE API" : "DEMO FALLBACK";
 
   return (
       <main className="workspace">
@@ -441,8 +474,8 @@ export function Dashboard() {
             </div>
           </div>
           <div className="heroMeta">
-            <span>UPDATED {new Date(snapshot.generatedAt).toLocaleDateString("en-US")}</span>
-            <span className={`badge ${mode === "api" ? "" : "muted"}`}>{transportLabel}</span>
+            <span>UPDATED {new Date(dataGeneratedAt).toLocaleDateString("en-US")}</span>
+            <span className={`badge ${listMode === "api" ? "" : "muted"}`}>{listTransportLabel}</span>
             <button type="button">EXPORT CHECKLIST</button>
           </div>
         </section>
@@ -564,7 +597,7 @@ export function Dashboard() {
                     {/* Expansion Row */}
                     {expandedRowId === item.id && (
                       <tr className="expansion-row">
-                        <td colSpan={7}>
+                        <td colSpan={8}>
                           <div className="expansion-panel-inner">
                             {loading ? <div className="alert neutral">Loading inspection details...</div> : null}
                             {error ? <div className="alert warning">{error}</div> : null}
@@ -661,7 +694,9 @@ export function Dashboard() {
                                 <div>
                                   <div className="panel" style={{ padding: 0 }}>
                                     <div className="panelHeader" style={{ paddingBottom: '12px', borderBottom: '1px solid rgba(148, 163, 184, 0.2)' }}>
-                                      <p className="eyebrow">SUBMIT INSPECTION RESULT</p>
+                                      <p className="eyebrow" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        SUBMIT INSPECTION RESULT <span className={`badge ${mode === "api" ? "" : "muted"}`} style={{ padding: '2px 4px', fontSize: '9px', fontWeight: 600, display: 'inline-block'}}>{mode === 'api' ? 'API DB' : 'MEM DB'}</span>
+                                      </p>
                                       {preview ? <span className="badge">NEXT: {preview.nextWorkflowLabel.toUpperCase()}</span> : null}
                                     </div>
 
@@ -746,7 +781,7 @@ export function Dashboard() {
                     )}
                   </React.Fragment>
                 )) : (
-                  <tr><td colSpan={7} className="emptyState">No inspections match current filters.</td></tr>
+                  <tr><td colSpan={8} className="emptyState">No inspections match current filters.</td></tr>
                 )}
               </tbody>
             </table>

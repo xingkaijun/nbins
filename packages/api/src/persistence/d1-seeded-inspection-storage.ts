@@ -29,6 +29,8 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   }
 
   async readInspectionList(): Promise<InspectionListStorageRecord> {
+    await this.ensureSeeded();
+
     if (this.inner.readInspectionList) {
       const snapshot = await this.inner.readInspectionList();
       this.seeded = true;
@@ -45,6 +47,8 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   async readInspectionDetail(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null> {
+    await this.ensureSeeded();
+
     if (this.inner.readInspectionDetail) {
       const detail = await this.inner.readInspectionDetail(inspectionItemId);
 
@@ -56,8 +60,6 @@ export class D1SeededInspectionStorage implements InspectionStorage {
       if (this.seeded) {
         return null;
       }
-
-      await this.ensureSeeded();
       return this.inner.readInspectionDetail(inspectionItemId);
     }
 
@@ -68,6 +70,8 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   async readSubmittedInspectionDetail(
     inspectionItemId: string
   ): Promise<InspectionDetailStorageRecord | null> {
+    await this.ensureSeeded();
+
     if (this.inner.readSubmittedInspectionDetail) {
       const detail = await this.inner.readSubmittedInspectionDetail(inspectionItemId);
 
@@ -79,8 +83,6 @@ export class D1SeededInspectionStorage implements InspectionStorage {
       if (this.seeded) {
         return null;
       }
-
-      await this.ensureSeeded();
       return this.inner.readSubmittedInspectionDetail(inspectionItemId);
     }
 
@@ -90,6 +92,8 @@ export class D1SeededInspectionStorage implements InspectionStorage {
   async readSubmissionContext(
     inspectionItemId: string
   ): Promise<InspectionSubmissionContextRecord | null> {
+    await this.ensureSeeded();
+
     if (this.inner.readSubmissionContext) {
       const context = await this.inner.readSubmissionContext(inspectionItemId);
 

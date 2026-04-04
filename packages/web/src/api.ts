@@ -1,7 +1,8 @@
 import type {
   InspectionItemDetailResponse,
   SubmitInspectionResultRequest,
-  SubmitInspectionResultResponse
+  SubmitInspectionResultResponse,
+  DashboardSnapshot
 } from "@nbins/shared";
 
 interface ApiEnvelope<T> {
@@ -63,6 +64,10 @@ export async function fetchInspectionDetail(
   inspectionItemId: string
 ): Promise<InspectionItemDetailResponse> {
   return requestJson<InspectionItemDetailResponse>(`/inspections/${inspectionItemId}`);
+}
+
+export async function fetchInspectionList(): Promise<DashboardSnapshot> {
+  return requestJson<DashboardSnapshot>("/inspections");
 }
 
 export async function submitInspectionResult(

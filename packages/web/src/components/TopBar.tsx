@@ -10,7 +10,7 @@ const navItems = [
 export function TopBar() {
   const defaultUser = "Active Admin";
   const location = useLocation();
-  const isGlobalHall = location.pathname === "/";
+  const isGlobalHall = location.pathname === "/" || location.pathname === "/admin";
 
   return (
     <header className="topbar">

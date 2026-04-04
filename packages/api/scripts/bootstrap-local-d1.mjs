@@ -8,6 +8,7 @@ const stateDir = resolve(packageDir, "..", "..", ".wrangler", "state");
 const sqlFile = resolve(packageDir, "src", "db", "d1-bootstrap.sql");
 
 const args = [
+  "wrangler",
   "d1",
   "execute",
   "DB",
@@ -19,10 +20,11 @@ const args = [
   "--json"
 ];
 
-const out = execFileSync("wrangler", args, {
+const out = execFileSync("npx", args, {
   cwd: packageDir,
   stdio: ["ignore", "pipe", "pipe"],
-  encoding: "utf8"
+  encoding: "utf8",
+  shell: process.platform === "win32"
 });
 
 process.stdout.write(out);

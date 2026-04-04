@@ -11,7 +11,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
       displayName: "Li Si",
       passwordHash: "dev-only",
       role: "inspector",
-      disciplines: ["PAINT", "ENGINE"],
+      disciplines: ["PAINT", "MACHINERY"],
       isActive: 1,
       createdAt: NOW,
       updatedAt: NOW
@@ -22,7 +22,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
       displayName: "Wang Wu",
       passwordHash: "dev-only",
       role: "inspector",
-      disciplines: ["CTNMT", "HULL"],
+      disciplines: ["CCS", "HULL"],
       isActive: 1,
       createdAt: NOW,
       updatedAt: NOW
@@ -92,7 +92,7 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
       shipId: "ship-h2751",
       itemName: "Containment Weld Visual Survey",
       itemNameNormalized: "containment weld visual survey",
-      discipline: "CTNMT",
+      discipline: "CCS",
       workflowStatus: "open",
       lastRoundResult: "OWC",
       resolvedResult: null,

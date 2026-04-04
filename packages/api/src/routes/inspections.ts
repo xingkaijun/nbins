@@ -9,15 +9,20 @@ function createInspectionRoutes(): Hono<{ Bindings: Bindings }> {
   const resolveStorage = createInspectionStorageResolver();
 
   inspectionRoutes.get("/", async (c) => {
-    const inspectionService = new InspectionService(
-      new InspectionRepository(resolveStorage(c.env))
-    );
-    const snapshot = await inspectionService.listInspections();
+    try {
+      const inspectionService = new InspectionService(
+        new InspectionRepository(resolveStorage(c.env))
+      );
+      const snapshot = await inspectionService.listInspections();
 
-    return c.json({
-      ok: true,
-      data: snapshot
-    });
+      return c.json({
+        ok: true,
+        data: snapshot
+      });
+    } catch (e: any) {
+      console.error("GET / error:", e);
+      return c.json({ ok: false, error: String(e), stack: e?.stack }, 500);
+    }
   });
 
   inspectionRoutes.get("/:id", async (c) => {

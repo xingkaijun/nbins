@@ -613,8 +613,8 @@ for (let index = 0; index < 30; index++) {
   };
 }
 
-const ALL_MOCK_ITEMS = [...MOCK_ITEMS, ...DYNAMIC_ITEMS];
-const ALL_MOCK_DETAILS = { ...MOCK_INSPECTION_DETAILS, ...DYNAMIC_DETAILS };
+export const ALL_MOCK_ITEMS = [...MOCK_ITEMS, ...DYNAMIC_ITEMS];
+export const ALL_MOCK_DETAILS = { ...MOCK_INSPECTION_DETAILS, ...DYNAMIC_DETAILS };
 
 export function createMockDashboardSnapshot(): DashboardSnapshot {
   return {

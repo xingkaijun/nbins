@@ -317,7 +317,7 @@ function createDemoItem(
     hullNumber: "H-2748",
     shipName: "NB2748",
     itemName: "Main Engine Alignment",
-    discipline: "ENGINE",
+    discipline: "MACHINERY",
     source: "manual",
     yardQc: "Zhang San",
     plannedDate: "2026-04-03",
