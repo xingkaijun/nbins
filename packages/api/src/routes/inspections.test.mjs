@@ -476,9 +476,40 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   assert.deepEqual(
     db.executedSql,
     [
-      'SELECT * FROM "inspection_items" WHERE "id" = ?',
-      'SELECT * FROM "ships" WHERE "id" = ?',
-      'SELECT * FROM "projects" WHERE "id" = ?',
+      `SELECT
+         item."id" AS "item_id",
+         item."shipId" AS "item_shipId",
+         item."itemName" AS "item_itemName",
+         item."itemNameNormalized" AS "item_itemNameNormalized",
+         item."discipline" AS "item_discipline",
+         item."workflowStatus" AS "item_workflowStatus",
+         item."lastRoundResult" AS "item_lastRoundResult",
+         item."resolvedResult" AS "item_resolvedResult",
+         item."currentRound" AS "item_currentRound",
+         item."openCommentsCount" AS "item_openCommentsCount",
+         item."version" AS "item_version",
+         item."source" AS "item_source",
+         item."createdAt" AS "item_createdAt",
+         item."updatedAt" AS "item_updatedAt",
+         ship."id" AS "ship_id",
+         ship."projectId" AS "ship_projectId",
+         ship."hullNumber" AS "ship_hullNumber",
+         ship."shipName" AS "ship_shipName",
+         ship."shipType" AS "ship_shipType",
+         ship."status" AS "ship_status",
+         ship."createdAt" AS "ship_createdAt",
+         ship."updatedAt" AS "ship_updatedAt",
+         project."id" AS "project_id",
+         project."name" AS "project_name",
+         project."code" AS "project_code",
+         project."status" AS "project_status",
+         project."recipients" AS "project_recipients",
+         project."createdAt" AS "project_createdAt",
+         project."updatedAt" AS "project_updatedAt"
+       FROM "inspection_items" AS item
+       INNER JOIN "ships" AS ship ON ship."id" = item."shipId"
+       INNER JOIN "projects" AS project ON project."id" = ship."projectId"
+       WHERE item."id" = ?`,
       'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
       'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
       'SELECT * FROM "users" WHERE "id" IN (?)'
