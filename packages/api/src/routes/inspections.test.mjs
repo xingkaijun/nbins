@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { createApp } from "../index.ts";
+import { issueAccessToken } from "../auth/jwt.ts";
 import {
   INSPECTION_DETAIL_SUMMARY_SQL,
   INSPECTION_LIST_SUMMARY_SQL
@@ -218,6 +219,46 @@ async function loginAndCreateAuthHeader(app, env = {}) {
   return { authorization: `Bearer ${payload.data.token}` };
 }
 
+async function createAuthHeaderForUser(claims, env = {}) {
+  return {
+    authorization: `Bearer ${await issueAccessToken(claims, env)}`
+  };
+}
+
+function seedFakeD1Database(db, seed = createSeedInspectionStorageSnapshot()) {
+  for (const user of seed.users) {
+    db.tables.users.push({
+      ...user,
+      disciplines: JSON.stringify(user.disciplines),
+      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
+    });
+  }
+
+  for (const project of seed.projects) {
+    db.tables.projects.push({ ...project, recipients: JSON.stringify(project.recipients) });
+  }
+
+  for (const member of seed.projectMembers) {
+    db.tables.project_members.push({ ...member });
+  }
+
+  for (const ship of seed.ships) {
+    db.tables.ships.push({ ...ship });
+  }
+
+  for (const item of seed.inspectionItems) {
+    db.tables.inspection_items.push({ ...item });
+  }
+
+  for (const round of seed.inspectionRounds) {
+    db.tables.inspection_rounds.push({ ...round });
+  }
+
+  for (const comment of seed.comments) {
+    db.tables.comments.push({ ...comment });
+  }
+}
+
 test("GET /api/inspections returns 401 without bearer token", async () => {
   const app = createTestApp();
   const response = await app.request("http://localhost/api/inspections");
@@ -237,11 +278,10 @@ test("GET /api/inspections returns inspection list snapshot", async () => {
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
   assert.equal(Array.isArray(payload.data.items), true);
-  assert.equal(payload.data.items.length, 2);
+  assert.equal(payload.data.items.length, 1);
   assert.equal(payload.data.items[0].id, "insp-002");
-  assert.equal(payload.data.items[1].id, "insp-003");
-  assert.equal(payload.data.items[1].currentResult, "OWC");
-  assert.equal(payload.data.summary.openComments, 3);
+  assert.equal(payload.data.items[0].currentResult, "QCC");
+  assert.equal(payload.data.summary.openComments, 2);
 });
 
 test("GET /api/inspections/:id returns inspection detail", async () => {
@@ -258,6 +298,17 @@ test("GET /api/inspections/:id returns inspection detail", async () => {
   assert.equal(payload.data.comments[0].status, "open");
 });
 
+test("GET /api/inspections/:id returns 404 when the item is outside project membership", async () => {
+  const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
+  const response = await app.request("http://localhost/api/inspections/insp-003", { headers });
+  const payload = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "Inspection item not found");
+});
+
 test("GET /api/inspections/:id returns 401 without bearer token", async () => {
   const app = createTestApp();
   const response = await app.request("http://localhost/api/inspections/insp-002");
@@ -271,18 +322,22 @@ test("GET /api/inspections/:id returns 401 without bearer token", async () => {
 test("GET /api/inspections/:id keeps mock as the default runtime driver", async () => {
   const app = createTestApp();
   const headers = await loginAndCreateAuthHeader(app);
-  const response = await app.request("http://localhost/api/inspections/insp-003", { headers });
+  const response = await app.request("http://localhost/api/inspections/insp-002", { headers });
   const payload = await response.json();
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
-  assert.equal(payload.data.id, "insp-003");
-  assert.equal(payload.data.version, 5);
+  assert.equal(payload.data.id, "insp-002");
+  assert.equal(payload.data.version, 3);
 });
 
 test("default mock driver preserves writes across sequential requests", async () => {
   const app = createTestApp();
-  const headers = await loginAndCreateAuthHeader(app);
+  const headers = await createAuthHeaderForUser({
+    id: "user-inspector-wang",
+    role: "inspector",
+    disciplines: ["CCS", "HULL"]
+  });
 
   const submitResponse = await app.request(
     "http://localhost/api/inspections/insp-003/rounds/current/result",
@@ -382,35 +437,7 @@ test("PUT /api/inspections/:id/rounds/current/result accepts QCC with comments",
 test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", async () => {
   const app = createApp();
   const db = new FakeD1Database();
-  const seed = createSeedInspectionStorageSnapshot();
-
-  for (const user of seed.users) {
-    db.tables.users.push({ 
-      ...user, 
-      disciplines: JSON.stringify(user.disciplines),
-      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
-    });
-  }
-
-  for (const project of seed.projects) {
-    db.tables.projects.push({ ...project, recipients: JSON.stringify(project.recipients) });
-  }
-
-  for (const ship of seed.ships) {
-    db.tables.ships.push({ ...ship });
-  }
-
-  for (const item of seed.inspectionItems) {
-    db.tables.inspection_items.push({ ...item });
-  }
-
-  for (const round of seed.inspectionRounds) {
-    db.tables.inspection_rounds.push({ ...round });
-  }
-
-  for (const comment of seed.comments) {
-    db.tables.comments.push({ ...comment });
-  }
+  seedFakeD1Database(db);
 
   db.deletedTables = [];
   db.updatedTables = [];
@@ -488,35 +515,7 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
 test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   const app = createApp();
   const db = new FakeD1Database();
-  const seed = createSeedInspectionStorageSnapshot();
-
-  for (const user of seed.users) {
-    db.tables.users.push({ 
-      ...user, 
-      disciplines: JSON.stringify(user.disciplines),
-      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
-    });
-  }
-
-  for (const project of seed.projects) {
-    db.tables.projects.push({ ...project, recipients: JSON.stringify(project.recipients) });
-  }
-
-  for (const ship of seed.ships) {
-    db.tables.ships.push({ ...ship });
-  }
-
-  for (const item of seed.inspectionItems) {
-    db.tables.inspection_items.push({ ...item });
-  }
-
-  for (const round of seed.inspectionRounds) {
-    db.tables.inspection_rounds.push({ ...round });
-  }
-
-  for (const comment of seed.comments) {
-    db.tables.comments.push({ ...comment });
-  }
+  seedFakeD1Database(db);
 
   db.executedSql = [];
   const headers = await loginAndCreateAuthHeader(app, {
@@ -525,7 +524,7 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   });
   db.executedSql = [];
 
-  const response = await app.request("http://localhost/api/inspections/insp-003", { headers }, {
+  const response = await app.request("http://localhost/api/inspections/insp-002", { headers }, {
     D1_DRIVER: "d1",
     DB: db
   });
@@ -533,7 +532,7 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
-  assert.equal(payload.data.id, "insp-003");
+  assert.equal(payload.data.id, "insp-002");
   assert.equal(
     db.executedSql.some((sql) => /^SELECT \* FROM "(users|projects|ships|inspection_items|inspection_rounds|comments)"$/.test(sql)),
     false
@@ -542,6 +541,7 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
     db.executedSql,
     [
       'SELECT * FROM "users" WHERE "id" = ?',
+      'SELECT * FROM "project_members" WHERE "userId" = ?',
       INSPECTION_DETAIL_SUMMARY_SQL,
       'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
       'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
@@ -561,35 +561,7 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
 test("GET /api/inspections uses narrow D1 reads", async () => {
   const app = createApp();
   const db = new FakeD1Database();
-  const seed = createSeedInspectionStorageSnapshot();
-
-  for (const user of seed.users) {
-    db.tables.users.push({ 
-      ...user, 
-      disciplines: JSON.stringify(user.disciplines),
-      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
-    });
-  }
-
-  for (const project of seed.projects) {
-    db.tables.projects.push({ ...project, recipients: JSON.stringify(project.recipients) });
-  }
-
-  for (const ship of seed.ships) {
-    db.tables.ships.push({ ...ship });
-  }
-
-  for (const item of seed.inspectionItems) {
-    db.tables.inspection_items.push({ ...item });
-  }
-
-  for (const round of seed.inspectionRounds) {
-    db.tables.inspection_rounds.push({ ...round });
-  }
-
-  for (const comment of seed.comments) {
-    db.tables.comments.push({ ...comment });
-  }
+  seedFakeD1Database(db);
 
   db.executedSql = [];
   const headers = await loginAndCreateAuthHeader(app, {
@@ -606,7 +578,9 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
-  assert.equal(payload.data.items.length, 5);
+  assert.equal(payload.data.items.length, 2);
+  assert.equal(payload.data.items[0].id, "insp-002");
+  assert.equal(payload.data.items[1].id, "insp-001");
   assert.equal(
     db.executedSql.some((sql) =>
       /^SELECT \* FROM "(users|projects|ships|inspection_rounds|comments)"$/.test(sql)
@@ -615,6 +589,7 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
   );
   assert.deepEqual(db.executedSql, [
     'SELECT * FROM "users" WHERE "id" = ?',
+    'SELECT * FROM "project_members" WHERE "userId" = ?',
     INSPECTION_LIST_SUMMARY_SQL,
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?, ?, ?, ?)'
   ]);
@@ -631,6 +606,140 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
     ),
     false
   );
+});
+
+test("GET /api/inspections/:id returns 404 in D1 when the item is outside project membership", async () => {
+  const app = createApp();
+  const db = new FakeD1Database();
+  seedFakeD1Database(db);
+
+  db.executedSql = [];
+  const headers = await loginAndCreateAuthHeader(app, {
+    D1_DRIVER: "d1",
+    DB: db
+  });
+  db.executedSql = [];
+
+  const response = await app.request("http://localhost/api/inspections/insp-003", { headers }, {
+    D1_DRIVER: "d1",
+    DB: db
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "Inspection item not found");
+  assert.deepEqual(db.executedSql, [
+    'SELECT * FROM "users" WHERE "id" = ?',
+    'SELECT * FROM "project_members" WHERE "userId" = ?',
+    INSPECTION_DETAIL_SUMMARY_SQL,
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
+    'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
+    'SELECT * FROM "users" WHERE "id" IN (?)'
+  ]);
+});
+
+test("GET /api/inspections returns an empty list when the user has no project memberships", async () => {
+  const app = createApp();
+  const db = new FakeD1Database();
+  const seed = createSeedInspectionStorageSnapshot();
+  seed.users.push({
+    id: "user-no-membership",
+    username: "no.membership",
+    displayName: "No Membership",
+    passwordHash: "disabled",
+    role: "inspector",
+    disciplines: [],
+    accessibleProjectIds: [],
+    isActive: 1,
+    createdAt: "2026-04-04T00:00:00.000Z",
+    updatedAt: "2026-04-04T00:00:00.000Z"
+  });
+  seedFakeD1Database(db, seed);
+
+  db.executedSql = [];
+  const headers = await createAuthHeaderForUser(
+    {
+      id: "user-no-membership",
+      role: "inspector",
+      disciplines: []
+    },
+    {
+      D1_DRIVER: "d1",
+      DB: db
+    }
+  );
+  db.executedSql = [];
+
+  const response = await app.request("http://localhost/api/inspections", { headers }, {
+    D1_DRIVER: "d1",
+    DB: db
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+  assert.deepEqual(payload.data.items, []);
+  assert.equal(payload.data.summary.openComments, 0);
+  assert.deepEqual(db.executedSql, [
+    'SELECT * FROM "users" WHERE "id" = ?',
+    'SELECT * FROM "project_members" WHERE "userId" = ?',
+    'SELECT * FROM "project_members" WHERE "userId" = ?',
+    INSPECTION_LIST_SUMMARY_SQL,
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?, ?, ?, ?)'
+  ]);
+});
+
+test("GET /api/inspections/:id returns 404 when the user has no project memberships", async () => {
+  const app = createApp();
+  const db = new FakeD1Database();
+  const seed = createSeedInspectionStorageSnapshot();
+  seed.users.push({
+    id: "user-no-membership",
+    username: "no.membership",
+    displayName: "No Membership",
+    passwordHash: "disabled",
+    role: "inspector",
+    disciplines: [],
+    accessibleProjectIds: [],
+    isActive: 1,
+    createdAt: "2026-04-04T00:00:00.000Z",
+    updatedAt: "2026-04-04T00:00:00.000Z"
+  });
+  seedFakeD1Database(db, seed);
+
+  db.executedSql = [];
+  const headers = await createAuthHeaderForUser(
+    {
+      id: "user-no-membership",
+      role: "inspector",
+      disciplines: []
+    },
+    {
+      D1_DRIVER: "d1",
+      DB: db
+    }
+  );
+  db.executedSql = [];
+
+  const response = await app.request("http://localhost/api/inspections/insp-002", { headers }, {
+    D1_DRIVER: "d1",
+    DB: db
+  });
+  const payload = await response.json();
+
+  assert.equal(response.status, 404);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "Inspection item not found");
+  assert.deepEqual(db.executedSql, [
+    'SELECT * FROM "users" WHERE "id" = ?',
+    'SELECT * FROM "project_members" WHERE "userId" = ?',
+    'SELECT * FROM "project_members" WHERE "userId" = ?',
+    INSPECTION_DETAIL_SUMMARY_SQL,
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
+    'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
+    'SELECT * FROM "users" WHERE "id" IN (?)'
+  ]);
 });
 
 test("PUT /api/inspections/:id/rounds/current/result accepts CX without adding comments", async () => {
