@@ -105,6 +105,9 @@ class FakeD1Database {
           project_name: project.name,
           project_code: project.code,
           project_status: project.status,
+          project_owner: project.owner,
+          project_shipyard: project.shipyard,
+          project_class: project.class,
           project_recipients: project.recipients,
           project_createdAt: project.createdAt,
           project_updatedAt: project.updatedAt

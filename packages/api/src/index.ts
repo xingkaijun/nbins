@@ -43,6 +43,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
     return c.json({
       appName: c.env.APP_NAME ?? "NBINS",
       environment: c.env.APP_ENV ?? "development",
+      storageMode: c.env.D1_DRIVER === "d1" && c.env.DB ? "d1" : "mock",
       generatedAt: snapshot.generatedAt,
       disciplines: [...new Set(snapshot.items.map((item) => item.discipline))],
       routes: [
@@ -51,7 +52,9 @@ function createApp(): Hono<{ Bindings: Bindings }> {
         "/api/inspections",
         "/api/inspections/:id",
         "/api/inspections/:id/rounds/current/result",
+        "/api/inspections/:id/comments/:commentId/resolve",
         "/api/observation-types",
+        "/api/observation-types/:id",
         "/api/ships/:shipId/observations",
         "/api/observations/:id",
         "/api/observations/:id/close",

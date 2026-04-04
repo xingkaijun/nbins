@@ -4,7 +4,7 @@ import { bootstrapD1Schema } from "./bootstrap.ts";
 import { createTableStatements } from "./sql.ts";
 
 test("createTableStatements emits one CREATE TABLE statement per schema table", () => {
-  assert.equal(createTableStatements.length, 6);
+  assert.equal(createTableStatements.length, 8);
   assert.match(createTableStatements[0], /CREATE TABLE IF NOT EXISTS "users"/);
   assert.match(createTableStatements[1], /CREATE TABLE IF NOT EXISTS "projects"/);
   assert.match(createTableStatements[5], /CREATE TABLE IF NOT EXISTS "comments"/);

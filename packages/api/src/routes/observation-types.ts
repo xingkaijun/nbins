@@ -79,6 +79,62 @@ function createObservationTypeRoutes(): Hono<{ Bindings: Bindings }> {
     }
   });
 
+  routes.put("/:id", async (c) => {
+    try {
+      const id = c.req.param("id");
+      const body = await c.req.json<{ label?: string; sortOrder?: number }>();
+      const now = new Date().toISOString();
+
+      if (body.label === undefined && body.sortOrder === undefined) {
+        return c.json({ ok: false, error: "label 或 sortOrder 至少提供一个" }, 400);
+      }
+
+      if (isD1Enabled(c.env)) {
+        const sets: string[] = ['"updatedAt" = ?'];
+        const params: unknown[] = [now];
+
+        if (body.label !== undefined) {
+          sets.push('"label" = ?');
+          params.push(body.label);
+        }
+        if (body.sortOrder !== undefined) {
+          sets.push('"sortOrder" = ?');
+          params.push(body.sortOrder);
+        }
+
+        params.push(id);
+
+        const info = await c.env.DB!
+          .prepare(`UPDATE "observation_types" SET ${sets.join(", ")} WHERE "id" = ?`)
+          .bind(...params)
+          .run();
+
+        if (info.meta?.changes === 0) {
+          return c.json({ ok: false, error: "意见类型不存在" }, 404);
+        }
+      } else {
+        const record = mockObservationTypes.find((item) => item.id === id);
+
+        if (!record) {
+          return c.json({ ok: false, error: "意见类型不存在" }, 404);
+        }
+
+        if (body.label !== undefined) {
+          record.label = body.label;
+        }
+        if (body.sortOrder !== undefined) {
+          record.sortOrder = body.sortOrder;
+        }
+        record.updatedAt = now;
+      }
+
+      return c.json({ ok: true, data: { id, updatedAt: now } });
+    } catch (e: any) {
+      console.error("PUT /observation-types/:id error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
   return routes;
 }
 
