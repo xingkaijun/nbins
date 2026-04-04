@@ -46,6 +46,17 @@ const inputStyle: React.CSSProperties = { width: "100%", border: "1px solid var(
 const grid2: React.CSSProperties = { display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 };
 const panelGrid: React.CSSProperties = { display: "grid", gap: 12 };
 
+function msg(error: unknown, fallback: string) {
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message.trim()) {
+      return message;
+    }
+  }
+  return fallback;
+}
+
+
 export function Admin() {
   const [activeTab, setActiveTab] = useState<TabKey>("projects");
   const [meta, setMeta] = useState<ApiMeta | null>(null);
@@ -102,3 +113,18 @@ export function Admin() {
   }
   async function loadObservations(shipId: string) { try { setObservations(await fetchObservations(shipId)); } catch (e) { setError(msg(e, "Failed to load observations")); } }
   async function loadInspectionDetail(id: string) { try { setInspectionDetail(await fetchInspectionDetail(id)); } catch (e) { setError(msg(e, "Failed to load inspection detail")); } }
+
+  return (
+    <main className="workspace">
+      <section className="hero" style={{ paddingBottom: "24px" }}>
+        <div>
+          <p className="eyebrow">ADMIN</p>
+          <h2>ADMIN CONSOLE</h2>
+          <p style={{ margin: 0, color: "var(--nb-text-muted)", fontWeight: 600 }}>
+            (Placeholder UI) Admin workflows are still under construction.
+          </p>
+        </div>
+      </section>
+    </main>
+  );
+}

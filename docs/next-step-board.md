@@ -1,23 +1,13 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 18:56 Asia/Shanghai
+> Updated: 2026-04-04 19:10 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-M18 — Harden bearer auth by revalidating JWT subject against current user state
+(none — M18 completed; choose next milestone)
 
-- [x] Revalidate JWT `sub` against current storage user record in auth middleware
-- [x] Reject inactive or deleted users on protected routes
-- [x] Add focused route tests for middleware revalidation
-- [ ] Run `pnpm qa`, then commit + push if green
-
-- [x] Decide token transport (Bearer `Authorization` header for now) + secret handling (`JWT_SECRET` env var required in production, safe dev/test fallback in harness)
-- [x] Implement JWT creation on login (include user id + role + disciplines)
-- [x] Add auth middleware + typed context user
-- [x] Protect inspections routes behind auth middleware (add 401 tests + pass Authorization: Bearer <token> for existing route tests) (commit: `7b473ff`)
-- [x] Update route tests for login token issuance and auth middleware verification
-- [x] Validation + commit + push (JWT issuance + middleware scaffolding)
+(next: pick the smallest safe milestone from backlog)
 
 ## Rules
 
@@ -28,6 +18,8 @@ M18 — Harden bearer auth by revalidating JWT subject against current user stat
 5. After a successful push, if the active milestone still has unchecked tasks, immediately dispatch the next Codex task for the next smallest safe increment
 
 ## Recent Completed Milestones
+
+- [x] M18 — Harden bearer auth by revalidating JWT subject against current user state (commit: `7dd2d80`)
 
 - [x] M17 — Add /api/auth/me + narrow storage lookup for me endpoint (commits: `98725db`, `d49bb69`)
 - [x] M16 — Add JWT session + protect inspection routes (commits: `7812e5d`, `7b473ff`, `46aecbb`)

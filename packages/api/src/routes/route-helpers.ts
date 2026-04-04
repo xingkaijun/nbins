@@ -7,8 +7,8 @@ import type {
 } from "../persistence/records.ts";
 import type { Bindings } from "../env.ts";
 
-export function isD1Enabled(bindings: Bindings): boolean {
-  return bindings.D1_DRIVER === "d1" && Boolean(bindings.DB);
+export function isD1Enabled(bindings: Bindings | undefined | null): boolean {
+  return Boolean(bindings) && (bindings as Bindings).D1_DRIVER === "d1" && Boolean((bindings as Bindings).DB);
 }
 
 export function parseStringArray(value: unknown): string[] {

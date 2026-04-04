@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 18:31 Asia/Shanghai
+> Updated: 2026-04-04 19:10 Asia/Shanghai
 > Overall status: **D1 integration stabilized with core bugfixes; sequence-based comment IDs (localId) implemented in the persistent layer, with core inspection MVP flow fully adapted.**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -240,6 +240,8 @@ Delivery read:
 - Quality coverage is still lightweight, but it is meaningful for the implemented MVP path.
 
 ## Auth / RBAC
+
+- **Bearer token revalidation:** Middleware revalidates JWT subject (`sub`) against the current user record and rejects inactive/deleted users.
 
 **Status: `🟡`**
 
