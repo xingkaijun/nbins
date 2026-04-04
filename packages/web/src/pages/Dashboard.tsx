@@ -11,7 +11,8 @@ import {
   createMockInspectionDetails,
   syncListItemWithDetail
 } from "@nbins/shared";
-import { ApiError, fetchInspectionList } from "../api";
+import { useAuthSession } from "../auth";
+import { ApiError, fetchInspectionList, resolveInspectionComment } from "../api";
 import { type DetailTransportMode, useInspectionDetail } from "../useInspectionDetail";
 
 const snapshot = createMockDashboardSnapshot();
@@ -216,6 +217,7 @@ function syncDashboardItem(
 }
 
 export function Dashboard() {
+  const session = useAuthSession();
   const [listItems, setListItems] = useState<InspectionListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listMode, setListMode] = useState<DetailTransportMode>("demo");
@@ -259,8 +261,9 @@ export function Dashboard() {
   const [clientNotice, setClientNotice] = useState<string | null>(null);
 
   // Default Current User Context
-  const defaultUserId = "user-inspector-li"; // 必须存在于 users 表中，避免 Foreign Key 约束报错
-  const defaultUserDisplayName = "Active Admin";
+  const defaultUserId = session?.user.id ?? "user-inspector-li";
+  const defaultUserDisplayName =
+    session?.user.displayName ?? session?.user.username ?? "Active Admin";
 
   const localToday = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
   const [filterDate, setFilterDate] = useState<string>(localToday);
@@ -391,27 +394,48 @@ export function Dashboard() {
       });
     }
 
-    const request = {
-      result: selectedResult,
-      actualDate: buildActualDate(selectedDetail),
-      submittedBy: defaultUserId,
-      inspectorDisplayName: defaultUserDisplayName,
-      notes: null,
-      expectedVersion: selectedDetail.version,
-      comments: canAddComments ? draftComments.map((comment) => ({ message: comment.message })) : []
-      // Note: Ideal request would also include checking ids format to submit to the API backend
-    };
-
     setClientNotice(null);
 
     try {
       const nextMode: DetailTransportMode = mode;
 
       if (nextMode === "api") {
+        let workingDetail = selectedDetail;
+
+        for (const commentId of checkedCommentsToClose) {
+          const response = await resolveInspectionComment(workingDetail.id, commentId, {
+            resolvedBy: defaultUserDisplayName,
+            expectedVersion: workingDetail.version
+          });
+          workingDetail = response.item;
+        }
+
+        const request = {
+          result: selectedResult,
+          actualDate: buildActualDate(workingDetail),
+          submittedBy: defaultUserId,
+          inspectorDisplayName: defaultUserDisplayName,
+          notes: null,
+          expectedVersion: workingDetail.version,
+          comments: canAddComments ? draftComments.map((comment) => ({ message: comment.message })) : []
+        };
         const nextDetail = await submit(request, { mode: nextMode });
         persistResolvedDetail(nextDetail);
-        setClientNotice("Submitted to API successfully.");
+        setClientNotice(
+          checkedCommentsToClose.size > 0
+            ? "Comments resolved and result submitted to API."
+            : "Submitted to API successfully."
+        );
       } else {
+        const request = {
+          result: selectedResult,
+          actualDate: buildActualDate(selectedDetail),
+          submittedBy: defaultUserId,
+          inspectorDisplayName: defaultUserDisplayName,
+          notes: null,
+          expectedVersion: selectedDetail.version,
+          comments: canAddComments ? draftComments.map((comment) => ({ message: comment.message })) : []
+        };
         const nextDetail = createLocalSubmissionDetail({
           detail: mutatedDetailBeforeLocalWrite,
           selectedResult,
