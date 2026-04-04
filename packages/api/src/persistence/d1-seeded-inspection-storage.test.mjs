@@ -6,6 +6,7 @@ import { createSeedInspectionStorageSnapshot } from "./seed.ts";
 const EMPTY_SNAPSHOT = {
   users: [],
   projects: [],
+  projectMembers: [],
   ships: [],
   inspectionItems: [],
   inspectionRounds: [],

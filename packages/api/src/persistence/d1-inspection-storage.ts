@@ -4,6 +4,7 @@ import type {
   InspectionItemRecord,
   InspectionRoundRecord,
   InspectionStorageSnapshot,
+  ProjectMemberRecord,
   ProjectRecord,
   ShipRecord,
   UserRecord
@@ -31,9 +32,10 @@ export class D1InspectionStorage implements InspectionStorage {
   }
 
   async read(): Promise<InspectionStorageSnapshot> {
-    const [users, projects, ships, inspectionItems, inspectionRounds, comments] = await Promise.all([
+    const [users, projects, projectMembers, ships, inspectionItems, inspectionRounds, comments] = await Promise.all([
       this.selectAll("users"),
       this.selectAll("projects"),
+      this.selectAll("project_members"),
       this.selectAll("ships"),
       this.selectAll("inspection_items"),
       this.selectAll("inspection_rounds"),
@@ -43,6 +45,7 @@ export class D1InspectionStorage implements InspectionStorage {
     return {
       users: users.map(mapUserRecord),
       projects: projects.map(mapProjectRecord),
+      projectMembers: projectMembers.map(mapProjectMemberRecord),
       ships: ships.map(mapShipRecord),
       inspectionItems: inspectionItems.map(mapInspectionItemRecord),
       inspectionRounds: inspectionRounds.map(mapInspectionRoundRecord),
@@ -92,6 +95,14 @@ export class D1InspectionStorage implements InspectionStorage {
   async readUserByUsername(username: string): Promise<UserRecord | null> {
     const row = await this.selectFirst(`SELECT * FROM "users" WHERE "username" = ?`, username);
     return row ? mapUserRecord(row) : null;
+  }
+
+  async readProjectMembersByUserId(userId: string): Promise<ProjectMemberRecord[]> {
+    const rows = await this.selectMany(
+      `SELECT * FROM "project_members" WHERE "userId" = ?`,
+      userId
+    );
+    return rows.map(mapProjectMemberRecord);
   }
 
   async readSubmittedInspectionDetail(
@@ -180,7 +191,7 @@ export class D1InspectionStorage implements InspectionStorage {
   async write(next: InspectionStorageSnapshot): Promise<void> {
     const statements: D1PreparedStatement[] = [];
 
-    for (const tableName of ["comments", "inspection_rounds", "inspection_items", "ships", "projects", "users"]) {
+    for (const tableName of ["comments", "inspection_rounds", "inspection_items", "ships", "project_members", "projects", "users"]) {
       statements.push(this.db.prepare(`DELETE FROM "${tableName}"`));
     }
 
@@ -225,6 +236,17 @@ export class D1InspectionStorage implements InspectionStorage {
             record.createdAt,
             record.updatedAt
           )
+      );
+    }
+
+    for (const record of next.projectMembers) {
+      statements.push(
+        this.db
+          .prepare(
+            `INSERT INTO "project_members" ("id", "projectId", "userId", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?)`
+          )
+          .bind(record.id, record.projectId, record.userId, record.createdAt, record.updatedAt)
       );
     }
 
@@ -552,6 +574,16 @@ function mapProjectRecord(row: JsonRow): ProjectRecord {
     shipyard: nullableStringValue(row.shipyard),
     class: nullableStringValue(row.class),
     recipients: jsonArrayValue(row.recipients),
+    createdAt: stringValue(row.createdAt),
+    updatedAt: stringValue(row.updatedAt)
+  };
+}
+
+function mapProjectMemberRecord(row: JsonRow): ProjectMemberRecord {
+  return {
+    id: stringValue(row.id),
+    projectId: stringValue(row.projectId),
+    userId: stringValue(row.userId),
     createdAt: stringValue(row.createdAt),
     updatedAt: stringValue(row.updatedAt)
   };

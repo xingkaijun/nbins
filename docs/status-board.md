@@ -23,7 +23,7 @@ This board is intended to be more concrete than the phase table in the README. I
 | D1 foundation | ✅ | D1 schema, bootstrap, and seeding are stable; added support for sequence-based `localId` for comments |
 | Frontend workspace | ✅ | React/Vite workbench is functional, core pages linked to real D1 API |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
-| Auth / RBAC | 🟡 | Login endpoint returns JWT; auth middleware exists; inspections routes require bearer auth; new /api/auth/me returns the current user profile; Frontend Portal implemented |
+| Auth / RBAC | 🟡 | Login endpoint returns JWT; auth middleware exists; inspections routes require bearer auth; /api/auth/me returns the current user profile; project-scoped authorization data skeleton now exists; Frontend Portal implemented |
 | Import / PDF / n8n | 🟡 | Manual batch import is LIVE; automated (n8n/PDF) workflows are planned |
 
 ## Engineering Foundation
@@ -256,6 +256,7 @@ What is in place:
 
 What is still missing:
 
+- Actual route-level project-scope filtering/enforcement using the new membership skeleton.
 - Refresh/session lifecycle and logout/invalidation behavior.
 - Frontend login UI + session storage.
 
@@ -269,7 +270,7 @@ Representative files:
 
 Delivery read:
 
-- Auth now supports JWT issuance + verification and protects the inspection API routes, but session refresh/logout and frontend login are still pending.
+- Auth now supports JWT issuance + verification, protects the inspection API routes, and has a first project-scoped authorization data skeleton (`project_members` + lookup service). Actual route filtering/enforcement is the next increment.
 
 ## Import / PDF / n8n
 

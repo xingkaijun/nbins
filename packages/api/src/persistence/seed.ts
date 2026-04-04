@@ -47,6 +47,17 @@ export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot
         });
     }
 
+    const systemMembershipId = `project-member-sys-${projectId}`;
+    if (!snapshot.projectMembers.some((member) => member.id === systemMembershipId)) {
+      snapshot.projectMembers.push({
+        id: systemMembershipId,
+        projectId,
+        userId: "sys-user",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
+    }
+
     const existingShip = snapshot.ships.find(s => s.hullNumber === detail.hullNumber);
     const shipId = existingShip?.id ?? `ship-${detail.hullNumber.replace("-", "").toLowerCase()}`;
 
@@ -168,6 +179,24 @@ export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot
         updatedAt: new Date().toISOString()
       });
       knownUserIds.add(uid);
+    }
+  }
+
+  for (const user of snapshot.users) {
+    if (!snapshot.projectMembers.some((member) => member.userId === user.id)) {
+      const firstProject = snapshot.projects[0];
+
+      if (!firstProject) {
+        break;
+      }
+
+      snapshot.projectMembers.push({
+        id: `project-member-${user.id}-${firstProject.id}`,
+        projectId: firstProject.id,
+        userId: user.id,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      });
     }
   }
 

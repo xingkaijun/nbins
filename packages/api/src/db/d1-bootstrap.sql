@@ -24,6 +24,14 @@ CREATE TABLE IF NOT EXISTS "projects" (
   "updatedAt" TEXT NOT NULL
 );
 
+CREATE TABLE IF NOT EXISTS "project_members" (
+  "id" TEXT PRIMARY KEY,
+  "projectId" TEXT NOT NULL REFERENCES "projects"("id"),
+  "userId" TEXT NOT NULL REFERENCES "users"("id"),
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS "ships" (
   "id" TEXT PRIMARY KEY,
   "projectId" TEXT NOT NULL REFERENCES "projects"("id"),

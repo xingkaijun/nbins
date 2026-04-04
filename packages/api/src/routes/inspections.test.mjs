@@ -37,6 +37,7 @@ class FakeD1Database {
     this.tables = {
       users: [],
       projects: [],
+      project_members: [],
       ships: [],
       inspection_items: [],
       inspection_rounds: [],
