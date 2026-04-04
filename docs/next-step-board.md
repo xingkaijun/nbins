@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 11:02 Asia/Shanghai
+> Updated: 2026-04-04 11:10 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -17,7 +17,7 @@
 
 ## Task Breakdown
 
-- [ ] Implement a joined summary read for `readInspectionDetail()`
+- [x] Implement a joined summary read for `readInspectionDetail()` (commit: `63f44ee`)
 - [ ] Implement the next safe joined/narrow summary improvement for `readInspectionList()`
 - [ ] Update D1 SQL-recording tests to lock in the reduced query shape
 - [ ] Run validation (`pnpm typecheck && pnpm build && pnpm --filter @nbins/api test`)
