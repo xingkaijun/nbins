@@ -5,7 +5,7 @@
 
 ## Active Milestone
 
-### M14 — Fix seed/localId + keep D1 route tests stable
+### M14 — Fix seed/localId + keep D1 route tests stable (DONE)
 **Goal:** Ensure all seeded CommentRecords include numeric `localId` so D1 mapping stays strict, and make D1 seeding behavior not explode the narrow-query tests.
 
 **Definition of Done:**
@@ -20,7 +20,7 @@
 - [x] Assign `localId` during seed snapshot generation
 - [x] Keep D1 narrow-query tests stable (limit seed expansion + adjust expected list size)
 - [x] Run validation (`pnpm --filter @nbins/api test`)
-- [ ] Commit + push
+- [x] Commit + push
 
 ## Rules
 
@@ -32,6 +32,7 @@
 
 ## Recent Completed Milestones
 
+- [x] M14 — Fix seed/localId + keep D1 route tests stable (commit: `947464d`)
 - [x] M13 — Deduplicate joined summary SQL constants (commit: `fc219b6`)
 - [x] M12 — Collapse remaining D1 detail/list summary reads (detail + list joined summary reads) (commits: `63f44ee`, `813310c`, `a74c0de`)
 - [x] M11 — Narrow post-submit detail refresh path (commit: `bf317bc`)
