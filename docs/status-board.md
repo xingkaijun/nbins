@@ -1,7 +1,7 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 19:10 Asia/Shanghai
-> Overall status: **D1 integration stabilized with core bugfixes; sequence-based comment IDs (localId) implemented in the persistent layer, with core inspection MVP flow fully adapted.**
+> Updated: 2026-04-04 20:00 Asia/Shanghai
+> Overall status: **Backend MVP complete (70/70 tests green); resolve-comment API landed; frontend auth integration is the next critical milestone (api.ts lacks Bearer token injection).**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
 
@@ -23,7 +23,8 @@ This board is intended to be more concrete than the phase table in the README. I
 | D1 foundation | ✅ | D1 schema, bootstrap, and seeding are stable; added support for sequence-based `localId` for comments |
 | Frontend workspace | ✅ | React/Vite workbench is functional, core pages linked to real D1 API |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
-| Auth / RBAC | 🟡 | Login endpoint returns JWT; auth middleware exists; inspections routes require bearer auth; new /api/auth/me returns the current user profile; Frontend Portal implemented |
+| Auth / RBAC | 🟡 | Backend complete: login/JWT/auth middleware/role checks; **Frontend gap: api.ts does not inject Authorization header; Login.tsx bypasses API** |
+| Comment resolve | ✅ | Backend route + repository + tests done; **Frontend Dashboard UI not yet wired** |
 | Import / PDF / n8n | 🟡 | Manual batch import is LIVE; automated (n8n/PDF) workflows are planned |
 
 ## Engineering Foundation
@@ -196,11 +197,16 @@ What is in place:
 - React/Vite workspace is running with an inspection workbench UI.
 - Inspection list, detail panel, round history, comment display, preview logic, and submission interactions are present.
 - The web app can attempt to call the API and falls back to demo data when the API is unavailable.
+- Pages: Projects (hall), Dashboard, Import, Observations, Login (UI only), Reports (shell).
+- `api.ts` has full client SDK coverage for all backend routes.
 
 What is still missing:
 
-- The main homepage/workbench still depends on shared mock dashboard data.
-- Broader planned workspace areas such as login, project management, reporting center, and admin views are not implemented in code.
+- **`Admin.tsx` deleted but still imported in `App.tsx`** — causes typecheck failure.
+- **`api.ts` does not inject `Authorization` Bearer header** — cannot communicate with auth-protected backend routes.
+- Login.tsx bypasses real API (direct navigate on any input).
+- Dashboard does not wire the `resolveInspectionComment` SDK method to a UI control.
+- Reports page is a placeholder shell.
 
 Representative files:
 
@@ -212,7 +218,7 @@ Representative files:
 
 Delivery read:
 
-- The frontend is now a usable operational surface. Dashboard, Observation detail, and Manual Import are linked to DB-backed Hono routes.
+- The frontend is a usable operational surface but has a **critical auth gap** that prevents real API communication when the backend enforces bearer auth.
 - **Manual Import (`/import`)**: Optimized for 3-column Excel copy-paste with global date/discipline selection.
 
 ## Testing / Quality
@@ -309,12 +315,16 @@ Delivery read:
 
 ## Practical Next Priorities
 
-1. Exercise the D1-backed route path in a real Worker/D1 environment and harden the snapshot-write bridge.
-2. (Completed) Move the frontend workbench to API-first data loading and fix D1 blockers.
-3. (Completed) Add comment numbering (localId) to the core data model.
-4. Add comment close/resolve flow so the current inspection lifecycle can fully close in product code.
-5. Introduce auth and project-scoped RBAC before expanding beyond the MVP demo path.
-6. Build import and PDF generation only after the core data model is persisted end to end.
+1. **[P0 BLOCKING]** Fix `Admin.tsx` deletion → typecheck failure (create shell or remove route).
+2. **[P0 BLOCKING]** Wire frontend auth: Login.tsx → real API, api.ts → Bearer header injection, 401 redirect.
+3. **(Completed)** Backend resolve-comment API + tests (70/70 green).
+4. **(Completed)** Add comment numbering (localId) to the core data model.
+5. **(Completed)** Move the frontend workbench to API-first data loading and fix D1 blockers.
+6. **[P1]** Wire Dashboard resolve-comment UI to the existing `resolveInspectionComment` SDK.
+7. **[P2]** Build Admin page (user/project/ship management).
+8. **[P2]** Build Reports page (statistics and trends).
+9. **[P3]** Exercise the D1-backed route path in a real Worker/D1 environment.
+10. **[P3]** Narrow the D1 write path for `resolveComment`.
 
 
 # Bootstrap schema (generated SQL)
