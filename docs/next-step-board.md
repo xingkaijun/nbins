@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 23:06 Asia/Shanghai
+> Updated: 2026-04-04 23:10 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -15,7 +15,7 @@
 
 ## Recently Completed
 
-- [x] Phase A / Slice 1 — Real login + token persistence + bearer API injection (commit: `TBD`)
+- [x] Phase A / Slice 1 — Real login + token persistence + bearer API injection (commit: `91822c0`)
 
 ## Rules
 
