@@ -7,34 +7,34 @@ import type {
 export const DISCIPLINES = [
   "HULL",
   "OUTFIT",
-  "ENGINE",
-  "CARGO",
+  "MACHINERY",
+  "CHS",
   "ELEC",
   "PAINT",
-  "CTNMT"
+  "CCS"
 ] as const;
 
 export type Discipline = (typeof DISCIPLINES)[number];
 
 export const DISCIPLINE_LABELS: Record<Discipline, string> = {
-  HULL: "船体",
-  OUTFIT: "舾装",
-  ENGINE: "轮机",
-  CARGO: "货物",
-  ELEC: "电气",
-  PAINT: "涂装",
-  CTNMT: "货围"
+  HULL: "HULL",
+  OUTFIT: "OUTFIT",
+  MACHINERY: "MACHINERY",
+  CHS: "CHS",
+  ELEC: "ELEC",
+  PAINT: "PAINT",
+  CCS: "CCS"
 };
 
 export const INSPECTION_RESULTS = ["CX", "AA", "QCC", "OWC", "RJ"] as const;
 export type InspectionResult = (typeof INSPECTION_RESULTS)[number];
 
 export const INSPECTION_RESULT_LABELS: Record<InspectionResult, string> = {
-  CX: "取消",
-  AA: "接受",
-  QCC: "带意见接受",
-  OWC: "复检",
-  RJ: "拒绝"
+  CX: "CX",
+  AA: "AA",
+  QCC: "QCC",
+  OWC: "OWC",
+  RJ: "RJ"
 };
 
 export const WORKFLOW_STATUSES = [
@@ -118,7 +118,7 @@ const MOCK_ITEMS: InspectionListItem[] = [
     hullNumber: "H-2748",
     shipName: "NB2748",
     itemName: "Main Engine Alignment",
-    discipline: "ENGINE",
+    discipline: "MACHINERY",
     plannedDate: "2026-04-03",
     yardQc: "Zhang San",
     currentResult: null,
@@ -148,7 +148,7 @@ const MOCK_ITEMS: InspectionListItem[] = [
     hullNumber: "H-2751",
     shipName: "NB2751",
     itemName: "Containment Weld Visual Survey",
-    discipline: "CTNMT",
+    discipline: "CCS",
     plannedDate: "2026-04-03",
     yardQc: "Wang Wu",
     currentResult: "OWC",
@@ -196,7 +196,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
     hullNumber: "H-2748",
     shipName: "NB2748",
     itemName: "Main Engine Alignment",
-    discipline: "ENGINE",
+    discipline: "MACHINERY",
     source: "manual",
     yardQc: "Zhang San",
     plannedDate: "2026-04-03",
@@ -278,7 +278,7 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
     hullNumber: "H-2751",
     shipName: "NB2751",
     itemName: "Containment Weld Visual Survey",
-    discipline: "CTNMT",
+    discipline: "CCS",
     source: "n8n",
     yardQc: "Wang Wu",
     plannedDate: "2026-04-03",
@@ -452,23 +452,187 @@ const MOCK_INSPECTION_DETAILS: Record<string, InspectionItemDetailResponse> = {
   }
 };
 
+const ITEM_DICTS: Record<string, string[]> = {
+  HULL: ["Block Assembly Verification", "Weld Visual Check", "NDT Setup Joint Survey", "Hull Deflection Measurement", "Tank Tightness Test", "Erection Joint Fit-up"],
+  OUTFIT: ["Cabin Furnishing Inspection", "Handrail Installation Check", "Deck Equipment Foundation", "Mooring Fitting Test", "Galley Equipment Trial"],
+  MACHINERY: ["Main Engine Shaft Alignment", "Auxiliary Pump Pressure Test", "Steering Gear Sea Trial", "Lube Oil Piping Flush", "Propeller Clearance Check", "Boiler Visual Inspection"],
+  CHS: ["Cargo Pump Dry Run", "Manifold Piping Pressure Test", "Heating Coil Test", "Inert Gas Generator Trial", "Cargo Tank Calibration"],
+  ELEC: ["Cable Tray Routing", "Main Switchboard Insulation", "Fire Alarm Loop Test", "Navigational Equipment Check", "Battery Charger Load Test", "Emergency Lighting Trial"],
+  PAINT: ["Surface Preparation Check", "Primer Coat Thickness", "Final Coat Wet Film", "Anti-fouling Painting Survey", "Stripe Coating Touch-up"],
+  CCS: ["Containment Membrane Leak Test", "Insulation Box Bonding check", "Secondary Barrier Leak Test", "Weld Seam PT", "Gas Trial Preparation"]
+};
+
+const DYNAMIC_ITEMS: InspectionListItem[] = [];
+const DYNAMIC_DETAILS: Record<string, InspectionItemDetailResponse> = {};
+
+for (let index = 0; index < 30; index++) {
+  const i = index + 6;
+  const id = `insp-00${i > 9 ? i : `0${i}`}`;
+  
+  const discipline = DISCIPLINES[Math.floor(Math.random() * DISCIPLINES.length)];
+  const disciplineItems = ITEM_DICTS[discipline] || ["General Check"];
+  const itemName = disciplineItems[Math.floor(Math.random() * disciplineItems.length)];
+  
+  const randRound = Math.random();
+  const currentRound = randRound < 0.7 ? 1 : (randRound < 0.9 ? 2 : 3);
+  
+  const isPending = Math.random() < 0.4;
+  const currentResult = isPending ? null : INSPECTION_RESULTS[Math.floor(Math.random() * INSPECTION_RESULTS.length)];
+  
+  const today = new Date().toLocaleDateString("en-CA");
+  const yesterday = new Date(Date.now() - 86400000).toLocaleDateString("en-CA");
+  const theDayBefore = new Date(Date.now() - 2 * 86400000).toLocaleDateString("en-CA");
+  
+  const workflowStatus = isPending ? "pending" : (currentResult === "AA" || currentResult === "CX" ? "closed" : "open");
+  
+  const listItem: InspectionListItem = {
+    id,
+    projectCode: "P-001",
+    projectName: "NBINS Carrier Fleet",
+    hullNumber: `H-${2740 + (i % 5)}`,
+    shipName: `NB${2740 + (i % 5)}`,
+    itemName,
+    discipline,
+    plannedDate: today,
+    yardQc: "QC Staff " + i,
+    currentResult,
+    workflowStatus,
+    openComments: 0,
+    currentRound
+  };
+
+  const roundHistory = [];
+  const comments = [];
+  
+  if (currentRound > 1) {
+     const c1Id = `${id}-comment-r1-1`;
+     comments.push({
+        id: c1Id,
+        roundNumber: 1,
+        status: "open" as const,
+        message: "Defect found in previous round. Critical rectification required.",
+        createdAt: new Date(Date.now() - 90000000).toISOString(),
+        createdBy: "System Alert",
+        resolvedAt: null,
+        resolvedBy: null
+     });
+     roundHistory.push(buildRoundEntry({
+        id: `${id}-round-1`,
+        roundNumber: 1,
+        actualDate: yesterday,
+        submittedResult: "RJ" as any,
+        submittedAt: new Date(Date.now() - 86400000).toISOString(),
+        submittedBy: "sys-user",
+        inspectorDisplayName: "Past Surveyor",
+        notes: "Failed in first attempt.",
+        source: "manual",
+        commentIds: [c1Id]
+     }));
+  }
+  
+  if (currentRound > 2) {
+     const c2Id = `${id}-comment-r2-1`;
+     comments.push({
+        id: c2Id,
+        roundNumber: 2,
+        status: "open" as const,
+        message: "Still not complying with standards.",
+        createdAt: new Date(Date.now() - 50000000).toISOString(),
+        createdBy: "System Alert",
+        resolvedAt: null,
+        resolvedBy: null
+     });
+     roundHistory.push(buildRoundEntry({
+        id: `${id}-round-2`,
+        roundNumber: 2,
+        actualDate: theDayBefore,
+        submittedResult: "OWC" as any,
+        submittedAt: new Date(Date.now() - 40000000).toISOString(),
+        submittedBy: "sys-user",
+        inspectorDisplayName: "Past Surveyor",
+        notes: "Second attempt failed.",
+        source: "manual",
+        commentIds: [c2Id]
+     }));
+  }
+  
+  if (!isPending && currentResult) {
+     const c3Id = `${id}-comment-rc-${currentRound}`;
+     if (currentResult === 'RJ' || currentResult === 'OWC' || currentResult === 'QCC') {
+        comments.push({
+          id: c3Id,
+          roundNumber: currentRound,
+          status: "open" as const,
+          message: `Issued from round ${currentRound}. Needs immediate attention.`,
+          createdAt: new Date().toISOString(),
+          createdBy: "Active Inspector",
+          resolvedAt: null,
+          resolvedBy: null
+        });
+     }
+     roundHistory.push(buildRoundEntry({
+        id: `${id}-round-${currentRound}`,
+        roundNumber: currentRound,
+        actualDate: today,
+        submittedResult: currentResult as any,
+        submittedAt: new Date().toISOString(),
+        submittedBy: "sys-user",
+        inspectorDisplayName: "Current Auth",
+        notes: "Latest action recorded.",
+        source: "manual",
+        commentIds: (currentResult === 'RJ' || currentResult === 'OWC' || currentResult === 'QCC') ? [c3Id] : []
+     }));
+  }
+
+  listItem.openComments = comments.filter(c => c.status === 'open').length;
+  DYNAMIC_ITEMS.push(listItem);
+
+  DYNAMIC_DETAILS[id] = {
+    id: listItem.id,
+    projectCode: listItem.projectCode,
+    projectName: listItem.projectName,
+    hullNumber: listItem.hullNumber,
+    shipName: listItem.shipName,
+    itemName: listItem.itemName,
+    discipline: listItem.discipline,
+    source: "manual",
+    yardQc: listItem.yardQc,
+    plannedDate: listItem.plannedDate,
+    actualDate: isPending ? null : listItem.plannedDate,
+    currentRound: listItem.currentRound,
+    currentRoundId: `round-${listItem.id}-r${listItem.currentRound}`,
+    version: 1,
+    workflowStatus: listItem.workflowStatus,
+    resolvedResult: listItem.workflowStatus === "closed" ? "AA" : null,
+    lastRoundResult: currentResult,
+    openCommentCount: listItem.openComments,
+    pendingFinalAcceptance: currentResult === "QCC",
+    waitingForNextRound: currentResult === "OWC" || currentResult === "RJ",
+    comments: comments, 
+    roundHistory: roundHistory
+  };
+}
+
+const ALL_MOCK_ITEMS = [...MOCK_ITEMS, ...DYNAMIC_ITEMS];
+const ALL_MOCK_DETAILS = { ...MOCK_INSPECTION_DETAILS, ...DYNAMIC_DETAILS };
+
 export function createMockDashboardSnapshot(): DashboardSnapshot {
   return {
-    generatedAt: "2026-04-03T09:00:00.000Z",
+    generatedAt: new Date().toISOString(),
     summary: {
-      pendingToday: MOCK_ITEMS.filter((item) => item.workflowStatus === "pending").length,
-      completedToday: MOCK_ITEMS.filter((item) => item.currentResult === "AA").length,
-      openComments: MOCK_ITEMS.reduce((count, item) => count + item.openComments, 0),
-      reinspectionQueue: MOCK_ITEMS.filter((item) => item.currentResult === "OWC").length,
+      pendingToday: ALL_MOCK_ITEMS.filter((item) => item.workflowStatus === "pending").length,
+      completedToday: ALL_MOCK_ITEMS.filter((item) => item.currentResult === "AA").length,
+      openComments: ALL_MOCK_ITEMS.reduce((count, item) => count + item.openComments, 0),
+      reinspectionQueue: ALL_MOCK_ITEMS.filter((item) => item.currentResult === "OWC" || item.currentResult === "RJ").length,
       projectProgress: 68
     },
-    items: MOCK_ITEMS
+    items: ALL_MOCK_ITEMS
   };
 }
 
 export function createMockInspectionDetails(): Record<string, InspectionItemDetailResponse> {
   return Object.fromEntries(
-    Object.entries(MOCK_INSPECTION_DETAILS).map(([id, detail]) => [
+    Object.entries(ALL_MOCK_DETAILS).map(([id, detail]) => [
       id,
       {
         ...detail,
