@@ -11,7 +11,12 @@ import type {
   SubmitInspectionResultRequest,
   SubmitInspectionResultResponse
 } from "@nbins/shared";
-import { clearAuthSession, getAuthToken, type AuthUser } from "./auth";
+import {
+  clearAuthSession,
+  getAuthToken,
+  setAuthRedirectReason,
+  type AuthUser
+} from "./auth";
 
 interface ApiEnvelope<T> {
   ok: boolean;
@@ -116,6 +121,7 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok || !payload?.ok || payload.data === undefined) {
     if (response.status === 401) {
+      setAuthRedirectReason("expired");
       clearAuthSession();
     }
 

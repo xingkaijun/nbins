@@ -1,6 +1,6 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 21:33 Asia/Shanghai
+> Updated: 2026-04-04 21:41 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
@@ -9,9 +9,9 @@
 **Goal:** Small, safe UX improvements on top of Phase A auth wiring.
 
 **Planned slices:**
-- [ ] After successful login, redirect to the originally requested protected route (respect `location.state.from`).
-- [ ] When a 401 clears session, show a minimal notice on login page ("Session expired") if possible.
-- [ ] Validate `pnpm -w qa` and update docs before commit/push.
+- [x] After successful login, redirect to the originally requested protected route (respect `location.state.from`).
+- [x] When a 401 clears session, show a minimal notice on login page ("Session expired") if possible.
+- [x] Validate `pnpm -w qa` and update docs before commit/push.
 
 ## Recently Completed
 

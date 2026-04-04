@@ -1,7 +1,15 @@
 import React, { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { setAuthSession, useAuthSession } from "../auth";
 import { ApiError, login } from "../api";
+
+interface LoginLocationState {
+  from?: {
+    pathname?: string;
+    search?: string;
+  };
+  reason?: string;
+}
 
 export function Login() {
   const session = useAuthSession();
@@ -9,13 +17,21 @@ export function Login() {
   const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const location = useLocation();
   const navigate = useNavigate();
+  const locationState = location.state as LoginLocationState | null;
+  const redirectTo = locationState?.from?.pathname
+    ? `${locationState.from.pathname}${locationState.from.search ?? ""}`
+    : "/";
+  const sessionExpired =
+    locationState?.reason === "expired" ||
+    new URLSearchParams(location.search).get("reason") === "expired";
 
   useEffect(() => {
     if (session?.token) {
-      navigate("/", { replace: true });
+      navigate(redirectTo, { replace: true });
     }
-  }, [navigate, session?.token]);
+  }, [navigate, redirectTo, session?.token]);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -33,7 +49,7 @@ export function Login() {
         token: result.token,
         user: result.user
       });
-      navigate("/", { replace: true });
+      navigate(redirectTo, { replace: true });
     } catch (requestError) {
       if (requestError instanceof ApiError && requestError.status === 401) {
         setError("Invalid username or password.");
@@ -88,6 +104,12 @@ export function Login() {
         <p style={{ margin: "0 0 32px 0", fontSize: "13px", fontWeight: 600, color: "var(--nb-primary)", letterSpacing: "0.05em", textTransform: "uppercase" }}>
           Secure Authentication
         </p>
+
+        {sessionExpired ? (
+          <div className="alert neutral" style={{ width: "100%", margin: "0 0 16px 0" }}>
+            Session expired. Please sign in again.
+          </div>
+        ) : null}
 
         <form onSubmit={(event) => void handleLogin(event)} style={{ width: "100%", display: "flex", flexDirection: "column", gap: "16px" }}>
           <div>

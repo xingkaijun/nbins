@@ -1,6 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
-import { clearAuthSession, setAuthSession, useAuthSession } from "../auth";
+import {
+  clearAuthSession,
+  consumeAuthRedirectReason,
+  setAuthSession,
+  useAuthSession
+} from "../auth";
 import { ApiError, fetchCurrentUser } from "../api";
 import { TopBar } from "./TopBar";
 
@@ -51,7 +56,15 @@ export function Layout() {
   }, [session?.token]);
 
   if (!session?.token) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    const reason = consumeAuthRedirectReason();
+
+    return (
+      <Navigate
+        to="/login"
+        replace
+        state={reason ? { from: location, reason } : { from: location }}
+      />
+    );
   }
 
   if (validatingSession) {

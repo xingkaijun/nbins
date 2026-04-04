@@ -3,6 +3,7 @@ import type { Discipline, Role } from "@nbins/shared";
 
 const STORAGE_KEY = "nbins.auth.session";
 const AUTH_EVENT = "nbins:auth-change";
+const REDIRECT_REASON_KEY = "nbins.auth.redirect-reason";
 
 export interface AuthUser {
   id: string;
@@ -71,6 +72,28 @@ export function clearAuthSession(): void {
 
   window.localStorage.removeItem(STORAGE_KEY);
   emitAuthChange();
+}
+
+export function setAuthRedirectReason(reason: string): void {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  window.sessionStorage.setItem(REDIRECT_REASON_KEY, reason);
+}
+
+export function consumeAuthRedirectReason(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const reason = window.sessionStorage.getItem(REDIRECT_REASON_KEY);
+  if (!reason) {
+    return null;
+  }
+
+  window.sessionStorage.removeItem(REDIRECT_REASON_KEY);
+  return reason;
 }
 
 export function subscribeAuth(listener: AuthListener): () => void {
