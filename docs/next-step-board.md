@@ -1,25 +1,25 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 07:53 Asia/Shanghai
+> Updated: 2026-04-04 09:20 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-### M11 — Narrow post-submit detail refresh on the D1 path
-**Goal:** After `submitCurrentRoundResult()` completes on D1, avoid immediately falling back to the broader inspection-detail read path if a narrower post-submit refresh can return the same contract safely.
+### M12 — Collapse remaining D1 detail/list summary reads
+**Goal:** Continue shrinking the D1 read path by replacing remaining multi-step item/ship/project lookups with tighter joined summary reads, while keeping mock as the default runtime driver.
 
 **Definition of Done:**
-- The D1 submit flow refreshes only the detail records it truly needs after a write
+- One or more remaining D1 detail/list summary paths use a joined summary query instead of separate item/ship/project lookups
 - Mock remains the default runtime path and unchanged in behavior
-- Tests prove the D1 submit path avoids unnecessary broader reads after mutation
+- Tests prove the narrowed D1 read behavior without touching frontend files
 - Validation passes (`pnpm qa`)
 - Changes committed + pushed
 
 ## Task Breakdown
 
-- [ ] Identify the minimum post-submit read surface needed for the response contract
-- [ ] Land the next smallest safe D1 refresh-path increment
-- [ ] Update tests to assert the narrower D1 post-submit refresh behavior
+- [ ] Implement a joined summary read for `readInspectionDetail()`
+- [ ] Implement the next safe joined/narrow summary improvement for `readInspectionList()`
+- [ ] Update D1 SQL-recording tests to lock in the reduced query shape
 - [ ] Run validation (`pnpm typecheck && pnpm build && pnpm --filter @nbins/api test`)
 - [ ] Commit + push
 
@@ -33,6 +33,7 @@
 
 ## Recent Completed Milestones
 
+- [x] M11 — Narrow post-submit detail refresh path (commit: `bf317bc`)
 - [x] M10 — Batch list round reads for inspections route (commit: `83e89af`)
 - [x] M9 — Add inspections list route + narrow D1 reads (commit: `966da65`)
 - [x] M8 — Narrow D1 submission-context reads for current-round result submission (commit: `94aca7a`)
@@ -42,5 +43,5 @@
 
 ## Notes
 
-- This increment switches list-round loading to one item-scoped `inspection_rounds WHERE inspectionItemId IN (...)` query and filters to the current round in memory.
-- Remaining work for M10 is validation and, outside this lane, the usual commit/push step if the increment is accepted.
+- M11 is complete and pushed; the next read-path work should stay in API/persistence only and avoid `packages/web/**` entirely.
+- This M12 slice is intentionally backend-only because the frontend is currently under manual editing.
