@@ -5,7 +5,7 @@
 
 ## Active Milestone
 
-### M13 — Deduplicate joined summary SQL constants
+### M13 — Deduplicate joined summary SQL constants (DONE)
 **Goal:** Reduce duplication of the joined summary SQL strings across storage and route/persistence SQL-recording tests, while keeping assertions strict (string-equal) and behavior unchanged.
 
 **Definition of Done:**
@@ -19,7 +19,7 @@
 - [x] Extract joined summary SQL constants into a single module (e.g. `packages/api/src/persistence/d1-inspection-sql.ts`)
 - [x] Update storage + tests to import and use those constants
 - [x] Run validation (`pnpm --filter @nbins/api test`)
-- [ ] Commit + push
+- [x] Commit + push
 
 ## Rules
 
@@ -31,6 +31,7 @@
 
 ## Recent Completed Milestones
 
+- [x] M13 — Deduplicate joined summary SQL constants (commit: `fc219b6`)
 - [x] M12 — Collapse remaining D1 detail/list summary reads (detail + list joined summary reads) (commits: `63f44ee`, `813310c`, `a74c0de`)
 - [x] M11 — Narrow post-submit detail refresh path (commit: `bf317bc`)
 - [x] M10 — Batch list round reads for inspections route (commit: `83e89af`)
