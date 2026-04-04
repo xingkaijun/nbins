@@ -11,7 +11,9 @@ export const DISCIPLINES = [
   "CHS",
   "ELEC",
   "PAINT",
-  "CCS"
+  "CCS",
+  "ENGINE",
+  "CTNMT"
 ] as const;
 
 export type Discipline = (typeof DISCIPLINES)[number];
@@ -23,7 +25,9 @@ export const DISCIPLINE_LABELS: Record<Discipline, string> = {
   CHS: "CHS",
   ELEC: "ELEC",
   PAINT: "PAINT",
-  CCS: "CCS"
+  CCS: "CCS",
+  ENGINE: "ENGINE",
+  CTNMT: "CTNMT"
 };
 
 export const INSPECTION_RESULTS = ["CX", "AA", "QCC", "OWC", "RJ"] as const;
