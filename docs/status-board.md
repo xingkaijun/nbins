@@ -233,19 +233,19 @@ Delivery read:
 
 ## Auth / RBAC
 
-**Status: `❌`**
+**Status: `🟡`**
 
 What is in place:
 
-- Shared role constants exist.
-- Mock user records include role and discipline fields.
+- **Frontend Login Portal**: A dedicated `/login` route with a production-grade authentication UI is implemented.
+- **Auth Flow**: Successful login triggers a redirect to the Project Hall.
+- Shared role constants and mock user records with discipline fields are fully integrated.
 
 What is still missing:
 
-- No login endpoint.
-- No password verification flow.
-- No JWT/session implementation.
-- No route guards or project-scope RBAC enforcement.
+- Backend JWT issuance and middleware verification.
+- Route guards for authenticated-only access.
+- Role-based UI visibility masking (beyond the scaffolded Admin pill).
 
 Representative files:
 
@@ -289,9 +289,9 @@ Delivery read:
 
 ## Recommended Current Project Readout
 
-- `✅ Complete for MVP baseline`: shared contracts, core domain rules, detail/read API, result submission API, mock-backed repository flow, basic tests
-- `🟡 Partial / in progress`: persistence architecture hardening, D1 rollout, frontend integration depth, production-grade data flow
-- `❌ Not started in product code`: auth, RBAC, import pipeline, PDF reports, n8n automation
+- `✅ Complete for MVP baseline`: shared contracts, core domain rules, multi-page routing, Dashboard UI, Project Hall, Login Portal.
+- `🟡 Partial / in progress`: persistence architecture hardening, D1 rollout, per-item report triggers, cross-module data syncing.
+- `❌ Not started in product code`: backend JWT auth, complex import pipeline, server-side PDF rendering.
 
 ## Practical Next Priorities
 
