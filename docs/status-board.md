@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 17:15 Asia/Shanghai
+> Updated: 2026-04-04 18:31 Asia/Shanghai
 > Overall status: **D1 integration stabilized with core bugfixes; sequence-based comment IDs (localId) implemented in the persistent layer, with core inspection MVP flow fully adapted.**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -23,7 +23,7 @@ This board is intended to be more concrete than the phase table in the README. I
 | D1 foundation | ✅ | D1 schema, bootstrap, and seeding are stable; added support for sequence-based `localId` for comments |
 | Frontend workspace | 🟡 | React/Vite workbench is functional, but parts of the experience still fall back to shared mock data |
 | Testing / quality | ✅ | Typecheck plus domain, SQL, and route tests are present |
-| Auth / RBAC | 🟡 | Login endpoint returns JWT (Bearer token); auth middleware exists; inspections routes now require bearer auth (401 when missing) |
+| Auth / RBAC | 🟡 | Login endpoint returns JWT; auth middleware exists; inspections routes require bearer auth; new /api/auth/me returns the current user profile |
 | Import / PDF / n8n | ❌ | Only planning/docs placeholders exist; no production workflow code yet |
 
 ## Engineering Foundation

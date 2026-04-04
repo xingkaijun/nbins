@@ -1,11 +1,18 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 17:16 Asia/Shanghai
+> Updated: 2026-04-04 18:31 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-(none — M16 completed; choose next milestone)
+M17 — Add /api/auth/me + narrow storage lookup for me endpoint
+
+- [x] Add /api/auth/me endpoint (token->profile)
+- [x] Add storage narrow lookup readUserById + repository findById
+- [x] Add tests: 401 without bearer; ok returns profile; D1 narrow lookup asserts query
+- [x] Validate + commit + push (commit: `98725db`)
+
+(next: choose milestone)
 
 - [x] Decide token transport (Bearer `Authorization` header for now) + secret handling (`JWT_SECRET` env var required in production, safe dev/test fallback in harness)
 - [x] Implement JWT creation on login (include user id + role + disciplines)
