@@ -157,7 +157,7 @@ export const APPLY_SUBMISSION_EXAMPLES: Array<{
     item: createDemoItem(),
     submission: {
       result: "AA",
-      actualDate: "2026-04-03",
+      actualDate: (new Date().toLocaleDateString("en-CA")),
       submittedAt: "2026-04-03T10:00:00.000Z",
       submittedBy: "inspector-a",
       inspectorDisplayName: "Inspector A",
@@ -177,7 +177,7 @@ export const APPLY_SUBMISSION_EXAMPLES: Array<{
     }),
     submission: {
       result: "AA",
-      actualDate: "2026-04-03",
+      actualDate: (new Date().toLocaleDateString("en-CA")),
       submittedAt: "2026-04-03T10:00:00.000Z",
       submittedBy: "inspector-a",
       inspectorDisplayName: "Inspector A",
@@ -189,7 +189,7 @@ export const APPLY_SUBMISSION_EXAMPLES: Array<{
     item: createDemoItem(),
     submission: {
       result: "AA",
-      actualDate: "2026-04-03",
+      actualDate: (new Date().toLocaleDateString("en-CA")),
       submittedAt: "2026-04-03T10:00:00.000Z",
       submittedBy: "inspector-a",
       inspectorDisplayName: "Inspector A",
@@ -202,7 +202,7 @@ export const APPLY_SUBMISSION_EXAMPLES: Array<{
     item: createDemoItem(),
     submission: {
       result: "QCC",
-      actualDate: "2026-04-03",
+      actualDate: (new Date().toLocaleDateString("en-CA")),
       submittedAt: "2026-04-03T10:00:00.000Z",
       submittedBy: "inspector-b",
       inspectorDisplayName: "Inspector B",
@@ -215,7 +215,7 @@ export const APPLY_SUBMISSION_EXAMPLES: Array<{
     item: createDemoItem(),
     submission: {
       result: "OWC",
-      actualDate: "2026-04-03",
+      actualDate: (new Date().toLocaleDateString("en-CA")),
       submittedAt: "2026-04-03T10:00:00.000Z",
       submittedBy: "inspector-c",
       inspectorDisplayName: "Inspector C",
@@ -228,7 +228,7 @@ export const APPLY_SUBMISSION_EXAMPLES: Array<{
     item: createDemoItem(),
     submission: {
       result: "RJ",
-      actualDate: "2026-04-03",
+      actualDate: (new Date().toLocaleDateString("en-CA")),
       submittedAt: "2026-04-03T10:00:00.000Z",
       submittedBy: "inspector-d",
       inspectorDisplayName: "Inspector D",
@@ -240,7 +240,7 @@ export const APPLY_SUBMISSION_EXAMPLES: Array<{
     item: createDemoItem(),
     submission: {
       result: "RJ",
-      actualDate: "2026-04-03",
+      actualDate: (new Date().toLocaleDateString("en-CA")),
       submittedAt: "2026-04-03T10:00:00.000Z",
       submittedBy: "inspector-d",
       inspectorDisplayName: "Inspector D",
@@ -253,7 +253,7 @@ export const APPLY_SUBMISSION_EXAMPLES: Array<{
     item: createDemoItem(),
     submission: {
       result: "CX",
-      actualDate: "2026-04-03",
+      actualDate: (new Date().toLocaleDateString("en-CA")),
       submittedAt: "2026-04-03T10:00:00.000Z",
       submittedBy: "inspector-e",
       inspectorDisplayName: "Inspector E",
@@ -320,7 +320,7 @@ function createDemoItem(
     discipline: "MACHINERY",
     source: "manual",
     yardQc: "Zhang San",
-    plannedDate: "2026-04-03",
+    plannedDate: (new Date().toLocaleDateString("en-CA")),
     actualDate: null,
     currentRound: 1,
     currentRoundId: "round-insp-demo-001-r1",

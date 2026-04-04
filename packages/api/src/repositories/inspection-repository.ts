@@ -273,6 +273,9 @@ function createSubmissionDetail(input: {
     id: input.item.id,
     projectCode: "",
     projectName: "",
+    projectOwner: null,
+    projectShipyard: null,
+    projectClass: null,
     hullNumber: "",
     shipName: "",
     itemName: input.item.itemName,
@@ -325,13 +328,16 @@ export function createInspectionRepositorySnapshot(
 function mapInspectionListItemRecord(record: {
   item: InspectionItemRecord;
   ship: { hullNumber: string; shipName: string };
-  project: { code: string; name: string };
+  project: { code: string; name: string; owner: string | null; shipyard: string | null; class: string | null };
   currentRound: InspectionRoundRecord;
 }): InspectionListItem {
   return {
     id: record.item.id,
     projectCode: record.project.code,
     projectName: record.project.name,
+    projectOwner: record.project.owner,
+    projectShipyard: record.project.shipyard,
+    projectClass: record.project.class,
     hullNumber: record.ship.hullNumber,
     shipName: record.ship.shipName,
     itemName: record.item.itemName,

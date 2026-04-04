@@ -32,6 +32,9 @@ export interface InspectionItemDetailResponse {
   id: string;
   projectCode: string;
   projectName: string;
+  projectOwner: string | null;
+  projectShipyard: string | null;
+  projectClass: string | null;
   hullNumber: string;
   shipName: string;
   itemName: string;
