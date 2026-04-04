@@ -13,14 +13,15 @@ export class InspectionService {
     this.repository = repository;
   }
 
-  listInspections(): Promise<DashboardSnapshot> {
-    return this.repository.listInspections();
+  listInspections(allowedProjectIds?: string[]): Promise<DashboardSnapshot> {
+    return this.repository.listInspections(allowedProjectIds);
   }
 
   readInspectionItemDetail(
-    inspectionItemId: string
+    inspectionItemId: string,
+    allowedProjectIds?: string[]
   ): Promise<InspectionItemDetailResponse | null> {
-    return this.repository.getInspectionDetail(inspectionItemId);
+    return this.repository.getInspectionDetail(inspectionItemId, allowedProjectIds);
   }
 
   submitInspectionResult(

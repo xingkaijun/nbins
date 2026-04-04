@@ -72,6 +72,22 @@ const BASELINE_DATA: InspectionStorageSnapshot = {
       updatedAt: NOW
     }
   ],
+  projectMembers: [
+    {
+      id: "project-member-li-hd-lng",
+      projectId: "project-hd-lng",
+      userId: "user-inspector-li",
+      createdAt: NOW,
+      updatedAt: NOW
+    },
+    {
+      id: "project-member-wang-cssc-series",
+      projectId: "project-cssc-series",
+      userId: "user-inspector-wang",
+      createdAt: NOW,
+      updatedAt: NOW
+    }
+  ],
   ships: [
     {
       id: "ship-h2748",
@@ -250,6 +266,10 @@ export class MockInspectionDatabase implements InspectionStorage {
     );
   }
 
+  async readProjectMembersByUserId(userId: string) {
+    return this.data.projectMembers.filter((member) => member.userId === userId);
+  }
+
   async reset(seed: InspectionStorageSnapshot = BASELINE_DATA): Promise<void> {
     this.data = cloneStorageSnapshot(seed);
   }
@@ -267,6 +287,7 @@ export function cloneStorageSnapshot(snapshot: InspectionStorageSnapshot): Inspe
       accessibleProjectIds: [...record.accessibleProjectIds]
     })),
     projects: snapshot.projects.map((record) => ({ ...record, recipients: [...record.recipients] })),
+    projectMembers: snapshot.projectMembers.map((record) => ({ ...record })),
     ships: snapshot.ships.map((record) => ({ ...record })),
     inspectionItems: snapshot.inspectionItems.map((record) => ({ ...record })),
     inspectionRounds: snapshot.inspectionRounds.map((record) => ({ ...record })),

@@ -1,13 +1,13 @@
 # NBINS Next-Step Board
 
-> Updated: 2026-04-04 19:10 Asia/Shanghai
+> Updated: 2026-04-04 20:07 Asia/Shanghai
 > Execution mode: single active milestone, small validated increments, commit+push on each finished sub-goal
 
 ## Active Milestone
 
-(none — M18 completed; choose next milestone)
+(none — M20 completed; choose next milestone)
 
-(next: pick the smallest safe milestone from backlog)
+(next: choose post-M20 follow-up milestone)
 
 ## Rules
 
@@ -19,6 +19,8 @@
 
 ## Recent Completed Milestones
 
+- [x] M19 — Add project-scoped authorization skeleton (project_members + membership lookup service)
+- [x] M20 — Apply allowed-project filtering to inspection list/detail read endpoints (commit: `347909e`)
 - [x] M18 — Harden bearer auth by revalidating JWT subject against current user state (commit: `7dd2d80`)
 
 - [x] M17 — Add /api/auth/me + narrow storage lookup for me endpoint (commits: `98725db`, `d49bb69`)

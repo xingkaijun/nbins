@@ -37,6 +37,7 @@ class FakeD1Database {
     this.tables = {
       users: [],
       projects: [],
+      project_members: [],
       ships: [],
       inspection_items: [],
       inspection_rounds: [],
@@ -243,6 +244,30 @@ test("D1InspectionStorage reads and writes repository snapshots", async () => {
   const snapshot = await storage.read();
 
   assert.deepEqual(snapshot, baseline);
+});
+
+test("D1InspectionStorage readProjectMembersByUserId uses a narrow membership query", async () => {
+  const db = new FakeD1Database();
+  const storage = new D1InspectionStorage(db);
+  const baseline = createBaselineInspectionStorage();
+
+  await storage.write(baseline);
+  db.executedSql = [];
+
+  const memberships = await storage.readProjectMembersByUserId("user-inspector-li");
+
+  assert.deepEqual(memberships.map((record) => record.projectId), ["project-hd-lng"]);
+  assert.deepEqual(db.executedSql, ['SELECT * FROM "project_members" WHERE "userId" = ?']);
+  assert.equal(
+    db.executedSql.some((sql) =>
+      [
+        'SELECT * FROM "project_members"',
+        'SELECT * FROM "projects" WHERE "id" = ?',
+        'SELECT * FROM "users" WHERE "id" = ?'
+      ].includes(sql)
+    ),
+    false
+  );
 });
 
 test("D1InspectionStorage submitCurrentRoundResult updates only affected tables", async () => {

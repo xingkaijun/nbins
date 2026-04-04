@@ -1,11 +1,13 @@
 import { Hono } from "hono";
 import { createRequireAuth } from "../auth.ts";
+import type { AuthContextVariables } from "../auth.ts";
 import type { Bindings } from "../env.ts";
 import type { InspectionStorage } from "../persistence/inspection-storage.ts";
 import type { InspectionItemRecord, InspectionRoundRecord } from "../persistence/records.ts";
 import { createInspectionStorageResolver } from "../persistence/storage-factory.ts";
 import { InspectionRepository } from "../repositories/inspection-repository.ts";
 import { InspectionService } from "../services/inspection-service.ts";
+import { resolveAllowedProjectIdsForAuthUser } from "../services/inspection-read-authorization.ts";
 import { isD1Enabled } from "./route-helpers.ts";
 
 function normalizeItemName(value: string): string {
@@ -14,17 +16,20 @@ function normalizeItemName(value: string): string {
 
 function createInspectionRoutes(
   resolveStorage: (bindings?: Bindings) => InspectionStorage = createInspectionStorageResolver()
-): Hono<{ Bindings: Bindings }> {
-  const inspectionRoutes = new Hono<{ Bindings: Bindings }>();
+): Hono<{ Bindings: Bindings; Variables: AuthContextVariables }> {
+  const inspectionRoutes = new Hono<{ Bindings: Bindings; Variables: AuthContextVariables }>();
 
   inspectionRoutes.use("*", createRequireAuth());
 
   inspectionRoutes.get("/", async (c) => {
     try {
-      const inspectionService = new InspectionService(
-        new InspectionRepository(resolveStorage(c.env))
+      const storage = resolveStorage(c.env);
+      const inspectionService = new InspectionService(new InspectionRepository(storage));
+      const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(
+        storage,
+        c.get("authUser")
       );
-      const snapshot = await inspectionService.listInspections();
+      const snapshot = await inspectionService.listInspections(allowedProjectIds);
 
       return c.json({
         ok: true,
@@ -179,10 +184,16 @@ function createInspectionRoutes(
   });
 
   inspectionRoutes.get("/:id", async (c) => {
-    const inspectionService = new InspectionService(
-      new InspectionRepository(resolveStorage(c.env))
+    const storage = resolveStorage(c.env);
+    const inspectionService = new InspectionService(new InspectionRepository(storage));
+    const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(
+      storage,
+      c.get("authUser")
     );
-    const detail = await inspectionService.readInspectionItemDetail(c.req.param("id"));
+    const detail = await inspectionService.readInspectionItemDetail(
+      c.req.param("id"),
+      allowedProjectIds
+    );
 
     if (!detail) {
       return c.json(

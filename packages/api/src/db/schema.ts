@@ -11,6 +11,7 @@ import type {
   InspectionRoundRecord,
   ObservationRecord,
   ObservationTypeRecord,
+  ProjectMemberRecord,
   ProjectRecord,
   ShipRecord,
   UserRecord
@@ -91,6 +92,16 @@ export const shipsTable = sqliteTable<{
   shipName: textColumn<string>(),
   shipType: textColumn<string | null>({ nullable: true }),
   status: textColumn<"building" | "delivered">({ default: "building" }),
+  createdAt: textColumn<string>(),
+  updatedAt: textColumn<string>()
+});
+
+export const projectMembersTable = sqliteTable<{
+  [K in keyof ProjectMemberRecord]: ColumnDefinition<ProjectMemberRecord[K]>;
+}>("project_members", {
+  id: textColumn<string>({ primaryKey: true }),
+  projectId: textColumn<string>({ references: "projects.id" }),
+  userId: textColumn<string>({ references: "users.id" }),
   createdAt: textColumn<string>(),
   updatedAt: textColumn<string>()
 });
@@ -185,6 +196,7 @@ export const observationsTable = sqliteTable<{
 export const schema = {
   users: usersTable,
   projects: projectsTable,
+  projectMembers: projectMembersTable,
   ships: shipsTable,
   inspectionItems: inspectionItemsTable,
   inspectionRounds: inspectionRoundsTable,

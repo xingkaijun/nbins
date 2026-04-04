@@ -37,6 +37,14 @@ export interface ShipRecord {
   updatedAt: string;
 }
 
+export interface ProjectMemberRecord {
+  id: string;
+  projectId: string;
+  userId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface InspectionItemRecord {
   id: string;
   shipId: string;
@@ -116,6 +124,7 @@ export interface ObservationRecord {
 export interface InspectionStorageSnapshot {
   users: UserRecord[];
   projects: ProjectRecord[];
+  projectMembers: ProjectMemberRecord[];
   ships: ShipRecord[];
   inspectionItems: InspectionItemRecord[];
   inspectionRounds: InspectionRoundRecord[];

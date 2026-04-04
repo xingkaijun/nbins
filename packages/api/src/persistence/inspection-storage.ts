@@ -3,6 +3,7 @@ import type {
   InspectionItemRecord,
   InspectionRoundRecord,
   ProjectRecord,
+  ProjectMemberRecord,
   InspectionStorageSnapshot,
   ShipRecord,
   UserRecord
@@ -49,6 +50,7 @@ export interface InspectionStorage {
   write(next: InspectionStorageSnapshot): Promise<void>;
   readUserById?(id: string): Promise<UserRecord | null>;
   readUserByUsername?(username: string): Promise<UserRecord | null>;
+  readProjectMembersByUserId?(userId: string): Promise<ProjectMemberRecord[]>;
   readInspectionList?(): Promise<InspectionListStorageRecord>;
   readInspectionDetail?(
     inspectionItemId: string

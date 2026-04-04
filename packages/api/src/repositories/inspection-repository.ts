@@ -27,14 +27,17 @@ export class InspectionRepository {
     this.db = db;
   }
 
-  async listInspections(): Promise<DashboardSnapshot> {
+  async listInspections(allowedProjectIds?: string[]): Promise<DashboardSnapshot> {
     if (this.db.readInspectionList) {
       const selected = await this.db.readInspectionList();
+      const items = selected.items
+        .filter((record) => isProjectAllowed(record.project.id, allowedProjectIds))
+        .map(mapInspectionListItemRecord);
 
       return {
         generatedAt: selected.generatedAt,
-        summary: createDashboardSummary(selected.items.map(mapInspectionListItemRecord)),
-        items: selected.items.map(mapInspectionListItemRecord)
+        summary: createDashboardSummary(items),
+        items
       };
     }
 
@@ -57,6 +60,10 @@ export class InspectionRepository {
           return null;
         }
 
+        if (!isProjectAllowed(project.id, allowedProjectIds)) {
+          return null;
+        }
+
         return mapInspectionListItemRecord({ item, ship, project, currentRound });
       })
       .filter((record): record is InspectionListItem => record !== null);
@@ -68,16 +75,23 @@ export class InspectionRepository {
     };
   }
 
-  async getInspectionDetail(inspectionItemId: string): Promise<InspectionItemDetailResponse | null> {
+  async getInspectionDetail(
+    inspectionItemId: string,
+    allowedProjectIds?: string[]
+  ): Promise<InspectionItemDetailResponse | null> {
     if (this.db.readInspectionDetail) {
       const selected = await this.db.readInspectionDetail(inspectionItemId);
       if (selected) {
-        return mapInspectionDetailFromStorage(selected);
+        return isProjectAllowed(selected.project.id, allowedProjectIds)
+          ? mapInspectionDetailFromStorage(selected)
+          : null;
       }
     }
 
     const selected = selectInspectionDetailRecord(await this.db.read(), inspectionItemId);
-    return selected ? mapInspectionDetailFromStorage(selected) : null;
+    return selected && isProjectAllowed(selected.project.id, allowedProjectIds)
+      ? mapInspectionDetailFromStorage(selected)
+      : null;
   }
 
   async submitCurrentRoundResult(
@@ -336,6 +350,14 @@ export class InspectionRepository {
 
     return refreshedDetail;
   }
+}
+
+function isProjectAllowed(projectId: string, allowedProjectIds?: string[]): boolean {
+  if (!allowedProjectIds) {
+    return true;
+  }
+
+  return allowedProjectIds.includes(projectId);
 }
 
 function createCommentRecord(input: {

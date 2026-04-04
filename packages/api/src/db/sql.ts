@@ -3,6 +3,7 @@ import { schema, type SchemaDefinition } from "./schema.ts";
 const TABLE_ORDER = [
   "users",
   "projects",
+  "projectMembers",
   "ships",
   "inspectionItems",
   "inspectionRounds",
