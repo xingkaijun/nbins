@@ -2,6 +2,9 @@ import type { MiddlewareHandler } from "hono";
 import type { Discipline, Role } from "@nbins/shared";
 import type { Bindings } from "./env.ts";
 import { verifyAccessToken as verifyJwtAccessToken } from "./auth/jwt.ts";
+import { createInspectionStorageResolver } from "./persistence/storage-factory.ts";
+import { UserRepository } from "./repositories/user-repository.ts";
+import { AuthService } from "./services/auth-service.ts";
 
 export interface AuthenticatedUser {
   id: string;
@@ -13,6 +16,8 @@ export interface AuthContextVariables {
   user: AuthenticatedUser;
   authUser: AuthenticatedUser;
 }
+
+const resolveStorage = createInspectionStorageResolver();
 
 export function extractBearerToken(headerValue: string | null | undefined): string | null {
   if (!headerValue) {
@@ -59,8 +64,32 @@ export function createRequireAuth<
       );
     }
 
-    c.set("user", verifiedUser);
-    c.set("authUser", verifiedUser);
+    const authService = new AuthService(new UserRepository(resolveStorage(c.env)));
+
+    try {
+      const currentUser = await authService.getUserProfile(verifiedUser.id);
+      const authUser: AuthenticatedUser = {
+        id: currentUser.id,
+        role: currentUser.role,
+        disciplines: [...currentUser.disciplines]
+      };
+
+      c.set("user", authUser);
+      c.set("authUser", authUser);
+    } catch (error) {
+      if (error instanceof Error && error.message === "AUTH_USER_NOT_FOUND") {
+        return c.json(
+          {
+            ok: false,
+            error: "Invalid access token"
+          },
+          401
+        );
+      }
+
+      throw error;
+    }
+
     await next();
   };
 }

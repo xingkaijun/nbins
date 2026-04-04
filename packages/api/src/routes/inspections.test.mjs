@@ -447,14 +447,15 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   assert.deepEqual(db.updatedTables, ["inspection_rounds", "inspection_items"]);
   assert.deepEqual(db.insertedTables, ["comments"]);
   assert.deepEqual(db.executedSql.slice(0, 7), [
+    'SELECT * FROM "users" WHERE "id" = ?',
     'SELECT * FROM "inspection_items" WHERE "id" = ?',
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?',
     'SELECT COUNT(*) AS "count" FROM "comments" WHERE "inspectionItemId" = ? AND "status" = ?',
     INSPECTION_DETAIL_SUMMARY_SQL,
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
-    'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
-    'SELECT * FROM "users" WHERE "id" IN (?)'
+    'SELECT * FROM "comments" WHERE "inspectionItemId" = ?'
   ]);
+  assert.equal(db.executedSql[7], 'SELECT * FROM "users" WHERE "id" IN (?)');
   assert.equal(
     db.executedSql.some((sql) =>
       /^SELECT \* FROM "(users|projects|ships|inspection_items|inspection_rounds|comments)"$/.test(sql)
@@ -531,6 +532,7 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   assert.deepEqual(
     db.executedSql,
     [
+      'SELECT * FROM "users" WHERE "id" = ?',
       INSPECTION_DETAIL_SUMMARY_SQL,
       'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
       'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
@@ -539,11 +541,11 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   );
   assert.equal(
     db.executedSql.filter((sql) => sql.startsWith('SELECT * FROM "users"')).length,
-    1
+    2
   );
   assert.equal(
-    db.executedSql.includes('SELECT * FROM "users" WHERE "id" = ?'),
-    false
+    db.executedSql.filter((sql) => sql === 'SELECT * FROM "users" WHERE "id" = ?').length,
+    1
   );
 });
 
@@ -599,6 +601,7 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
     false
   );
   assert.deepEqual(db.executedSql, [
+    'SELECT * FROM "users" WHERE "id" = ?',
     INSPECTION_LIST_SUMMARY_SQL,
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?, ?, ?, ?)'
   ]);

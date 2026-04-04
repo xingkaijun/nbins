@@ -279,5 +279,59 @@ test("GET /api/auth/me uses narrow D1 user lookup by id", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
-  assert.deepEqual(db.executedSql, ['SELECT * FROM "users" WHERE "id" = ?']);
+  assert.deepEqual(db.executedSql, [
+    'SELECT * FROM "users" WHERE "id" = ?',
+    'SELECT * FROM "users" WHERE "id" = ?'
+  ]);
+});
+
+test("GET /api/auth/me rejects tokens for inactive users", async () => {
+  const app = createApp();
+  const db = new FakeAuthD1Database();
+  const seed = createSeedInspectionStorageSnapshot();
+
+  for (const user of seed.users) {
+    db.tables.users.push({ ...user, disciplines: JSON.stringify(user.disciplines) });
+  }
+
+  const loginResponse = await app.request(
+    "http://localhost/api/auth/login",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "li.si",
+        password: "nbins-dev-li-2026"
+      })
+    },
+    {
+      D1_DRIVER: "d1",
+      DB: db
+    }
+  );
+  const loginPayload = await loginResponse.json();
+
+  assert.equal(loginResponse.status, 200);
+
+  const user = db.tables.users.find((record) => record.id === "user-inspector-li");
+  assert.ok(user);
+  user.isActive = 0;
+
+  const meResponse = await app.request(
+    "http://localhost/api/auth/me",
+    {
+      headers: { authorization: `Bearer ${loginPayload.data.token}` }
+    },
+    {
+      D1_DRIVER: "d1",
+      DB: db
+    }
+  );
+  const mePayload = await meResponse.json();
+
+  assert.equal(meResponse.status, 401);
+  assert.deepEqual(mePayload, {
+    ok: false,
+    error: "Invalid access token"
+  });
 });
