@@ -1,6 +1,6 @@
 # NBINS Status Board
 
-> Updated: 2026-04-04 20:07 Asia/Shanghai
+> Updated: 2026-04-04 20:28 Asia/Shanghai
 > Overall status: **D1 integration stabilized with core bugfixes; sequence-based comment IDs (localId) implemented in the persistent layer, with core inspection MVP flow fully adapted.**
 
 This board is intended to be more concrete than the phase table in the README. It focuses on what is implemented in the current repository, what is partial, and what is still not started in code.
@@ -251,7 +251,7 @@ What is in place:
 - Password hashing utilities exist (PBKDF2-SHA256) and seeded/mock users now have real password hashes for dev credentials.
 - Narrow D1 lookup exists for users by username (no full snapshot read required).
 - Auth helper scaffolding exists for bearer token extraction, authenticated-user context injection, and role checks (`createRequireAuth`, `createRequireRole`), with focused route/middleware tests.
-- `/api/inspections*` routes now require bearer-token authentication (returns 401 when missing).
+- `/api/inspections*` routes now require bearer-token authentication (returns 401 when missing), and list/detail reads now filter by allowed project membership.
 - API-level validation for this increment passes via `pnpm --filter @nbins/api test`, `pnpm --filter @nbins/api typecheck`, and `pnpm --filter @nbins/api build`.
 
 What is still missing:
