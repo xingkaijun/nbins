@@ -57,6 +57,7 @@ export interface UserRecord {
   displayName: string;
   role: Role;
   disciplines: Discipline[];
+  accessibleProjectIds: string[];
   isActive: 0 | 1;
   createdAt: string;
   updatedAt: string;
@@ -171,6 +172,61 @@ export async function resolveInspectionComment(
   );
 }
 
+export async function updateInspectionItemAdmin(
+  inspectionItemId: string,
+  data: {
+    shipId?: string;
+    itemName?: string;
+    discipline?: Discipline;
+    workflowStatus?: string;
+    lastRoundResult?: string | null;
+    resolvedResult?: string | null;
+    currentRound?: number;
+    source?: "manual" | "n8n";
+  }
+): Promise<{ id: string; updatedAt: string }> {
+  return requestJson<{ id: string; updatedAt: string }>(`/inspections/${inspectionItemId}/admin/item`, {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function updateInspectionCurrentRoundAdmin(
+  inspectionItemId: string,
+  data: {
+    rawItemName?: string;
+    plannedDate?: string | null;
+    actualDate?: string | null;
+    yardQc?: string | null;
+    result?: string | null;
+    inspectedBy?: string | null;
+    notes?: string | null;
+    source?: "manual" | "n8n";
+  }
+): Promise<{ id: string; updatedAt: string }> {
+  return requestJson<{ id: string; updatedAt: string }>(`/inspections/${inspectionItemId}/admin/rounds/current`, {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function updateInspectionCommentAdmin(
+  inspectionItemId: string,
+  commentId: string,
+  data: {
+    authorId?: string;
+    content?: string;
+    status?: "open" | "closed";
+    closedBy?: string | null;
+    closedAt?: string | null;
+  }
+): Promise<{ id: string; updatedAt: string }> {
+  return requestJson<{ id: string; updatedAt: string }>(`/inspections/${inspectionItemId}/comments/${commentId}/admin`, {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
 export async function fetchObservationTypes(): Promise<ObservationType[]> {
   return requestJson<ObservationType[]>("/observation-types");
 }
@@ -229,7 +285,17 @@ export async function createObservation(
 
 export async function updateObservation(
   observationId: string,
-  data: { type?: string; discipline?: string; date?: string; content?: string }
+  data: {
+    shipId?: string;
+    type?: string;
+    discipline?: string;
+    authorId?: string;
+    date?: string;
+    content?: string;
+    status?: "open" | "closed";
+    closedBy?: string | null;
+    closedAt?: string | null;
+  }
 ): Promise<{ id: string; updatedAt: string }> {
   return requestJson<{ id: string; updatedAt: string }>(`/observations/${observationId}`, {
     method: "PUT",
@@ -317,6 +383,7 @@ export async function createUser(data: {
   password: string;
   role: Role;
   disciplines?: Discipline[];
+  accessibleProjectIds?: string[];
 }): Promise<UserRecord> {
   return requestJson<UserRecord>("/users", {
     method: "POST",
@@ -326,7 +393,7 @@ export async function createUser(data: {
 
 export async function updateUser(
   userId: string,
-  data: Partial<Pick<UserRecord, "displayName" | "role" | "disciplines">> & {
+  data: Partial<Pick<UserRecord, "displayName" | "role" | "disciplines" | "accessibleProjectIds">> & {
     isActive?: boolean;
   }
 ): Promise<{ id: string; updatedAt: string }> {
