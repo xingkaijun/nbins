@@ -119,9 +119,12 @@ function createSubmittedComments(
   submittedAt: string,
   draftComments: Array<{ id: string; message: string }>
 ): InspectionItemComment[] {
+  const nextLocalId =
+    Math.max(0, ...detail.comments.map((comment) => comment.localId ?? 0)) + 1;
+
   return draftComments.map((comment, index) => ({
     id: `${detail.id}-comment-${detail.currentRound}-${detail.comments.length + index + 1}`,
-    localId: detail.comments.length + index + 1,
+    localId: nextLocalId + index,
     roundNumber: detail.currentRound,
     status: "open",
     message: comment.message,

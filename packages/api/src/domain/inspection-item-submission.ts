@@ -125,7 +125,7 @@ function buildComment(input: {
 }): InspectionItemComment {
   return {
     id: `${input.itemId}-comment-${input.roundNumber}-${input.index + 1}`,
-    localId: 0, // Placeholder
+    localId: input.index + 1,
     roundNumber: input.roundNumber,
     status: "open",
     message: input.comment.message,
@@ -348,7 +348,7 @@ function createExistingComment(input: {
 }): InspectionItemComment {
   return {
     id: input.id,
-    localId: 1, // Placeholder
+    localId: 1,
     roundNumber: input.roundNumber,
     status: "open",
     message: input.message,

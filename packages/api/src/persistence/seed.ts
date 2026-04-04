@@ -2,6 +2,9 @@ import { createBaselineInspectionStorage } from "./mock-inspection-db.ts";
 import type { InspectionStorageSnapshot } from "./records.ts";
 import { ALL_MOCK_DETAILS } from "@nbins/shared";
 
+const SYSTEM_USER_PASSWORD_HASH =
+  "pbkdf2_sha256$120000$736565642d7379732d73616c742d3031$7286d300f692dcfc580b9608c8aea16f2ef87f2b2eee040e7fdb73fc5fe79f52";
+
 export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot {
   const snapshot = createBaselineInspectionStorage();
 
@@ -156,7 +159,7 @@ export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot
         id: uid,
         username: `user_${uid.replace(/[^a-z0-9]/gi, '_').toLowerCase()}`,
         displayName: `Mock User (${uid})`,
-        passwordHash: "dev-only",
+        passwordHash: uid === "sys-user" ? SYSTEM_USER_PASSWORD_HASH : "disabled",
         role: "inspector",
         disciplines: [],
         isActive: 1,

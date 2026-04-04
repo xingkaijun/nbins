@@ -1,4 +1,5 @@
 import { Hono } from "hono";
+import { createRequireAuth } from "../auth.ts";
 import type { Bindings } from "../env.ts";
 import type { InspectionStorage } from "../persistence/inspection-storage.ts";
 import type { InspectionItemRecord, InspectionRoundRecord } from "../persistence/records.ts";
@@ -15,6 +16,8 @@ function createInspectionRoutes(
   resolveStorage: (bindings?: Bindings) => InspectionStorage = createInspectionStorageResolver()
 ): Hono<{ Bindings: Bindings }> {
   const inspectionRoutes = new Hono<{ Bindings: Bindings }>();
+
+  inspectionRoutes.use("*", createRequireAuth());
 
   inspectionRoutes.get("/", async (c) => {
     try {

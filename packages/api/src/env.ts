@@ -5,4 +5,5 @@ export interface Bindings {
   APP_ENV?: "development" | "staging" | "production";
   D1_DRIVER?: "mock" | "d1";
   DB?: D1Database;
+  JWT_SECRET?: string;
 }

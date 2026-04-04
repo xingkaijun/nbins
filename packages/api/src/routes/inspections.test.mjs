@@ -196,9 +196,41 @@ function createTestApp() {
   return createApp();
 }
 
-test("GET /api/inspections returns inspection list snapshot", async () => {
+async function loginAndCreateAuthHeader(app, env = {}) {
+  const response = await app.request(
+    "http://localhost/api/auth/login",
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        username: "li.si",
+        password: "nbins-dev-li-2026"
+      })
+    },
+    env
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.ok, true);
+
+  return { authorization: `Bearer ${payload.data.token}` };
+}
+
+test("GET /api/inspections returns 401 without bearer token", async () => {
   const app = createTestApp();
   const response = await app.request("http://localhost/api/inspections");
+  const payload = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "Authorization header must use Bearer token");
+});
+
+test("GET /api/inspections returns inspection list snapshot", async () => {
+  const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
+  const response = await app.request("http://localhost/api/inspections", { headers });
   const payload = await response.json();
 
   assert.equal(response.status, 200);
@@ -213,7 +245,8 @@ test("GET /api/inspections returns inspection list snapshot", async () => {
 
 test("GET /api/inspections/:id returns inspection detail", async () => {
   const app = createTestApp();
-  const response = await app.request("http://localhost/api/inspections/insp-002");
+  const headers = await loginAndCreateAuthHeader(app);
+  const response = await app.request("http://localhost/api/inspections/insp-002", { headers });
   const payload = await response.json();
 
   assert.equal(response.status, 200);
@@ -224,9 +257,20 @@ test("GET /api/inspections/:id returns inspection detail", async () => {
   assert.equal(payload.data.comments[0].status, "open");
 });
 
+test("GET /api/inspections/:id returns 401 without bearer token", async () => {
+  const app = createTestApp();
+  const response = await app.request("http://localhost/api/inspections/insp-002");
+  const payload = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "Authorization header must use Bearer token");
+});
+
 test("GET /api/inspections/:id keeps mock as the default runtime driver", async () => {
   const app = createTestApp();
-  const response = await app.request("http://localhost/api/inspections/insp-003");
+  const headers = await loginAndCreateAuthHeader(app);
+  const response = await app.request("http://localhost/api/inspections/insp-003", { headers });
   const payload = await response.json();
 
   assert.equal(response.status, 200);
@@ -237,12 +281,13 @@ test("GET /api/inspections/:id keeps mock as the default runtime driver", async 
 
 test("default mock driver preserves writes across sequential requests", async () => {
   const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
 
   const submitResponse = await app.request(
     "http://localhost/api/inspections/insp-003/rounds/current/result",
     {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
         result: "CX",
         actualDate: "2026-04-03",
@@ -257,7 +302,7 @@ test("default mock driver preserves writes across sequential requests", async ()
 
   assert.equal(submitResponse.status, 200);
 
-  const getResponse = await app.request("http://localhost/api/inspections/insp-003");
+  const getResponse = await app.request("http://localhost/api/inspections/insp-003", { headers });
   const payload = await getResponse.json();
 
   assert.equal(getResponse.status, 200);
@@ -267,7 +312,8 @@ test("default mock driver preserves writes across sequential requests", async ()
 
 test("GET /api/inspections/:id returns 404 for unknown inspection items", async () => {
   const app = createTestApp();
-  const response = await app.request("http://localhost/api/inspections/insp-missing");
+  const headers = await loginAndCreateAuthHeader(app);
+  const response = await app.request("http://localhost/api/inspections/insp-missing", { headers });
   const payload = await response.json();
 
   assert.equal(response.status, 404);
@@ -275,13 +321,39 @@ test("GET /api/inspections/:id returns 404 for unknown inspection items", async 
   assert.equal(payload.error, "Inspection item not found");
 });
 
-test("PUT /api/inspections/:id/rounds/current/result accepts QCC with comments", async () => {
+test("PUT /api/inspections/:id/rounds/current/result returns 401 without bearer token", async () => {
   const app = createTestApp();
   const response = await app.request(
     "http://localhost/api/inspections/insp-003/rounds/current/result",
     {
       method: "PUT",
       headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        result: "QCC",
+        actualDate: "2026-04-03",
+        submittedAt: "2026-04-03T11:00:00.000Z",
+        submittedBy: "user-inspector-wang",
+        inspectorDisplayName: "Wang Wu",
+        expectedVersion: 5,
+        comments: []
+      })
+    }
+  );
+  const payload = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error, "Authorization header must use Bearer token");
+});
+
+test("PUT /api/inspections/:id/rounds/current/result accepts QCC with comments", async () => {
+  const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
+  const response = await app.request(
+    "http://localhost/api/inspections/insp-003/rounds/current/result",
+    {
+      method: "PUT",
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
         result: "QCC",
         actualDate: "2026-04-03",
@@ -339,12 +411,17 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   db.updatedTables = [];
   db.insertedTables = [];
   db.executedSql = [];
+  const headers = await loginAndCreateAuthHeader(app, {
+    D1_DRIVER: "d1",
+    DB: db
+  });
+  db.executedSql = [];
 
   const response = await app.request(
     "http://localhost/api/inspections/insp-003/rounds/current/result",
     {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
         result: "QCC",
         actualDate: "2026-04-03",
@@ -432,8 +509,13 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   }
 
   db.executedSql = [];
+  const headers = await loginAndCreateAuthHeader(app, {
+    D1_DRIVER: "d1",
+    DB: db
+  });
+  db.executedSql = [];
 
-  const response = await app.request("http://localhost/api/inspections/insp-003", {}, {
+  const response = await app.request("http://localhost/api/inspections/insp-003", { headers }, {
     D1_DRIVER: "d1",
     DB: db
   });
@@ -495,8 +577,13 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
   }
 
   db.executedSql = [];
+  const headers = await loginAndCreateAuthHeader(app, {
+    D1_DRIVER: "d1",
+    DB: db
+  });
+  db.executedSql = [];
 
-  const response = await app.request("http://localhost/api/inspections", {}, {
+  const response = await app.request("http://localhost/api/inspections", { headers }, {
     D1_DRIVER: "d1",
     DB: db
   });
@@ -532,11 +619,12 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
 
 test("PUT /api/inspections/:id/rounds/current/result accepts CX without adding comments", async () => {
   const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
   const response = await app.request(
     "http://localhost/api/inspections/insp-003/rounds/current/result",
     {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
         result: "CX",
         actualDate: "2026-04-03",
@@ -561,11 +649,12 @@ test("PUT /api/inspections/:id/rounds/current/result accepts CX without adding c
 
 test("PUT /api/inspections/:id/rounds/current/result rejects AA with new comments", async () => {
   const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
   const response = await app.request(
     "http://localhost/api/inspections/insp-002/rounds/current/result",
     {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
         result: "AA",
         actualDate: "2026-04-03",
@@ -587,11 +676,12 @@ test("PUT /api/inspections/:id/rounds/current/result rejects AA with new comment
 
 test("PUT /api/inspections/:id/rounds/current/result enforces optimistic locking", async () => {
   const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
   const response = await app.request(
     "http://localhost/api/inspections/insp-002/rounds/current/result",
     {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
         result: "QCC",
         actualDate: "2026-04-03",
@@ -613,11 +703,12 @@ test("PUT /api/inspections/:id/rounds/current/result enforces optimistic locking
 
 test("PUT /api/inspections/:id/rounds/current/result returns 400 for malformed JSON", async () => {
   const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
   const response = await app.request(
     "http://localhost/api/inspections/insp-002/rounds/current/result",
     {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: "{"
     }
   );
@@ -631,11 +722,12 @@ test("PUT /api/inspections/:id/rounds/current/result returns 400 for malformed J
 
 test("PUT /api/inspections/:id/rounds/current/result returns 400 for non-object JSON", async () => {
   const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
   const response = await app.request(
     "http://localhost/api/inspections/insp-002/rounds/current/result",
     {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify("not-an-object")
     }
   );
@@ -649,11 +741,12 @@ test("PUT /api/inspections/:id/rounds/current/result returns 400 for non-object 
 
 test("PUT /api/inspections/:id/rounds/current/result returns 400 for invalid request fields", async () => {
   const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
   const response = await app.request(
     "http://localhost/api/inspections/insp-002/rounds/current/result",
     {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
         result: "QCC",
         actualDate: "2026-04-03",
@@ -675,11 +768,12 @@ test("PUT /api/inspections/:id/rounds/current/result returns 400 for invalid req
 
 test("PUT /api/inspections/:id/rounds/current/result returns 404 for unknown inspection items", async () => {
   const app = createTestApp();
+  const headers = await loginAndCreateAuthHeader(app);
   const response = await app.request(
     "http://localhost/api/inspections/insp-missing/rounds/current/result",
     {
       method: "PUT",
-      headers: { "content-type": "application/json" },
+      headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
         result: "QCC",
         actualDate: "2026-04-03",

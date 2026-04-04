@@ -3,6 +3,7 @@ import { cors } from "hono/cors";
 import { createMockDashboardSnapshot } from "@nbins/shared";
 import type { Bindings } from "./env.ts";
 import { createInspectionStorageResolver } from "./persistence/storage-factory.ts";
+import { createAuthRoutes } from "./routes/auth.ts";
 import { devRoutes } from "./routes/dev.ts";
 import { createInspectionRoutes } from "./routes/inspections.ts";
 import { createObservationRoutes } from "./routes/observations.ts";
@@ -49,6 +50,8 @@ function createApp(): Hono<{ Bindings: Bindings }> {
       routes: [
         "/health",
         "/api/meta",
+        "/api/auth/login",
+        "/api/auth/me",
         "/api/inspections",
         "/api/inspections/:id",
         "/api/inspections/:id/rounds/current/result",
@@ -74,6 +77,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
   });
 
   app.route("/api/dev", devRoutes);
+  app.route("/api/auth", createAuthRoutes());
   app.route("/api/inspections", createInspectionRoutes(resolveStorage));
   app.route("/api/observation-types", createObservationTypeRoutes());
   app.route("/api/projects", createProjectRoutes(resolveStorage));
