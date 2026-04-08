@@ -1,0 +1,13 @@
+node_modules/
+dist/
+build/
+.turbo/
+.cache/
+.vite/
+coverage/
+.wrangler/
+*.tsbuildinfo
+.DS_Store
+pnpm-lock.yaml
+
+.codex

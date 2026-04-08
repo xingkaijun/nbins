@@ -1,0 +1,22 @@
+{
+  "name": "@nbins/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "dev": "wrangler dev",
+    "gen:bootstrap-sql": "node --experimental-strip-types ./scripts/gen-bootstrap-sql.mjs",
+    "test": "node --experimental-specifier-resolution=node --test src/**/*.test.mjs",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@nbins/shared": "workspace:*",
+    "hono": "^4.7.7"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250402.0",
+    "typescript": "^5.8.3",
+    "wrangler": "^4.10.0"
+  }
+}

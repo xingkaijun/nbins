@@ -1,0 +1,20 @@
+{
+  "name": "nbins",
+  "version": "0.1.0",
+  "private": true,
+  "packageManager": "pnpm@10.8.1",
+  "scripts": {
+    "build": "pnpm -r build",
+    "dev:web": "pnpm --filter @nbins/web dev",
+    "dev:api": "pnpm --filter @nbins/api dev",
+    "dev:api:d1": "pnpm d1:bootstrap && cross-env pnpm --filter @nbins/api exec wrangler dev --local --persist-to ../../.wrangler/state --var D1_DRIVER:d1",
+    "d1:gen": "pnpm --filter @nbins/api run gen:bootstrap-sql -- src/db/d1-bootstrap.sql",
+    "d1:bootstrap": "pnpm d1:gen && pnpm --filter @nbins/api exec node scripts/bootstrap-local-d1.mjs",
+    "test:api": "pnpm --filter @nbins/api test",
+    "qa": "pnpm typecheck && pnpm build && pnpm test:api",
+    "typecheck": "pnpm -r typecheck"
+  },
+  "devDependencies": {
+    "cross-env": "^10.1.0"
+  }
+}

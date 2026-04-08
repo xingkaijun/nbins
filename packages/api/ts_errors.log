@@ -1,0 +1,4 @@
+src/routes/projects.ts(124,7): error TS2561: Object literal may only specify known properties, but 'recipients' does not exist in type 'ProjectRecord'. Did you mean to write 'ncrRecipients'?
+src/routes/projects.ts(144,35): error TS2551: Property 'recipients' does not exist on type 'ProjectRecord'. Did you mean 'ncrRecipients'?
+src/routes/projects.ts(232,52): error TS2551: Property 'recipients' does not exist on type 'ProjectRecord'. Did you mean 'ncrRecipients'?
+src/routes/route-helpers.ts(42,5): error TS2561: Object literal may only specify known properties, but 'recipients' does not exist in type 'ProjectRecord'. Did you mean to write 'ncrRecipients'?
