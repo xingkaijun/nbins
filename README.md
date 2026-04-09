@@ -124,19 +124,42 @@ pnpm install
 pnpm dev:web
 ```
 
-### 3. 启动 API
+### 3. 启动 API (搭载 D1 真实数据库)
 
 ```bash
-# 默认使用 mock storage（适合演示 / 不依赖 D1）
-pnpm dev:api
-
-# 使用本地 D1（wrangler --local + persist），并在启动前自动 bootstrap schema
-# 需要保证 packages/api/wrangler.jsonc 里存在 DB 绑定
 pnpm dev:api:d1
 ```
 
-> 说明：当前 mock 与 D1 都走同一套 repository 逻辑，但 **mock 仍是默认 runtime driver**。
-> 若 `D1_DRIVER` 未设置为 `d1`，或 Wrangler 的 `DB` binding 未正确解析，API 会自动回退到 mock。
+> **注意：系统已经完全抛弃了内存 Mock，现在全面拥抱真实的本地 SQLite (D1) 数据库。**数据会持久化保存在 `packages/api/.wrangler/state/v3/d1` 中。
+
+---
+
+## 账号与环境管理
+
+### 1. 默认登录账号
+初始的数据库环境是一个完全干净的“白板状态（Clean Slate）”，它没有任何船舶或杂乱的检验数据。系统只会固化生成唯一一个超级管理员：
+- **账号**: `admin`
+- **密码**: `123456`
+
+你可以使用此账号登录并随时管理其他用户。
+
+### 2. 怎么清理/重置数据库？
+如果你把数据弄脏了需要重置，可以运行以下命令：
+```bash
+# 进入 api 目录并清空本地库
+pnpm d1:bootstrap
+```
+这会把数据库硬重置回只有 `admin` 的初始白板状态。重启 API (`pnpm dev:api:d1`) 即可生效。
+
+### 3. 生成测试用的 Demo 数据
+如果在重置后你需要一批假数据用来测试系统功能（前端列表展示、不同状态的检验单等），请直接在根目录执行以下专用脚本：
+```bash
+pnpm --filter @nbins/api exec wrangler d1 execute nbins-local --local --file scripts/dummy-data.sql
+```
+该脚本会向数据库直接注入：
+- 2个演示项目、3条演示船舶
+- 对应的测试用户 (比如 `demo.qc`, `demo.owner` 密码皆为 `nbins-dev-2026`)
+- 附带评论的各类检验记录
 
 ### 4. 类型检查 / 构建
 

@@ -190,14 +190,18 @@ export class D1InspectionStorage implements InspectionStorage {
   }
 
   async write(next: InspectionStorageSnapshot): Promise<void> {
-    const statements: D1PreparedStatement[] = [];
-
+    // DELETEs must run first, in their own batch
+    const deleteStatements: D1PreparedStatement[] = [];
     for (const tableName of ["comments", "inspection_rounds", "inspection_items", "ships", "project_members", "projects", "users"]) {
-      statements.push(this.db.prepare(`DELETE FROM "${tableName}"`));
+      deleteStatements.push(this.db.prepare(`DELETE FROM "${tableName}"`));
     }
+    await this.db.batch(deleteStatements);
+
+    // Collect all INSERT statements
+    const insertStatements: D1PreparedStatement[] = [];
 
     for (const record of next.users) {
-      statements.push(
+      insertStatements.push(
         this.db
           .prepare(
             `INSERT INTO "users" ("id", "username", "displayName", "passwordHash", "role", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt")
@@ -219,7 +223,7 @@ export class D1InspectionStorage implements InspectionStorage {
     }
 
     for (const record of next.projects) {
-      statements.push(
+      insertStatements.push(
         this.db
           .prepare(
             `INSERT INTO "projects" ("id", "name", "code", "status", "owner", "shipyard", "class", "reportRecipients", "ncrRecipients", "createdAt", "updatedAt")
@@ -242,7 +246,7 @@ export class D1InspectionStorage implements InspectionStorage {
     }
 
     for (const record of next.projectMembers) {
-      statements.push(
+      insertStatements.push(
         this.db
           .prepare(
             `INSERT INTO "project_members" ("id", "projectId", "userId", "createdAt", "updatedAt")
@@ -253,7 +257,7 @@ export class D1InspectionStorage implements InspectionStorage {
     }
 
     for (const record of next.ships) {
-      statements.push(
+      insertStatements.push(
         this.db
           .prepare(
             `INSERT INTO "ships" ("id", "projectId", "hullNumber", "shipName", "shipType", "status", "createdAt", "updatedAt")
@@ -273,7 +277,7 @@ export class D1InspectionStorage implements InspectionStorage {
     }
 
     for (const record of next.inspectionItems) {
-      statements.push(
+      insertStatements.push(
         this.db
           .prepare(
             `INSERT INTO "inspection_items" ("id", "shipId", "itemName", "itemNameNormalized", "discipline", "workflowStatus", "lastRoundResult", "resolvedResult", "currentRound", "openCommentsCount", "version", "source", "createdAt", "updatedAt")
@@ -299,7 +303,7 @@ export class D1InspectionStorage implements InspectionStorage {
     }
 
     for (const record of next.inspectionRounds) {
-      statements.push(
+      insertStatements.push(
         this.db
           .prepare(
             `INSERT INTO "inspection_rounds" ("id", "inspectionItemId", "roundNumber", "rawItemName", "plannedDate", "actualDate", "yardQc", "result", "inspectedBy", "notes", "source", "createdAt", "updatedAt")
@@ -324,7 +328,7 @@ export class D1InspectionStorage implements InspectionStorage {
     }
 
     for (const record of next.comments) {
-      statements.push(
+      insertStatements.push(
         this.db
           .prepare(
             `INSERT INTO "comments" ("id", "inspectionItemId", "createdInRoundId", "closedInRoundId", "authorId", "localId", "content", "status", "closedBy", "closedAt", "resolveRemark", "createdAt", "updatedAt")
@@ -348,7 +352,11 @@ export class D1InspectionStorage implements InspectionStorage {
       );
     }
 
-    await this.db.batch(statements);
+    // Chunk inserts into batches of 50 to stay under D1's variable limit
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < insertStatements.length; i += BATCH_SIZE) {
+      await this.db.batch(insertStatements.slice(i, i + BATCH_SIZE));
+    }
   }
 
   async submitCurrentRoundResult(
@@ -544,13 +552,20 @@ export class D1InspectionStorage implements InspectionStorage {
   private async selectRoundsByInspectionItemIds(
     inspectionItemIds: string[]
   ): Promise<InspectionRoundRecord[]> {
-    const placeholders = inspectionItemIds.map(() => "?").join(", ");
-    const rows = await this.selectMany(
-      `SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (${placeholders})`,
-      ...inspectionItemIds
-    );
+    const CHUNK_SIZE = 50;
+    const allRecords: InspectionRoundRecord[] = [];
 
-    return rows.map(mapInspectionRoundRecord);
+    for (let i = 0; i < inspectionItemIds.length; i += CHUNK_SIZE) {
+      const chunk = inspectionItemIds.slice(i, i + CHUNK_SIZE);
+      const placeholders = chunk.map(() => "?").join(", ");
+      const rows = await this.selectMany(
+        `SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (${placeholders})`,
+        ...chunk
+      );
+      allRecords.push(...rows.map(mapInspectionRoundRecord));
+    }
+
+    return allRecords;
   }
 }
 

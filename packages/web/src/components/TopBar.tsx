@@ -62,9 +62,11 @@ export function TopBar() {
 
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         <nav className="navPills" aria-label="Global Options">
-            <NavLink to="/admin" className={({ isActive }) => (isActive ? "pill active" : "pill")}>
-              Admin
-            </NavLink>
+            {session?.user.role === 'admin' && (
+              <NavLink to="/admin" className={({ isActive }) => (isActive ? "pill active" : "pill")}>
+                Admin
+              </NavLink>
+            )}
             <button type="button" className="pill topbarAction" onClick={handleLogout}>
               Logout
             </button>

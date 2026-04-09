@@ -274,6 +274,7 @@ export function Admin() {
     const data: Record<string, string> = {};
     for (const [k, v] of Object.entries(row)) {
       if (Array.isArray(v)) data[k] = JSON.stringify(v);
+      else if (k === "isActive" && (v === 1 || v === 0)) data[k] = v === 1 ? "true" : "false";
       else data[k] = v == null ? "" : String(v);
     }
     setModalData(data);

@@ -115,7 +115,6 @@ export function Import() {
   const getDisciplineColor = (d: string) => {
     switch (d) {
       case 'HULL': return '#1d4ed8'; // blue
-      case 'ENGINE': return '#7e22ce'; // purple
       case 'OUTFIT': return '#0f766e'; // teal
       case 'PAINT': return '#be185d'; // pink
       case 'ELEC': return '#c2410c'; // orange

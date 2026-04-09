@@ -1,6 +1,6 @@
 import React from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
-import { AuthProvider, ProtectedRoute } from "./auth-context";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { AuthProvider, ProtectedRoute, useAuth } from "./auth-context";
 import { Layout } from "./components/Layout";
 import { Dashboard } from "./pages/Dashboard";
 import { Projects } from "./pages/Projects";
@@ -10,6 +10,14 @@ import { Admin } from "./pages/Admin";
 import { Login } from "./pages/Login";
 import { Observations } from "./pages/Observations";
 import { Ncrs } from "./pages/Ncrs";
+
+function AdminGuard() {
+  const { session } = useAuth();
+  if (session?.user.role !== "admin") {
+    return <Navigate to="/" replace />;
+  }
+  return <Admin />;
+}
 
 export function App() {
   return (
@@ -25,7 +33,7 @@ export function App() {
               <Route path="import" element={<Import />} />
               <Route path="observations" element={<Observations />} />
               <Route path="ncrs" element={<Ncrs />} />
-              <Route path="admin" element={<Admin />} />
+              <Route path="admin" element={<AdminGuard />} />
             </Route>
           </Route>
         </Routes>

@@ -1,12 +1,27 @@
 import type { InspectionStorageSnapshot } from "./records.ts";
 import { ALL_MOCK_DETAILS, DISCIPLINES, INSPECTION_RESULTS } from "@nbins/shared";
 
+// Password: nbins-dev-2026
 const SYSTEM_USER_PASSWORD_HASH =
-  "pbkdf2_sha256$120000$736565642d7379732d73616c742d3031$b4463dd10858509c2e000628d10dff3c7e31b2cfbcf869832b6d99437f8a8003";
+  "pbkdf2_sha256$120000$736565642d7379732d73616c742d3031$e2b18d69b836e060955d3fb4a1044218fd45f64a8b21f52dff8b093d5e5d1ca1";
 
 export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot {
   const snapshot: InspectionStorageSnapshot = {
-    users: [],
+    users: [
+      {
+        id: "sys-admin",
+        username: "admin",
+        displayName: "System Admin",
+        // Password: 123456
+        passwordHash: "pbkdf2_sha256$120000$c9a53f0869da3fdced70c3a63fa227fa$0ec61f4bec112ed51219189b49c730b844b40e9423f3bfa09cc915977c45ee36",
+        role: "admin",
+        disciplines: [],
+        accessibleProjectIds: [],
+        isActive: 1,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      }
+    ],
     projects: [],
     projectMembers: [],
     ships: [],
@@ -26,7 +41,7 @@ export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot
 
   // 把所有自动生成的 shared 测试数据转换注入为 D1 种子数据库结构
   for (const detail of Object.values(ALL_MOCK_DETAILS)) {
-    const SEED_DETAIL_IDS = new Set(["insp-001", "insp-004", "insp-005"]);
+    const SEED_DETAIL_IDS = new Set<string>(); // Keep empty for clean seed
 
     // 防止和原有 mock 数据冲突
     if (snapshot.inspectionItems.find(i => i.id === detail.id)) {
@@ -212,8 +227,8 @@ export function createSeedInspectionStorageSnapshot(): InspectionStorageSnapshot
   }
 
   // ① 处理原有的 ALL_MOCK_DETAILS（保持不变)
-  // ② 生成新固定数据
-  generateFixedMockData(snapshot);
+  // ② 生成新固定数据 (Disabled to keep seed clean)
+  // generateFixedMockData(snapshot);
     
   return snapshot;
 }
@@ -331,7 +346,7 @@ function generateFixedMockData(snapshot: InspectionStorageSnapshot) {
             updatedAt: new Date().toISOString(),
           });
 
-          if (workflowStatus !== 'pending') {
+          {
             const roundId = `${inspId}-round-1`;
             snapshot.inspectionRounds.push({
               id: roundId,
@@ -339,10 +354,10 @@ function generateFixedMockData(snapshot: InspectionStorageSnapshot) {
               roundNumber: 1,
               rawItemName: itemName,
               plannedDate: new Date().toLocaleDateString('en-CA'),
-              actualDate: null,
+              actualDate: workflowStatus !== 'pending' ? new Date().toLocaleDateString('en-CA') : null,
               yardQc: 'QC Staff',
               result: currentResult as any,
-              inspectedBy: 'sys-user',
+              inspectedBy: workflowStatus !== 'pending' ? 'sys-user' : null,
               notes: null,
               source: 'manual',
               createdAt: new Date().toISOString(),

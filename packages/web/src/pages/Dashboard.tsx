@@ -7,15 +7,13 @@ import {
   type InspectionItemDetailResponse,
   type InspectionListItem,
   type InspectionResult,
-  createMockDashboardSnapshot,
-  createMockInspectionDetails,
   syncListItemWithDetail
 } from "@nbins/shared";
-import { ApiError, fetchInspectionList } from "../api";
+import { ApiError, fetchInspectionList, fetchInspectionDetail } from "../api";
 import { type DetailTransportMode, useInspectionDetail } from "../useInspectionDetail";
+import { generateInspectionReport } from "../utils/pdf-generator";
+import { useAuth } from "../auth-context";
 
-const snapshot = createMockDashboardSnapshot();
-const initialMockDetails = createMockInspectionDetails();
 const resultOptions = INSPECTION_RESULTS;
 const commentStatusLabels = {
   open: "Open",
@@ -318,11 +316,8 @@ function syncDashboardItem(
 export function Dashboard() {
   const [listItems, setListItems] = useState<InspectionListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
-  const [listMode, setListMode] = useState<DetailTransportMode>("demo");
-  const [dataGeneratedAt, setDataGeneratedAt] = useState<string>(snapshot.generatedAt);
-
-  const [mockDetailsById, setMockDetailsById] =
-    useState<Record<string, InspectionItemDetailResponse>>(initialMockDetails);
+  const [listMode, setListMode] = useState<DetailTransportMode>("api");
+  const [dataGeneratedAt, setDataGeneratedAt] = useState<string>(new Date().toISOString());
   
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
 
@@ -341,12 +336,9 @@ export function Dashboard() {
         }
       } catch (err) {
         if (!active) return;
-        setListMode("demo");
-        setListItems(snapshot.items);
-        setDataGeneratedAt(snapshot.generatedAt);
-        if (snapshot.items.length > 0) {
-           setExpandedRowId(snapshot.items[0]?.id ?? null);
-        }
+        setListMode("api");
+        setListItems([]);
+        setDataGeneratedAt(new Date().toISOString());
       } finally {
         if (active) setListLoading(false);
       }
@@ -357,10 +349,10 @@ export function Dashboard() {
   const [selectedResult, setSelectedResult] = useState<InspectionResult>("QCC");
   const [commentText, setCommentText] = useState("");
   const [clientNotice, setClientNotice] = useState<string | null>(null);
-
-  // Default Current User Context
-  const defaultUserId = "user-inspector-li"; // 必须存在于 users 表中，避免 Foreign Key 约束报错
-  const defaultUserDisplayName = "Active Admin";
+  const { session } = useAuth();
+  // Using dynamic logged-in user to prevent Foreign Key constraints error
+  const currentUserId = session?.user.id || "admin";
+  const currentUserDisplayName = session?.user.displayName || "Admin";
 
   const localToday = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
   const [filterDate, setFilterDate] = useState<string>(localToday);
@@ -370,7 +362,7 @@ export function Dashboard() {
   const [remarkModalCommentId, setRemarkModalCommentId] = useState<string | null>(null);
   const [remarkText, setRemarkText] = useState("");
 
-  const fallbackDetail = expandedRowId ? mockDetailsById[expandedRowId] : undefined;
+  const fallbackDetail = undefined;
   const {
     detail: selectedDetail,
     mode,
@@ -406,8 +398,8 @@ export function Dashboard() {
   }, [selectedDetail?.id, selectedDetail?.lastRoundResult]);
 
   // Derived filter options
-  const hullOptions = useMemo(() => Array.from(new Set(snapshot.items.map(i => i.hullNumber))).sort(), []);
-  const disciplineOptions = useMemo(() => Array.from(new Set(snapshot.items.map(i => i.discipline))).sort(), []);
+  const hullOptions = useMemo(() => Array.from(new Set(listItems.map(i => i.hullNumber))).sort(), [listItems]);
+  const disciplineOptions = useMemo(() => Array.from(new Set(listItems.map(i => i.discipline))).sort(), [listItems]);
 
   const displayedItems = listItems.filter(item => {
     if (filterDate && item.plannedDate !== filterDate) return false;
@@ -435,20 +427,25 @@ export function Dashboard() {
     }
   }
 
+  async function handleDownloadPdf(e: React.MouseEvent, itemId: string) {
+    e.stopPropagation();
+    alert("Generating report...");
+    try {
+      const response = await fetchInspectionDetail(itemId);
+      if (response) {
+        generateInspectionReport(response);
+      }
+    } catch (err) {
+      alert("Failed to fetch full detail for PDF report.");
+    }
+  }
+
   function persistLocalDetail(nextDetail: InspectionItemDetailResponse): void {
-    setMockDetailsById((current) => ({
-      ...current,
-      [nextDetail.id]: nextDetail
-    }));
     applyLocalDetail(nextDetail);
     setListItems((current) => syncDashboardItem(current, nextDetail));
   }
 
   function persistResolvedDetail(nextDetail: InspectionItemDetailResponse): void {
-    setMockDetailsById((current) => ({
-      ...current,
-      [nextDetail.id]: nextDetail
-    }));
     setListItems((current) => syncDashboardItem(current, nextDetail));
   }
 
@@ -465,7 +462,7 @@ export function Dashboard() {
         const nextDetail = await resolveComment(
           commentId,
           {
-            resolvedBy: defaultUserDisplayName,
+            resolvedBy: currentUserDisplayName,
             expectedVersion: selectedDetail.version
           },
           { mode }
@@ -476,7 +473,7 @@ export function Dashboard() {
         const nextDetail = createLocalResolvedDetail(
           selectedDetail,
           commentId,
-          defaultUserDisplayName
+          currentUserDisplayName
         );
         persistLocalDetail(nextDetail);
         setClientNotice("API unavailable. Comment resolved in demo mode.");
@@ -502,7 +499,7 @@ export function Dashboard() {
         const nextDetail = createLocalResolvedDetail(
           selectedDetail,
           commentId,
-          defaultUserDisplayName
+          currentUserDisplayName
         );
         persistLocalDetail(nextDetail);
         setClientNotice("API unavailable. Comment resolved in demo mode.");
@@ -576,8 +573,8 @@ export function Dashboard() {
     const request = {
       result: selectedResult,
       actualDate: buildActualDate(selectedDetail),
-      submittedBy: defaultUserId,
-      inspectorDisplayName: defaultUserDisplayName,
+      submittedBy: currentUserId,
+      inspectorDisplayName: currentUserDisplayName,
       notes: null,
       expectedVersion: selectedDetail.version,
       comments: canAddComments ? draftComments.map((comment) => ({ message: comment.message })) : []
@@ -600,7 +597,7 @@ export function Dashboard() {
           preview,
           canAddComments,
           draftComments,
-          submittedBy: defaultUserDisplayName
+          submittedBy: currentUserDisplayName
         });
         persistLocalDetail(nextDetail);
         setClientNotice("API unavailable. Submission applied in demo mode.");
@@ -623,7 +620,7 @@ export function Dashboard() {
         preview,
         canAddComments,
         draftComments,
-        submittedBy: defaultUserDisplayName
+        submittedBy: currentUserDisplayName
       });
       persistLocalDetail(nextDetail);
       setCommentText("");
@@ -755,10 +752,7 @@ export function Dashboard() {
                         <button 
                           type="button"
                           title="Generate Report"
-                          onClick={(e) => {
-                             e.stopPropagation();
-                             alert("TODO: Trigger PDF Generation for " + item.id);
-                          }}
+                          onClick={(e) => handleDownloadPdf(e, item.id)}
                           style={{
                              background: 'transparent',
                              border: 'none',
