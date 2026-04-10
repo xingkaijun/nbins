@@ -462,6 +462,64 @@ function createInspectionRoutes(
     }
   });
 
+  inspectionRoutes.post("/:id/comments/admin", requireAdmin, async (c) => {
+    try {
+      const inspectionItemId = c.req.param("id");
+      const body = await c.req.json<{
+        content: string;
+        authorId: string;
+      }>();
+      const now = new Date().toISOString();
+
+      if (!body.content || !body.authorId) {
+        return c.json({ ok: false, error: "Missing content or authorId" }, 400);
+      }
+
+      // 获取当前 item 的 currentRound 和最大 localId
+      const itemRow = await c.env.DB!.prepare(`SELECT "currentRound" FROM "inspection_items" WHERE "id" = ?`).bind(inspectionItemId).first<{ currentRound: number }>();
+      if (!itemRow) return c.json({ ok: false, error: "Inspection item not found" }, 404);
+
+      const maxLocalRow = await c.env.DB!.prepare(`SELECT MAX("localId") as maxId FROM "comments" WHERE "inspectionItemId" = ?`).bind(inspectionItemId).first<{ maxId: number }>();
+      const nextLocalId = (maxLocalRow?.maxId || 0) + 1;
+
+      const commentId = crypto.randomUUID();
+
+      await c.env.DB!.prepare(
+        `INSERT INTO "comments" ("id", "inspectionItemId", "localId", "roundNumber", "authorId", "content", "status", "version", "createdAt", "updatedAt") 
+         VALUES (?, ?, ?, ?, ?, ?, 'open', 1, ?, ?)`
+      ).bind(commentId, inspectionItemId, nextLocalId, itemRow.currentRound, body.authorId, body.content, now, now).run();
+
+      // 更新 openCommentsCount
+      await c.env.DB!.prepare(`UPDATE "inspection_items" SET "openCommentsCount" = "openCommentsCount" + 1 WHERE "id" = ?`).bind(inspectionItemId).run();
+
+      return c.json({ ok: true, data: { id: commentId, localId: nextLocalId, createdAt: now } });
+    } catch (e: any) {
+      console.error("POST /:id/comments/admin error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
+  inspectionRoutes.delete("/:id/comments/:commentId/admin", requireAdmin, async (c) => {
+    try {
+      const inspectionItemId = c.req.param("id");
+      const commentId = c.req.param("commentId");
+
+      const commentRow = await c.env.DB!.prepare(`SELECT "status" FROM "comments" WHERE "id" = ? AND "inspectionItemId" = ?`).bind(commentId, inspectionItemId).first<{ status: string }>();
+      if (!commentRow) return c.json({ ok: false, error: "Comment not found" }, 404);
+
+      await c.env.DB!.prepare(`DELETE FROM "comments" WHERE "id" = ? AND "inspectionItemId" = ?`).bind(commentId, inspectionItemId).run();
+
+      if (commentRow.status === 'open') {
+        await c.env.DB!.prepare(`UPDATE "inspection_items" SET "openCommentsCount" = MAX(0, "openCommentsCount" - 1) WHERE "id" = ?`).bind(inspectionItemId).run();
+      }
+
+      return c.json({ ok: true, data: { success: true } });
+    } catch (e: any) {
+      console.error("DELETE /:id/comments/:commentId/admin error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
   return inspectionRoutes;
 }
 

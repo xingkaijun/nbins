@@ -241,6 +241,34 @@ export async function reopenInspectionComment(
   );
 }
 
+export async function createInspectionCommentAdmin(
+  inspectionItemId: string,
+  data: {
+    authorId: string;
+    content: string;
+  }
+): Promise<{ id: string; localId: number; createdAt: string }> {
+  return requestJson<{ id: string; localId: number; createdAt: string }>(
+    `/inspections/${inspectionItemId}/comments/admin`,
+    {
+      method: "POST",
+      body: JSON.stringify(data)
+    }
+  );
+}
+
+export async function deleteInspectionCommentAdmin(
+  inspectionItemId: string,
+  commentId: string
+): Promise<{ success: boolean }> {
+  return requestJson<{ success: boolean }>(
+    `/inspections/${inspectionItemId}/comments/${commentId}/admin`,
+    {
+      method: "DELETE"
+    }
+  );
+}
+
 export async function updateInspectionItemAdmin(
   inspectionItemId: string,
   data: {

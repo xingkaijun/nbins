@@ -25,6 +25,8 @@ import {
   updateShip,
   updateUser,
   updateUserPassword,
+  createInspectionCommentAdmin,
+  deleteInspectionCommentAdmin,
   type ProjectRecord,
   type ShipRecord,
   type UserRecord,
@@ -122,6 +124,7 @@ export function Admin() {
   const [inspModalTab, setInspModalTab] = useState<"item" | "round" | "comments">("item");
   const [editingCommentId, setEditingCommentId] = useState("");
   const [commentForm, setCommentForm] = useState({ content: "", status: "open" as "open" | "closed", closedBy: "", closedAt: "" });
+  const [newCommentDraft, setNewCommentDraft] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
 
   /* ── auto-clear toast ── */
@@ -459,6 +462,33 @@ export function Admin() {
     finally { setWorking(false); }
   }
 
+  async function handleAddComment() {
+    if (!inspectionDetail || !newCommentDraft.trim()) return;
+    setWorking(true);
+    try {
+      await createInspectionCommentAdmin(inspectionDetail.id, {
+        content: newCommentDraft.trim(),
+        authorId: "sys-user"
+      });
+      await loadInspDetail(inspectionDetail.id);
+      setNewCommentDraft("");
+      setToast({ type: "ok", text: "Comment added" });
+    } catch (e) { setToast({ type: "err", text: errMsg(e, "Failed to add comment") }); }
+    finally { setWorking(false); }
+  }
+
+  async function handleDeleteComment(commentId: string) {
+    if (!inspectionDetail) return;
+    if (!confirm("Are you sure you want to delete this comment?")) return;
+    setWorking(true);
+    try {
+      await deleteInspectionCommentAdmin(inspectionDetail.id, commentId);
+      await loadInspDetail(inspectionDetail.id);
+      setToast({ type: "ok", text: "Comment deleted" });
+    } catch (e) { setToast({ type: "err", text: errMsg(e, "Failed to delete comment") }); }
+    finally { setWorking(false); }
+  }
+
   async function handleCloseObs(id: string) {
     setWorking(true);
     try {
@@ -605,7 +635,7 @@ export function Admin() {
       {/* ── Modal ── */}
       {modalMode !== "closed" && (
         <div className="modalOverlay" onClick={(e) => { if (e.target === e.currentTarget) setModalMode("closed"); }}>
-          <div className="modalDialog" style={{ maxWidth: activeTable === "inspections" && modalMode === "edit" ? 640 : 500, maxHeight: "85vh", overflow: "auto" }}>
+          <div className="modalDialog" style={{ maxWidth: activeTable === "inspections" && modalMode === "edit" ? 840 : 500, maxHeight: "85vh", overflow: "auto" }}>
             {renderModalContent()}
           </div>
         </div>
@@ -940,6 +970,14 @@ export function Admin() {
         {inspModalTab === "comments" && (
           <>
             {d.comments.length === 0 && <div className="admin-empty-prompt" style={{ minHeight: 80, border: "none" }}>No comments</div>}
+            
+            <div style={{ marginBottom: 16, padding: "10px", background: "#f8fafc", borderRadius: 8, border: "1px dashed var(--nb-border)" }}>
+              <div className="admin-field"><label>Add New Comment</label><textarea placeholder="Type a new comment here..." value={newCommentDraft} onChange={e => setNewCommentDraft(e.target.value)} style={{ minHeight: 60 }} /></div>
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+                <button className="admin-btn primary" onClick={() => void handleAddComment()} disabled={working || !newCommentDraft.trim()}>+ Add Comment</button>
+              </div>
+            </div>
+
             {d.comments.map(c => (
               <div key={c.id} className="admin-comment-card">
                 <div className="admin-comment-header">
@@ -965,6 +1003,7 @@ export function Admin() {
                     <div className="admin-comment-actions">
                       <button className="admin-btn" onClick={() => { setEditingCommentId(c.id); setCommentForm({ content: c.message, status: c.status, closedBy: c.resolvedBy ?? "", closedAt: c.resolvedAt ?? "" }); }}>✏️ Edit</button>
                       {c.status === "open" && <button className="admin-btn" onClick={() => void handleResolveComment(c.id)} disabled={working}>✔ Resolve</button>}
+                      <button className="admin-btn danger" onClick={() => void handleDeleteComment(c.id)} disabled={working}>🗑 Delete</button>
                     </div>
                   </>
                 )}
