@@ -12,6 +12,15 @@ function normalizeItemName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function generateId(prefix: string): string {
+  const uuidPart = typeof crypto !== "undefined" && typeof crypto.randomUUID === "function"
+    ? crypto.randomUUID()
+    : Math.random().toString(36).slice(2);
+
+  return `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}-${uuidPart}`;
+}
+
+
 function createInspectionRoutes(
   resolveStorage: (bindings?: Bindings) => InspectionStorage = createInspectionStorageResolver()
 ): Hono<{ Bindings: Bindings; Variables: AuthContextVariables }> {
@@ -43,8 +52,9 @@ function createInspectionRoutes(
     }
   });
 
-  inspectionRoutes.post("/batch", requireAdminOrManager, async (c) => {
+  inspectionRoutes.post("/batch", async (c) => {
     try {
+      const authUser = c.get("authUser");
       const body = await c.req.json<{
         projectId: string;
         shipId: string;
@@ -57,8 +67,57 @@ function createInspectionRoutes(
         }>;
       }>();
 
-      if (!body.shipId || !Array.isArray(body.items) || body.items.length === 0) {
-        return c.json({ ok: false, error: "缺少 shipId 或 items 列表为空" }, 400);
+      if (!body.projectId || !body.shipId || !Array.isArray(body.items) || body.items.length === 0) {
+        return c.json({ ok: false, error: "缺少 projectId、shipId 或 items 列表为空" }, 400);
+      }
+
+      // 查询 ship 实际所属的项目
+      const shipRow = await c.env.DB!.prepare(
+        `SELECT "projectId" FROM "ships" WHERE "id" = ?`
+      ).bind(body.shipId).first<{ projectId: string }>();
+
+      if (!shipRow) {
+        return c.json({ ok: false, error: "Ship not found" }, 404);
+      }
+
+      // 验证前端传入的 projectId 与 ship 实际所属项目一致
+      if (shipRow.projectId !== body.projectId) {
+        return c.json({ ok: false, error: "Ship does not belong to the specified project" }, 400);
+      }
+
+      // 权限检查：admin/manager 有完全权限，inspector 需要有项目和项目权限
+      if (authUser.role !== "admin" && authUser.role !== "manager") {
+        const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(
+          resolveStorage(c.env),
+          authUser
+        );
+        if (!allowedProjectIds.includes(shipRow.projectId)) {
+          return c.json({ ok: false, error: "forbidden" }, 403);
+        }
+
+        // 检查专业权限：inspector 只能导入自己有权限的专业
+        const userRow = await c.env.DB!.prepare(
+          `SELECT "disciplines" FROM "users" WHERE "id" = ?`
+        ).bind(authUser.id).first<{ disciplines: string }>();
+
+        if (userRow) {
+          let userDisciplines: string[] = [];
+          try {
+            userDisciplines = JSON.parse(userRow.disciplines || "[]");
+          } catch { /* ignore */ }
+
+          // 检查所有导入项的专业是否都在用户权限范围内
+          const unauthorizedItems = body.items.filter(
+            item => !userDisciplines.includes(item.discipline)
+          );
+          if (unauthorizedItems.length > 0) {
+            const unauthorizedDisciplines = [...new Set(unauthorizedItems.map(i => i.discipline))];
+            return c.json({
+              ok: false,
+              error: `您没有以下专业的权限: ${unauthorizedDisciplines.join(", ")}`
+            }, 403);
+          }
+        }
       }
 
       const now = new Date().toISOString();
@@ -153,48 +212,66 @@ function createInspectionRoutes(
   });
 
   inspectionRoutes.put("/:id/comments/:commentId/resolve", async (c) => {
-    const inspectionService = new InspectionService(
-      new InspectionRepository(resolveStorage(c.env))
-    );
-    let body: unknown;
-
     try {
-      body = await c.req.json<unknown>();
-    } catch {
-      return c.json({ ok: false, error: "Request body must be valid JSON" }, 400);
-    }
-
-    if (!body || typeof body !== "object") {
-      return c.json({ ok: false, error: "Request body must be an object" }, 400);
-    }
-
-    const { resolvedBy, expectedVersion, remark } = body as {
-      resolvedBy?: string;
-      expectedVersion?: number;
-      remark?: string;
-    };
-
-    if (!resolvedBy || typeof expectedVersion !== "number") {
-      return c.json(
-        { ok: false, error: "resolvedBy and expectedVersion are required" },
-        400
+      const inspectionService = new InspectionService(
+        new InspectionRepository(resolveStorage(c.env))
       );
-    }
+      let body: unknown;
 
-    try {
+      try {
+        body = await c.req.json<unknown>();
+      } catch {
+        return c.json({ ok: false, error: "Request body must be valid JSON" }, 400);
+      }
+
+      if (!body || typeof body !== "object") {
+        return c.json({ ok: false, error: "Request body must be an object" }, 400);
+      }
+
+      const { resolvedBy, expectedVersion, remark } = body as {
+        resolvedBy?: string;
+        expectedVersion?: number;
+        remark?: string;
+      };
+
+      if (!resolvedBy || typeof expectedVersion !== "number") {
+        return c.json(
+          { ok: false, error: "resolvedBy and expectedVersion are required" },
+          400
+        );
+      }
+
+      const authUser = c.get("authUser");
+      const storage = resolveStorage(c.env);
+      const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(
+        storage,
+        authUser
+      );
+      const detail = await inspectionService.readInspectionItemDetail(
+        c.req.param("id"),
+        allowedProjectIds
+      );
+      if (!detail) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
+      if (authUser.role === "inspector" && !authUser.disciplines.includes(detail.discipline)) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
+
       const response = await inspectionService.resolveComment(
         c.req.param("id"),
         c.req.param("commentId"),
         { resolvedBy, expectedVersion, remark }
       );
 
-      return c.json({ ok: true, data: response });
+      return c.json({ ok: true, data: { item: response } });
     } catch (error) {
+      console.error("PUT /:id/comments/:commentId/resolve error:", error);
       const message = error instanceof Error ? error.message : "Unknown error";
       if (message === "COMMENT_NOT_FOUND") return c.json({ ok: false, error: "Comment not found" }, 404);
       if (message === "INSPECTION_ITEM_VERSION_CONFLICT") return c.json({ ok: false, error: "Inspection item version conflict" }, 409);
       if (message === "COMMENT_ALREADY_CLOSED") return c.json({ ok: false, error: "Comment is already closed" }, 400);
-      return c.json({ ok: false, error: message }, 400);
+      return c.json({ ok: false, error: message }, 500);
     }
   });
 
@@ -224,6 +301,23 @@ function createInspectionRoutes(
         { ok: false, error: "expectedVersion and remark are required" },
         400
       );
+    }
+
+    const authUser = c.get("authUser");
+    const storage = resolveStorage(c.env);
+    const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(
+      storage,
+      authUser
+    );
+    const detail = await inspectionService.readInspectionItemDetail(
+      c.req.param("id"),
+      allowedProjectIds
+    );
+    if (!detail) {
+      return c.json({ ok: false, error: "forbidden" }, 403);
+    }
+    if (authUser.role === "inspector" && !authUser.disciplines.includes(detail.discipline)) {
+      return c.json({ ok: false, error: "forbidden" }, 403);
     }
 
     try {
@@ -262,6 +356,23 @@ function createInspectionRoutes(
 
     if (typeof expectedVersion !== "number") {
       return c.json({ ok: false, error: "expectedVersion is required" }, 400);
+    }
+
+    const authUser = c.get("authUser");
+    const storage = resolveStorage(c.env);
+    const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(
+      storage,
+      authUser
+    );
+    const detail = await inspectionService.readInspectionItemDetail(
+      c.req.param("id"),
+      allowedProjectIds
+    );
+    if (!detail) {
+      return c.json({ ok: false, error: "forbidden" }, 403);
+    }
+    if (authUser.role === "inspector" && !authUser.disciplines.includes(detail.discipline)) {
+      return c.json({ ok: false, error: "forbidden" }, 403);
     }
 
     try {
@@ -310,6 +421,22 @@ function createInspectionRoutes(
     }
 
     try {
+      const authUser = c.get("authUser");
+      const storage = resolveStorage(c.env);
+      const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(
+        storage,
+        authUser
+      );
+      const detail = await inspectionService.readInspectionItemDetail(
+        c.req.param("id"),
+        allowedProjectIds
+      );
+      if (!detail) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
+      if (authUser.role === "inspector" && !authUser.disciplines.includes(detail.discipline)) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
       const response = await inspectionService.submitInspectionResult(
         c.req.param("id"),
         body as never
@@ -465,29 +592,43 @@ function createInspectionRoutes(
   inspectionRoutes.post("/:id/comments/admin", requireAdmin, async (c) => {
     try {
       const inspectionItemId = c.req.param("id");
+      const authUser = c.get("authUser");
       const body = await c.req.json<{
         content: string;
-        authorId: string;
+        authorId?: string;
       }>();
       const now = new Date().toISOString();
 
-      if (!body.content || !body.authorId) {
-        return c.json({ ok: false, error: "Missing content or authorId" }, 400);
+      if (!body.content) {
+        return c.json({ ok: false, error: "Missing content" }, 400);
+      }
+
+      // 优先使用前端传入的 authorId，回退到认证用户 ID
+      const authorId = body.authorId || authUser.id;
+
+      // 校验 authorId 是否存在于 users 表中
+      const authorRow = await c.env.DB!.prepare(`SELECT "id" FROM "users" WHERE "id" = ?`).bind(authorId).first<{ id: string }>();
+      if (!authorRow) {
+        return c.json({ ok: false, error: `Author user not found: ${authorId}` }, 400);
       }
 
       // 获取当前 item 的 currentRound 和最大 localId
       const itemRow = await c.env.DB!.prepare(`SELECT "currentRound" FROM "inspection_items" WHERE "id" = ?`).bind(inspectionItemId).first<{ currentRound: number }>();
       if (!itemRow) return c.json({ ok: false, error: "Inspection item not found" }, 404);
 
+      // 获取当前 round 的 id
+      const roundRow = await c.env.DB!.prepare(`SELECT "id" FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?`).bind(inspectionItemId, itemRow.currentRound).first<{ id: string }>();
+      if (!roundRow) return c.json({ ok: false, error: "Current round not found" }, 404);
+
       const maxLocalRow = await c.env.DB!.prepare(`SELECT MAX("localId") as maxId FROM "comments" WHERE "inspectionItemId" = ?`).bind(inspectionItemId).first<{ maxId: number }>();
       const nextLocalId = (maxLocalRow?.maxId || 0) + 1;
 
-      const commentId = crypto.randomUUID();
+      const commentId = generateId("comment");
 
       await c.env.DB!.prepare(
-        `INSERT INTO "comments" ("id", "inspectionItemId", "localId", "roundNumber", "authorId", "content", "status", "version", "createdAt", "updatedAt") 
-         VALUES (?, ?, ?, ?, ?, ?, 'open', 1, ?, ?)`
-      ).bind(commentId, inspectionItemId, nextLocalId, itemRow.currentRound, body.authorId, body.content, now, now).run();
+        `INSERT INTO "comments" ("id", "inspectionItemId", "createdInRoundId", "localId", "authorId", "content", "status", "createdAt", "updatedAt")
+         VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)`
+      ).bind(commentId, inspectionItemId, roundRow.id, nextLocalId, authorId, body.content, now, now).run();
 
       // 更新 openCommentsCount
       await c.env.DB!.prepare(`UPDATE "inspection_items" SET "openCommentsCount" = "openCommentsCount" + 1 WHERE "id" = ?`).bind(inspectionItemId).run();

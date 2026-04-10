@@ -11,7 +11,7 @@ import {
 } from "@nbins/shared";
 import { ApiError, fetchInspectionList, fetchInspectionDetail } from "../api";
 import { type DetailTransportMode, useInspectionDetail } from "../useInspectionDetail";
-import { generateInspectionReport } from "../utils/pdf-generator";
+import { generateInspectionChecklistPdf, generateInspectionReport } from "../utils/pdf-generator";
 import { useAuth } from "../auth-context";
 
 const resultOptions = INSPECTION_RESULTS;
@@ -320,6 +320,9 @@ export function Dashboard() {
   const [dataGeneratedAt, setDataGeneratedAt] = useState<string>(new Date().toISOString());
   
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [isExporting, setIsExporting] = useState(false);
+  const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
     let active = true;
@@ -427,6 +430,57 @@ export function Dashboard() {
     }
   }
 
+  function handleSelectAll(e: React.ChangeEvent<HTMLInputElement>) {
+    if (e.target.checked) {
+      setSelectedIds(new Set(displayedItems.map(i => i.id)));
+    } else {
+      setSelectedIds(new Set());
+    }
+  }
+
+  function handleSelectRow(e: React.ChangeEvent<HTMLInputElement>, id: string) {
+    e.stopPropagation();
+    const next = new Set(selectedIds);
+    if (e.target.checked) next.add(id);
+    else next.delete(id);
+    setSelectedIds(next);
+  }
+
+  async function handleBatchExport() {
+    if (selectedIds.size === 0) return;
+    setIsExporting(true);
+    setExportProgress({ current: 0, total: selectedIds.size });
+    
+    try {
+      const itemsToExport = [];
+      let idx = 0;
+      for (const id of selectedIds) {
+        setExportProgress({ current: ++idx, total: selectedIds.size });
+        const detail = await fetchInspectionDetail(id);
+        if (detail) itemsToExport.push(detail);
+      }
+      
+      if (itemsToExport.length > 0) {
+        const { generateBatchZip } = await import("../utils/pdf-generator");
+        await generateBatchZip(itemsToExport, `NbIns_Batch_Reports_${filterDate || 'All'}.zip`);
+      }
+    } catch (err) {
+      alert("Batch export failed.");
+      console.error(err);
+    } finally {
+      setIsExporting(false);
+      setExportProgress({ current: 0, total: 0 });
+    }
+  }
+
+  function handleExportChecklist() {
+    generateInspectionChecklistPdf(displayedItems, {
+      date: filterDate || 'ALL',
+      hull: filterHull === 'ALL' ? 'ALL' : filterHull,
+      discipline: filterDiscipline === 'ALL' ? 'ALL' : filterDiscipline
+    });
+  }
+
   async function handleDownloadPdf(e: React.MouseEvent, itemId: string) {
     e.stopPropagation();
     alert("Generating report...");
@@ -439,6 +493,7 @@ export function Dashboard() {
       alert("Failed to fetch full detail for PDF report.");
     }
   }
+
 
   function persistLocalDetail(nextDetail: InspectionItemDetailResponse): void {
     applyLocalDetail(nextDetail);
@@ -462,7 +517,7 @@ export function Dashboard() {
         const nextDetail = await resolveComment(
           commentId,
           {
-            resolvedBy: currentUserDisplayName,
+            resolvedBy: currentUserId,
             expectedVersion: selectedDetail.version
           },
           { mode }
@@ -658,7 +713,33 @@ export function Dashboard() {
           <div className="heroMeta">
             <span>UPDATED {new Date(dataGeneratedAt).toLocaleDateString("en-US")}</span>
             <span className={`badge ${listMode === "api" ? "" : "muted"}`}>{listTransportLabel}</span>
-            <button type="button">EXPORT CHECKLIST</button>
+            <button 
+              type="button" 
+              onClick={() => void handleBatchExport()} 
+              disabled={isExporting || selectedIds.size === 0}
+              style={{
+                marginLeft: '12px',
+                background: selectedIds.size > 0 ? 'var(--nb-accent)' : '#ffffff',
+                color: selectedIds.size > 0 ? '#ffffff' : 'var(--nb-text-muted)',
+                border: `1px solid ${selectedIds.size > 0 ? 'var(--nb-accent)' : 'var(--nb-border)'}`,
+                boxShadow: selectedIds.size > 0 ? '0 4px 12px rgba(13, 148, 136, 0.18)' : 'none'
+              }}
+            >
+              {isExporting ? `EXPORTING ${exportProgress.current}/${exportProgress.total}...` : `BATCH EXPORT (${selectedIds.size})`}
+            </button>
+            <button
+              type="button"
+              onClick={handleExportChecklist}
+              disabled={displayedItems.length === 0}
+              style={{
+                background: displayedItems.length > 0 ? '#0f172a' : '#ffffff',
+                color: displayedItems.length > 0 ? '#ffffff' : 'var(--nb-text-muted)',
+                border: `1px solid ${displayedItems.length > 0 ? '#0f172a' : 'var(--nb-border)'}`,
+                boxShadow: displayedItems.length > 0 ? '0 4px 12px rgba(15, 23, 42, 0.12)' : 'none'
+              }}
+            >
+              EXPORT CHECKLIST ({displayedItems.length})
+            </button>
           </div>
         </section>
 
@@ -713,19 +794,39 @@ export function Dashboard() {
              </div>
           </div>
           <div className="tableWrap">
-            <table>
+            <table className="dashboardTable">
+              <colgroup>
+                <col style={{ width: '44px' }} />
+                <col style={{ width: '92px' }} />
+                <col style={{ width: '108px' }} />
+                <col style={{ width: '118px' }} />
+                <col style={{ width: '64px' }} />
+                <col />
+                <col style={{ width: '96px' }} />
+                <col style={{ width: '84px' }} />
+                <col style={{ width: '64px' }} />
+              </colgroup>
               <thead>
                 <tr>
-                  <th>Hull</th>
-                  <th>Inspection Item</th>
-                  <th>Discipline</th>
-                  <th>Planned Date</th>
-                  <th>Round</th>
-                  <th>Result</th>
-                  <th>Comments</th>
-                  <th style={{ width: '60px', textAlign: 'center' }}>Report</th>
+                  <th className="dashboardColCheckbox" style={{ textAlign: 'center' }}>
+                    <input 
+                      type="checkbox" 
+                      style={{ cursor: 'pointer' }}
+                      checked={selectedIds.size > 0 && selectedIds.size === displayedItems.length} 
+                      onChange={handleSelectAll} 
+                    />
+                  </th>
+                  <th className="dashboardCompactCol">Hull</th>
+                  <th className="dashboardCompactCol">Discipline</th>
+                  <th className="dashboardCompactCol">Planned Date</th>
+                  <th className="dashboardCompactCol">Round</th>
+                  <th className="dashboardItemCol">Inspection Item</th>
+                  <th className="dashboardCompactCol">Result</th>
+                  <th className="dashboardCompactCol">Comments</th>
+                  <th className="dashboardColReport" style={{ textAlign: 'center' }}>Report</th>
                 </tr>
               </thead>
+
               <tbody>
                 {displayedItems.length > 0 ? displayedItems.map((item) => (
                   <React.Fragment key={item.id}>
@@ -733,15 +834,23 @@ export function Dashboard() {
                       className={`record-row ${item.id === expandedRowId ? "isSelected" : ""}`}
                       onClick={() => handleToggleRow(item.id)}
                     >
-                      <td>
-                        <strong>{item.hullNumber}</strong>
+                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                        <input 
+                          type="checkbox" 
+                          style={{ cursor: 'pointer' }}
+                          checked={selectedIds.has(item.id)} 
+                          onChange={(e) => handleSelectRow(e, item.id)} 
+                        />
                       </td>
                       <td>
-                        <strong>{item.itemName}</strong>
+                        <strong>{item.hullNumber}</strong>
                       </td>
                       <td>{item.discipline}</td>
                       <td>{item.plannedDate}</td>
                       <td>R{item.currentRound}</td>
+                      <td>
+                        <strong>{item.itemName}</strong>
+                      </td>
                       <td>
                         <span className={`resultBadge ${resultTone(item.currentResult)}`}>
                           {item.currentResult ? INSPECTION_RESULT_LABELS[item.currentResult] || item.currentResult : "PENDING"}
@@ -776,7 +885,7 @@ export function Dashboard() {
                     {/* Expansion Row */}
                     {expandedRowId === item.id && (
                       <tr className="expansion-row">
-                        <td colSpan={8}>
+                        <td colSpan={9}>
                           <div className="expansion-panel-inner">
                             {loading ? <div className="alert neutral">Loading inspection details...</div> : null}
                             {error ? <div className="alert warning">{error}</div> : null}
@@ -787,22 +896,22 @@ export function Dashboard() {
                                 <div>
                                   <div className="detailHero">
                                     <h3>{selectedDetail.itemName}</h3>
-                                    <div className="detailSummaryGrid">
-                                      <div className="infoCard">
-                                        <span>Hull / Ship</span>
-                                        <strong>{selectedDetail.hullNumber} / {selectedDetail.shipName}</strong>
+                                    <div className="detailSummaryGrid" style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                                      <div className="infoCard" style={{ flex: 1, padding: '4px 10px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <span style={{ margin: 0 }}>Hull / Ship</span>
+                                        <strong style={{ fontSize: '11px' }}>{selectedDetail.hullNumber} / {selectedDetail.shipName}</strong>
                                       </div>
-                                      <div className="infoCard">
-                                        <span>Discipline</span>
-                                        <strong>{selectedDetail.discipline}</strong>
+                                      <div className="infoCard" style={{ flex: 1, padding: '4px 10px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <span style={{ margin: 0 }}>Discipline</span>
+                                        <strong style={{ fontSize: '11px' }}>{selectedDetail.discipline}</strong>
                                       </div>
-                                      <div className="infoCard">
-                                        <span>Round / Inspector</span>
-                                        <strong>R{selectedDetail.currentRound} / {selectedDetail.yardQc}</strong>
+                                      <div className="infoCard" style={{ flex: 1, padding: '4px 10px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <span style={{ margin: 0 }}>Round / Inspector</span>
+                                        <strong style={{ fontSize: '11px' }}>R{selectedDetail.currentRound} / {selectedDetail.yardQc}</strong>
                                       </div>
-                                      <div className="infoCard">
-                                        <span>Workflow</span>
-                                        <strong>{selectedDetail.workflowStatus.toUpperCase()}</strong>
+                                      <div className="infoCard" style={{ flex: 1, padding: '4px 10px', display: 'flex', gap: '8px', alignItems: 'center' }}>
+                                        <span style={{ margin: 0 }}>Workflow</span>
+                                        <strong style={{ fontSize: '11px' }}>{selectedDetail.workflowStatus.toUpperCase()}</strong>
                                       </div>
                                     </div>
                                   </div>
@@ -811,10 +920,10 @@ export function Dashboard() {
                                     <div className="panelHeader">
                                       <p className="eyebrow">ROUND HISTORY</p>
                                     </div>
-                                    <div className="timeline">
+                                    <div className="timeline" style={{ display: 'flex', flexDirection: 'row', overflowX: 'auto', paddingBottom: '4px', gap: '8px' }}>
                                       {selectedDetail.roundHistory.length > 0 ? (
                                         selectedDetail.roundHistory.map((entry) => (
-                                          <div className="timelineItem" key={entry.id}>
+                                          <div className="timelineItem" key={entry.id} style={{ minWidth: '220px', flexShrink: 0 }}>
                                             <div className="timelineMarker">R{entry.roundNumber}</div>
                                             <div className="timelineContent">
                                               <strong>{entry.submittedResult ? INSPECTION_RESULT_LABELS[entry.submittedResult] || entry.submittedResult : "PENDING"}</strong>
@@ -831,61 +940,64 @@ export function Dashboard() {
 
                                   <div className="panel">
                                     <div className="panelHeader">
-                                      <p className="eyebrow">OPINIONS & COMMENTS ({openCommentCount} OPEN)</p>
+                                      <p className="eyebrow">COMMENTS ({openCommentCount} OPEN)</p>
                                     </div>
                                     <div className="commentList">
                                       {selectedDetail.comments.length > 0 ? (
                                         selectedDetail.comments.map((comment) => (
-                                        <article className="commentCard" key={comment.id}>
-                                            <div className="commentMeta">
-                                              <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-                                                <span className={`commentStatus ${comment.status}`}>
-                                                  {commentStatusLabels[comment.status]}
-                                                </span>
-                                                {comment.status === "open" ? (
+                                        <article className="commentCard" key={comment.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                                              <strong style={{ fontSize: '11px', lineHeight: '1.4' }}>{comment.message}</strong>
+                                              <div style={{ color: 'var(--nb-text-muted)', fontSize: '10px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
+                                                <span>Raised by {comment.createdBy} at {formatStamp(comment.createdAt)}</span>
+                                                {comment.resolvedAt && (
                                                   <>
-                                                    <button
-                                                      type="button"
-                                                      className="commentCheckboxLabel"
-                                                      onClick={() => void handleResolveComment(comment.id)}
-                                                      disabled={submitting || resolvingCommentId === comment.id}
-                                                    >
-                                                      {resolvingCommentId === comment.id ? "Resolving..." : "Resolve"}
-                                                    </button>
-                                                    <button
-                                                      type="button"
-                                                      className="commentCheckboxLabel"
-                                                      style={{ background: 'var(--nb-surface)', color: 'var(--nb-text-muted)' }}
-                                                      onClick={() => { setRemarkModalCommentId(comment.id); setRemarkText(comment.resolveRemark || ""); }}
-                                                      disabled={submitting || resolvingCommentId === comment.id}
-                                                    >
-                                                      Remark
-                                                    </button>
+                                                    <span>•</span>
+                                                    <span>Closed by {comment.resolvedBy} at {formatStamp(comment.resolvedAt)}</span>
+                                                    {comment.resolveRemark && (
+                                                      <span style={{ fontStyle: 'italic' }}>(Remark: {comment.resolveRemark})</span>
+                                                    )}
                                                   </>
-                                                ) : (
+                                                )}
+                                              </div>
+                                            </div>
+                                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexShrink: 0 }}>
+                                              <span style={{ color: 'var(--nb-text-muted)', fontSize: '10px', fontWeight: 800 }}>R{comment.roundNumber}</span>
+                                              <span className={`commentStatus ${comment.status}`}>
+                                                {commentStatusLabels[comment.status]}
+                                              </span>
+                                              {comment.status === "open" ? (
+                                                <div style={{ display: 'flex', gap: '4px' }}>
                                                   <button
                                                     type="button"
                                                     className="commentCheckboxLabel"
-                                                    style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2' }}
-                                                    onClick={() => void handleReopenComment(comment.id)}
-                                                    disabled={submitting}
+                                                    onClick={() => void handleResolveComment(comment.id)}
+                                                    disabled={submitting || resolvingCommentId === comment.id}
                                                   >
-                                                    Reopen
+                                                    {resolvingCommentId === comment.id ? "Resolving..." : "Resolve"}
                                                   </button>
-                                                )}
-                                              </div>
-                                              <span>R{comment.roundNumber}</span>
+                                                  <button
+                                                    type="button"
+                                                    className="commentCheckboxLabel"
+                                                    style={{ background: 'var(--nb-bg)', color: 'var(--nb-text-muted)' }}
+                                                    onClick={() => { setRemarkModalCommentId(comment.id); setRemarkText(comment.resolveRemark || ""); }}
+                                                    disabled={submitting || resolvingCommentId === comment.id}
+                                                  >
+                                                    Remark
+                                                  </button>
+                                                </div>
+                                              ) : (
+                                                <button
+                                                  type="button"
+                                                  className="commentCheckboxLabel"
+                                                  style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2' }}
+                                                  onClick={() => void handleReopenComment(comment.id)}
+                                                  disabled={submitting}
+                                                >
+                                                  Reopen
+                                                </button>
+                                              )}
                                             </div>
-                                            <strong>{comment.message}</strong>
-                                            <p>Raised by {comment.createdBy} at {formatStamp(comment.createdAt)}</p>
-                                            {comment.resolvedAt && (
-                                              <>
-                                                <small>Closed by {comment.resolvedBy} at {formatStamp(comment.resolvedAt)}</small>
-                                                {comment.resolveRemark && (
-                                                  <small style={{ display: 'block', marginTop: '2px', fontStyle: 'italic', color: 'var(--nb-text-muted)' }}>Remark: {comment.resolveRemark}</small>
-                                                )}
-                                              </>
-                                            )}
                                           </article>
                                         ))
                                       ) : (

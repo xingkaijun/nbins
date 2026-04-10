@@ -22,6 +22,28 @@ export function parseStringArray(value: unknown): string[] {
   }
 }
 
+export async function resolveAllowedProjectIds(db: D1Database, userId: string): Promise<string[]> {
+  const [userRow, membershipRows] = await Promise.all([
+    db.prepare('SELECT "accessibleProjectIds" FROM "users" WHERE "id" = ?')
+      .bind(userId)
+      .first<Record<string, unknown>>(),
+    db.prepare('SELECT "projectId" FROM "project_members" WHERE "userId" = ?')
+      .bind(userId)
+      .all<Record<string, unknown>>()
+  ]);
+
+  const ids = new Set(parseStringArray(userRow?.accessibleProjectIds));
+
+  for (const row of membershipRows.results ?? []) {
+    if (typeof row.projectId === "string" && row.projectId.trim()) {
+      ids.add(row.projectId);
+    }
+  }
+
+  return [...ids];
+}
+
+
 export function mapProjectRecord(row: Record<string, unknown>): ProjectRecord {
   return {
     id: String(row.id),

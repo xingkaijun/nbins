@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import type { Bindings } from "../env.ts";
 import type { ProjectRecord } from "../persistence/records.ts";
-import { mapProjectRecord } from "./route-helpers.ts";
+import { mapProjectRecord, resolveAllowedProjectIds } from "./route-helpers.ts";
+
 import { createRequireAuth, createRequireRole } from "../auth.ts";
 import type { AuthContextVariables } from "../auth.ts";
 
@@ -24,36 +25,31 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
       const status = c.req.query("status");
       const authUser = c.get("authUser");
 
-      const sqlParts: string[] = [];
       const params: unknown[] = [];
-      
       const conditions: string[] = [];
-      
+
+      if (authUser.role !== "admin") {
+        const allowedProjectIds = await resolveAllowedProjectIds(c.env.DB!, authUser.id);
+        if (allowedProjectIds.length === 0) {
+          return c.json({ ok: true, data: [] });
+        }
+
+        conditions.push(`"id" IN (${allowedProjectIds.map(() => "?").join(", ")})`);
+        params.push(...allowedProjectIds);
+      }
+
       if (status) {
         conditions.push('"status" = ?');
         params.push(status);
       }
 
-      if (authUser.role === "admin") {
-        sqlParts.push('SELECT * FROM "projects"');
-        if (conditions.length > 0) {
-          sqlParts.push('WHERE ' + conditions.join(' AND '));
-        }
-      } else {
-        sqlParts.push('SELECT p.* FROM "projects" p');
-        sqlParts.push('INNER JOIN "project_members" pm ON p."id" = pm."projectId"');
-        conditions.push('pm."userId" = ?');
-        params.push(authUser.id);
-        
-        sqlParts.push('WHERE ' + conditions.join(' AND '));
-      }
-
-      sqlParts.push('ORDER BY "createdAt" DESC');
+      const where = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
 
       const result = await c.env.DB!
-        .prepare(sqlParts.join(" "))
+        .prepare(`SELECT * FROM "projects"${where} ORDER BY "createdAt" DESC`)
         .bind(...params)
         .all<Record<string, unknown>>();
+
 
       return c.json({
         ok: true,
@@ -78,11 +74,17 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
           .bind(id)
           .first<Record<string, unknown>>();
       } else {
-        projectRow = await c.env.DB!
-          .prepare('SELECT p.* FROM "projects" p INNER JOIN "project_members" pm ON p."id" = pm."projectId" WHERE p."id" = ? AND pm."userId" = ?')
-          .bind(id, authUser.id)
-          .first<Record<string, unknown>>();
+        const allowedProjectIds = await resolveAllowedProjectIds(c.env.DB!, authUser.id);
+        if (!allowedProjectIds.includes(id)) {
+          projectRow = null;
+        } else {
+          projectRow = await c.env.DB!
+            .prepare('SELECT * FROM "projects" WHERE "id" = ?')
+            .bind(id)
+            .first<Record<string, unknown>>();
+        }
       }
+
 
       if (!projectRow) {
         return c.json({ ok: false, error: "项目不存在或无权访问" }, 404);

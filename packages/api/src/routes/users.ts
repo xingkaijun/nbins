@@ -4,18 +4,50 @@ import type { UserRecord } from "../persistence/records.ts";
 import { mapUserRecord } from "./route-helpers.ts";
 import { createRequireAuth, createRequireRole } from "../auth.ts";
 import type { AuthContextVariables } from "../auth.ts";
+import { createPasswordHash } from "../auth/password.ts";
 
 function generateId(): string {
   return crypto.randomUUID();
 }
 
-import { createPasswordHash } from "../auth/password.ts";
-
 async function hashPassword(password: string): Promise<string> {
   return createPasswordHash(password);
 }
 
+function normalizeProjectIds(projectIds?: string[]): string[] {
+  if (!Array.isArray(projectIds)) {
+    return [];
+  }
+
+  return [...new Set(
+    projectIds
+      .filter((projectId): projectId is string => typeof projectId === "string")
+      .map((projectId) => projectId.trim())
+      .filter(Boolean)
+  )];
+}
+
+async function syncUserProjectMemberships(
+  db: D1Database,
+  userId: string,
+  projectIds: string[],
+  now: string
+): Promise<void> {
+  const statements = [
+    db.prepare('DELETE FROM "project_members" WHERE "userId" = ?').bind(userId),
+    ...projectIds.map((projectId) =>
+      db.prepare(
+        `INSERT INTO "project_members" ("id", "projectId", "userId", "createdAt", "updatedAt")
+         VALUES (?, ?, ?, ?, ?)`
+      ).bind(generateId(), projectId, userId, now, now)
+    )
+  ];
+
+  await db.batch(statements);
+}
+
 type UserRouteEnv = { Bindings: Bindings; Variables: AuthContextVariables };
+
 
 function createUserRoutes(): Hono<UserRouteEnv> {
   const routes = new Hono<UserRouteEnv>();
@@ -25,7 +57,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
   // 角色守卫
   const requireAdmin = createRequireRole<UserRouteEnv>(["admin"]);
 
-  routes.get("/", async (c) => {
+  routes.get("/", requireAdmin, async (c) => {
     try {
       const role = c.req.query("role");
       const isActive = c.req.query("isActive");
@@ -64,6 +96,10 @@ function createUserRoutes(): Hono<UserRouteEnv> {
   routes.get("/:id", async (c) => {
     try {
       const id = c.req.param("id");
+      const authUser = c.get("authUser");
+      if (authUser.role !== "admin" && authUser.id !== id) {
+        return c.json({ ok: false, error: "Forbidden" }, 403);
+      }
 
       const userRow = await c.env.DB!
         .prepare(
@@ -100,6 +136,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
     }
 
     const now = new Date().toISOString();
+    const accessibleProjectIds = normalizeProjectIds(body.accessibleProjectIds);
     const record: UserRecord = {
       id: generateId(),
       username: body.username,
@@ -107,11 +144,12 @@ function createUserRoutes(): Hono<UserRouteEnv> {
       passwordHash: await hashPassword(body.password),
       role: body.role as UserRecord["role"],
       disciplines: (body.disciplines ?? []) as UserRecord["disciplines"],
-      accessibleProjectIds: body.accessibleProjectIds ?? [],
+      accessibleProjectIds,
       isActive: 1,
       createdAt: now,
       updatedAt: now
     };
+
 
     try {
       await c.env.DB!
@@ -133,7 +171,10 @@ function createUserRoutes(): Hono<UserRouteEnv> {
         )
         .run();
 
+      await syncUserProjectMemberships(c.env.DB!, record.id, record.accessibleProjectIds, now);
+
       const { passwordHash, ...safeUser } = record;
+
       return c.json({ ok: true, data: safeUser });
     } catch (e: any) {
       console.error("POST /users error:", e);
@@ -155,6 +196,9 @@ function createUserRoutes(): Hono<UserRouteEnv> {
         isActive?: boolean;
       }>();
       const now = new Date().toISOString();
+      const normalizedProjectIds = body.accessibleProjectIds === undefined
+        ? undefined
+        : normalizeProjectIds(body.accessibleProjectIds);
 
       const sets: string[] = ['"updatedAt" = ?'];
       const params: unknown[] = [now];
@@ -165,11 +209,12 @@ function createUserRoutes(): Hono<UserRouteEnv> {
         sets.push('"disciplines" = ?');
         params.push(JSON.stringify(body.disciplines));
       }
-      if (body.accessibleProjectIds !== undefined) {
+      if (normalizedProjectIds !== undefined) {
         sets.push('"accessibleProjectIds" = ?');
-        params.push(JSON.stringify(body.accessibleProjectIds));
+        params.push(JSON.stringify(normalizedProjectIds));
       }
       if (body.isActive !== undefined) sets.push('"isActive" = ?'), params.push(body.isActive ? 1 : 0);
+
 
       params.push(id);
 
@@ -182,7 +227,12 @@ function createUserRoutes(): Hono<UserRouteEnv> {
         return c.json({ ok: false, error: "用户不存在" }, 404);
       }
 
+      if (normalizedProjectIds !== undefined) {
+        await syncUserProjectMemberships(c.env.DB!, id, normalizedProjectIds, now);
+      }
+
       return c.json({ ok: true, data: { id, updatedAt: now } });
+
     } catch (e: any) {
       console.error("PUT /users/:id error:", e);
       return c.json({ ok: false, error: String(e) }, 500);

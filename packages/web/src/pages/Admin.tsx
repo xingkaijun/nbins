@@ -1,5 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useAuth } from "../auth-context";
 import {
+
   batchImportInspections,
   closeObservation,
   createObservation,
@@ -78,7 +80,10 @@ function empty(v: string): string | null {
 /* ───────── main component ───────── */
 
 export function Admin() {
+  const { session } = useAuth();
+
   /* ── global state ── */
+
   const [activeTable, setActiveTable] = useState<TableKey>("projects");
   const [toast, setToast] = useState<{ type: "ok" | "err"; text: string } | null>(null);
   const [working, setWorking] = useState(false);
@@ -250,10 +255,11 @@ export function Admin() {
       return;
     }
     if (activeTable === "observations") {
-      setModalData({ shipId: obsShipFilter || "", type: obsTypes[0]?.code || "", discipline: "HULL", authorId: "sys-user", date: new Date().toISOString().slice(0, 10), content: "", status: "open" });
+      setModalData({ shipId: obsShipFilter || "", type: obsTypes[0]?.code || "", discipline: "HULL", authorId: session?.user.id ?? "", date: new Date().toISOString().slice(0, 10), content: "", status: "open" });
       setModalMode("new");
       return;
     }
+
     const defaults: Record<TableKey, Record<string, string>> = {
       projects: { code: "", name: "", status: "active", owner: "", shipyard: "", class: "", reportRecipients: "", ncrRecipients: "" },
       ships: { projectId: shipProjFilter || projects[0]?.id || "", hullNumber: "", shipName: "", shipType: "", status: "building" },
@@ -383,8 +389,9 @@ export function Admin() {
     if (modalMode === "edit" && d.id) {
       await updateObservation(d.id, { shipId: d.shipId, type: d.type, discipline: d.discipline as Discipline, authorId: d.authorId, date: d.date, content: d.content, status: d.status as "open" | "closed", closedBy: empty(d.closedBy ?? ""), closedAt: empty(d.closedAt ?? "") });
     } else {
-      await createObservation(d.shipId || obsShipFilter, { type: d.type, discipline: d.discipline, authorId: d.authorId || "sys-user", date: d.date, content: d.content });
+      await createObservation(d.shipId || obsShipFilter, { type: d.type, discipline: d.discipline, authorId: d.authorId || session?.user.id || "", date: d.date, content: d.content });
     }
+
     if (obsLoaded && obsShipFilter) await doSearchObservations();
   }
 
@@ -434,10 +441,11 @@ export function Admin() {
   }
 
   async function handleResolveComment(commentId: string) {
-    if (!inspectionDetail) return;
+    if (!inspectionDetail || !session?.user.id) return;
     setWorking(true);
     try {
-      await resolveInspectionComment(inspectionDetail.id, commentId, { resolvedBy: "sys-user", expectedVersion: inspectionDetail.version });
+      await resolveInspectionComment(inspectionDetail.id, commentId, { resolvedBy: session.user.id, expectedVersion: inspectionDetail.version });
+
       await loadInspDetail(inspectionDetail.id);
       if (inspLoaded) { const data = await fetchInspectionList(); setInspectionList(data.items); }
       setToast({ type: "ok", text: "Comment resolved" });
@@ -463,13 +471,14 @@ export function Admin() {
   }
 
   async function handleAddComment() {
-    if (!inspectionDetail || !newCommentDraft.trim()) return;
+    if (!inspectionDetail || !newCommentDraft.trim() || !session?.user.id) return;
     setWorking(true);
     try {
       await createInspectionCommentAdmin(inspectionDetail.id, {
         content: newCommentDraft.trim(),
-        authorId: "sys-user"
+        authorId: session.user.id
       });
+
       await loadInspDetail(inspectionDetail.id);
       setNewCommentDraft("");
       setToast({ type: "ok", text: "Comment added" });
@@ -490,9 +499,11 @@ export function Admin() {
   }
 
   async function handleCloseObs(id: string) {
+    if (!session?.user.id) return;
     setWorking(true);
     try {
-      await closeObservation(id, "sys-user");
+      await closeObservation(id, session.user.id);
+
       if (obsLoaded && obsShipFilter) await doSearchObservations();
       setToast({ type: "ok", text: "Observation closed" });
     } catch (e) { setToast({ type: "err", text: errMsg(e, "Failed to close") }); }

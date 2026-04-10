@@ -60,7 +60,13 @@ export function Import() {
     
     lines.forEach((line, i) => {
       // 当前要求只有3列：Item | QC | Re-insp
-      const cols = line.split('\t').map(s => s.trim());
+      // 支持 Tab、半角逗号、全角逗号分隔
+      let cols: string[];
+      if (line.includes('\t')) {
+        cols = line.split('\t').map(s => s.trim());
+      } else {
+        cols = line.split(/[,，]/).map(s => s.trim());
+      }
       const item = cols[0] || '';
       const qc = cols[1] || '';
       const reinspect = cols[2] || 'N';
@@ -173,7 +179,7 @@ export function Import() {
               <span style={{ background: 'var(--nb-accent)', color: '#fff', width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>2</span>
               <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 800 }}>Paste Spreadsheet Data</h3>
             </div>
-            <span style={{ fontSize: '11px', color: 'var(--nb-text-muted)' }}>Required Tab-separated columns: Item | QC | Re-insp</span>
+            <span style={{ fontSize: '11px', color: 'var(--nb-text-muted)' }}>支持 Tab 或逗号（全角/半角）分隔: Item | QC | Re-insp</span>
           </div>
           <div className="field">
             <textarea 

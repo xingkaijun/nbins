@@ -1,10 +1,21 @@
 import { jsPDF } from 'jspdf';
-import type { InspectionItemDetailResponse } from '@nbins/shared';
+import JSZip from 'jszip';
+import { saveAs } from 'file-saver';
+import type { InspectionItemDetailResponse, InspectionListItem } from '@nbins/shared';
 import { PG_LOGO_B64 } from './pg-logo-b64';
 // For simplicity, we just use text or a placeholder graphic right now, and refine later.
 // We'll create a clean text-based report, using a generic graphic if possible, or leave it textual.
 
-export function generateInspectionReport(detail: InspectionItemDetailResponse) {
+function drawPdfLogo(doc: jsPDF, x: number, y: number, targetHeight: number = 10) {
+  const properties = doc.getImageProperties(PG_LOGO_B64);
+  const aspectRatio = properties.width / (properties.height || 1);
+  const targetWidth = targetHeight * aspectRatio;
+  doc.addImage(PG_LOGO_B64, 'JPEG', x, y, targetWidth, targetHeight);
+  return { width: targetWidth, height: targetHeight };
+}
+
+export function buildInspectionReportDoc(detail: InspectionItemDetailResponse): { doc: jsPDF, fileName: string } {
+
   // Create an A4 document
   const doc = new jsPDF({
     orientation: 'portrait',
@@ -20,17 +31,13 @@ export function generateInspectionReport(detail: InspectionItemDetailResponse) {
 
   // --- HEADER ---
   // Company Logo
-  doc.addImage(PG_LOGO_B64, 'JPEG', margin, y, 22, 10);
-  
+  drawPdfLogo(doc, margin, y);
+
+
   // Title
   doc.setFontSize(16);
   doc.setTextColor(30, 41, 59); // Dark blue gray
   doc.text('INSPECTION REPORT', pageWidth / 2, y, { align: 'center' });
-
-  // Report Number / Reference
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`IR-${detail.id.substring(0, 8).toUpperCase()}`, pageWidth - margin, y, { align: 'right' });
 
   y += 8;
 
@@ -120,32 +127,28 @@ export function generateInspectionReport(detail: InspectionItemDetailResponse) {
   // Table Headers
   doc.setFontSize(9);
   doc.setFont('helvetica', 'bold');
-  // Columns: Round (15), Date (30), Result (20), Inspector (30)
+  // Tight columns: RND | DATE | RESULT | INSPECTOR
   doc.text('RND', margin, y);
-  doc.text('DATE', margin + 15, y);
-  doc.text('RESULT', margin + 45, y);
-  doc.text('INSPECTOR', margin + 70, y);
-  
-  y += 2;
-  doc.setLineWidth(0.2);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 5;
+  doc.text('DATE', margin + 12, y);
+  doc.text('RESULT', margin + 36, y);
+  doc.text('INSPECTOR', margin + 60, y);
+  y += 6;
 
   doc.setFont('helvetica', 'normal');
   if (detail.roundHistory && detail.roundHistory.length > 0) {
     detail.roundHistory.forEach(r => {
       doc.text(`${r.roundNumber}`, margin, y);
-      doc.text(`${r.actualDate || '-'}`, margin + 15, y);
-      doc.text(`${r.submittedResult || '-'}`, margin + 45, y);
-      doc.text(`${r.inspectorDisplayName || r.submittedBy || '-'}`, margin + 70, y);
-      y += 6;
+      doc.text(`${r.actualDate || '-'}`, margin + 12, y);
+      doc.text(`${r.submittedResult || '-'}`, margin + 36, y);
+      doc.text(`${r.inspectorDisplayName || r.submittedBy || '-'}`, margin + 60, y);
+      y += 5;
     });
   } else {
     doc.text('No round history.', margin, y);
     y += 6;
   }
 
-  y += 8;
+  y += 6;
 
   // --- SECTION 5: COMMENTS ---
   doc.setFontSize(12);
@@ -154,31 +157,27 @@ export function generateInspectionReport(detail: InspectionItemDetailResponse) {
   y += 6;
 
   if (detail.comments && detail.comments.length > 0) {
-    detail.comments.forEach((c, idx) => {
+    detail.comments.forEach((c) => {
       // Manage page breaks
-      if (y > pageHeight - 60) {
+      if (y > pageHeight - 40) {
         doc.addPage();
         y = margin;
       }
-      
+
       doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text(`#${idx + 1} - [${c.status.toUpperCase()}] Created: ${new Date(c.createdAt).toLocaleDateString()} by ${c.createdBy}`, margin, y);
-      y += 5;
-      
+      doc.text(`[${c.status.toUpperCase()}]`, margin, y);
       doc.setFont('helvetica', 'normal');
-      
-      // Auto text wrapping for comment content
-      const splitContent = doc.splitTextToSize(c.message, pageWidth - (margin * 2));
-      doc.text(splitContent, margin, y);
-      
-      y += (splitContent.length * 4) + 4;
+      const contentWidth = pageWidth - margin - 20;
+      const splitContent = doc.splitTextToSize(c.message, contentWidth);
+      doc.text(splitContent, margin + 20, y);
+      y += splitContent.length * 4 + 3;
     });
   } else {
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
     doc.text('No comments recorded.', margin, y);
-    y += 8;
+    y += 6;
   }
 
   // --- SECTION 6: SIGNATURES ---
@@ -234,6 +233,146 @@ export function generateInspectionReport(detail: InspectionItemDetailResponse) {
   
   const fileName = `${hullNum}-${discipline}-${itemName}-${roundText}-${resultText}.pdf`;
   
+  return { doc, fileName };
+}
+
+export function generateInspectionReport(detail: InspectionItemDetailResponse) {
+  const { doc, fileName } = buildInspectionReportDoc(detail);
   // output the PDF down to client
   doc.save(fileName);
 }
+
+export async function generateBatchZip(details: InspectionItemDetailResponse[], zipName: string = "Inspection_Reports.zip") {
+  const zip = new JSZip();
+  for (const detail of details) {
+    const { doc, fileName } = buildInspectionReportDoc(detail);
+    const pdfArrayBuffer = doc.output('arraybuffer');
+    zip.file(fileName, pdfArrayBuffer);
+  }
+  const content = await zip.generateAsync({ type: "blob" });
+  saveAs(content, zipName);
+}
+
+export function generateInspectionChecklistPdf(
+  items: InspectionListItem[],
+  filters: {
+    date?: string;
+    hull?: string;
+    discipline?: string;
+  }
+) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = 12;
+  const rowHeight = 6;
+  const bottomMargin = 12;
+
+  const normalizedFilters = {
+    date: filters.date?.trim() || 'ALL',
+    hull: filters.hull?.trim() || 'ALL',
+    discipline: filters.discipline?.trim() || 'ALL'
+  };
+
+  const drawHeader = (pageNumber: number) => {
+    doc.setTextColor(30, 41, 59);
+    drawPdfLogo(doc, margin, 8);
+    doc.setFont('helvetica', 'bold');
+
+    doc.setFontSize(16);
+    doc.text('INSPECTION CHECKLIST EXPORT', pageWidth / 2, 14, { align: 'center' });
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 11, { align: 'right' });
+    doc.text(`Records: ${items.length}`, pageWidth - margin, 16, { align: 'right' });
+
+    doc.setDrawColor(15, 118, 110);
+    doc.setLineWidth(0.5);
+    doc.line(margin, 22, pageWidth - margin, 22);
+
+    doc.setFontSize(9);
+    doc.setTextColor(100, 116, 139);
+    doc.text(
+      `Filters  Date: ${normalizedFilters.date}   Hull: ${normalizedFilters.hull}   Discipline: ${normalizedFilters.discipline}`,
+      margin,
+      28
+    );
+
+    doc.setTextColor(30, 41, 59);
+    doc.setFont('helvetica', 'bold');
+    doc.setFillColor(241, 245, 249);
+    doc.rect(margin, 32, pageWidth - margin * 2, 8, 'F');
+    doc.text('#', margin + 2, 37);
+    doc.text('PROJECT', margin + 10, 37);
+    doc.text('HULL / SHIP', margin + 34, 37);
+    doc.text('DISC', margin + 76, 37);
+    doc.text('PLAN DATE', margin + 94, 37);
+    doc.text('RND', margin + 118, 37);
+    doc.text('RESULT', margin + 130, 37);
+    doc.text('STATUS', margin + 150, 37);
+    doc.text('COMMENTS', margin + 172, 37);
+    doc.text('ITEM', margin + 194, 37);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text(`Page ${pageNumber}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+  };
+
+  if (items.length === 0) {
+    drawHeader(1);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
+    doc.setTextColor(100, 116, 139);
+    doc.text('No inspection items match the current filters.', margin, 48);
+    doc.save(`NBINS_Checklist_${new Date().toISOString().slice(0, 10)}.pdf`);
+    return;
+  }
+
+  let pageNumber = 1;
+  let y = 46;
+  drawHeader(pageNumber);
+
+  items.forEach((item, index) => {
+    const itemLines = doc.splitTextToSize(item.itemName || '-', 66);
+    const shipLines = doc.splitTextToSize(`${item.hullNumber} / ${item.shipName}`, 38);
+    const resultText = item.currentResult || 'PENDING';
+    const statusText = item.workflowStatus.toUpperCase();
+    const dynamicHeight = Math.max(itemLines.length, shipLines.length) * 3.6 + 2;
+    const currentRowHeight = Math.max(rowHeight, dynamicHeight);
+
+    if (y + currentRowHeight > pageHeight - bottomMargin) {
+      doc.addPage();
+      pageNumber += 1;
+      drawHeader(pageNumber);
+      y = 46;
+    }
+
+    if (index % 2 === 0) {
+      doc.setFillColor(248, 250, 252);
+      doc.rect(margin, y - 4.5, pageWidth - margin * 2, currentRowHeight, 'F');
+    }
+
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 41, 59);
+    doc.text(String(index + 1), margin + 2, y);
+    doc.text(item.projectCode || '-', margin + 10, y);
+    doc.text(shipLines, margin + 34, y);
+    doc.text(item.discipline, margin + 76, y);
+    doc.text(item.plannedDate || '-', margin + 94, y);
+    doc.text(`R${item.currentRound}`, margin + 118, y);
+    doc.text(resultText, margin + 130, y);
+    doc.text(statusText, margin + 150, y);
+    doc.text(String(item.openComments ?? 0), margin + 176, y);
+    doc.text(itemLines, margin + 194, y);
+
+    y += currentRowHeight;
+  });
+
+  const safeDate = normalizedFilters.date.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeHull = normalizedFilters.hull.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const safeDiscipline = normalizedFilters.discipline.replace(/[^a-zA-Z0-9_-]/g, '_');
+  doc.save(`NBINS_Checklist_${safeDate}_${safeHull}_${safeDiscipline}.pdf`);
+}
+

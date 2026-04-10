@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import { ADMIN_GROUPS } from "./table-configs";
 
 interface NavItem {
@@ -8,6 +9,15 @@ interface NavItem {
   count?: number;
   status?: "active" | "coming-soon";
 }
+
+const MAIN_APP_LINKS = [
+  { path: "/", label: "Projects (Hall)" },
+  { path: "/dashboard", label: "Dashboard" },
+  { path: "/observations", label: "Observations" },
+  { path: "/ncrs", label: "NCRs" },
+  { path: "/reports", label: "Reports" },
+  { path: "/import", label: "Import" }
+];
 
 export function AdminLayout(props: {
   metaLine: string;
@@ -42,6 +52,23 @@ export function AdminLayout(props: {
 
         <div className="adminBody">
           <aside className="adminSidebar">
+            <section className="adminNavGroup">
+              <p>Main App</p>
+              <div className="adminNavList">
+                {MAIN_APP_LINKS.map((link) => (
+                  <Link
+                    key={link.path}
+                    to={link.path}
+                    className="adminNavButton"
+                    style={{ textDecoration: "none", color: "inherit" }}
+                  >
+                    <span>{link.label}</span>
+                    <span className="badge muted">→</span>
+                  </Link>
+                ))}
+              </div>
+            </section>
+
             {ADMIN_GROUPS.map((group) => {
               const groupItems = props.items.filter((item) => item.group === group.key);
               if (groupItems.length === 0) return null;

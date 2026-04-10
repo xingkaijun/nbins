@@ -3,7 +3,8 @@ import type { Bindings } from "../env.ts";
 import type { NcrRecord } from "../persistence/records.ts";
 import type { CreateNcrRequest, ApproveNcrRequest, NcrItemResponse } from "@nbins/shared";
 import { createRequireAuth, createRequireRole } from "../auth.ts";
-import type { AuthContextVariables } from "../auth.ts";
+import type { AuthContextVariables, AuthenticatedUser } from "../auth.ts";
+import { resolveAllowedProjectIds } from "./route-helpers.ts";
 
 function generateId(): string {
   return crypto.randomUUID();
@@ -46,6 +47,26 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
   // 角色守卫
   const requireAdminOrManager = createRequireRole<NcrRouteEnv>(["admin", "manager"]);
 
+  async function checkProjectAccess(
+    db: D1Database,
+    user: AuthenticatedUser,
+    projectId: string
+  ): Promise<boolean> {
+    if (user.role === "admin") {
+      return true;
+    }
+    const allowedProjectIds = await resolveAllowedProjectIds(db, user.id);
+    return allowedProjectIds.includes(projectId);
+  }
+
+  async function getProjectIdByShipId(db: D1Database, shipId: string): Promise<string | null> {
+    const ship = await db
+      .prepare('SELECT "projectId" FROM "ships" WHERE "id" = ?')
+      .bind(shipId)
+      .first<{ projectId: string }>();
+    return ship?.projectId ?? null;
+  }
+
   // Helper fetching ncr response fully hydrated
   async function hydrateNcrs(ncrs: NcrRecord[], env: Bindings): Promise<NcrItemResponse[]> {
     if (ncrs.length === 0) return [];
@@ -70,6 +91,15 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
   routes.get("/ships/:shipId", async (c) => {
     try {
       const shipId = c.req.param("shipId");
+      const authUser = c.get("authUser");
+      const projectId = await getProjectIdByShipId(c.env.DB!, shipId);
+      if (!projectId) {
+        return c.json({ ok: false, error: "Ship not found" }, 404);
+      }
+      const hasAccess = await checkProjectAccess(c.env.DB!, authUser, projectId);
+      if (!hasAccess) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
 
       const result = await c.env.DB!
         .prepare(`SELECT * FROM "ncrs" WHERE "shipId" = ? ORDER BY "createdAt" DESC`)
@@ -90,8 +120,17 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
     try {
       const shipId = c.req.param("shipId");
       const body = await c.req.json<CreateNcrRequest>();
+      const authUser = c.get("authUser");
+      const projectId = await getProjectIdByShipId(c.env.DB!, shipId);
+      if (!projectId) {
+        return c.json({ ok: false, error: "Ship not found" }, 404);
+      }
+      const hasAccess = await checkProjectAccess(c.env.DB!, authUser, projectId);
+      if (!hasAccess) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
       
-      const authorId = c.get("authUser").id;
+      const authorId = authUser.id;
       
       const now = new Date().toISOString();
       const ncr: NcrRecord = {
@@ -134,7 +173,8 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
       const id = c.req.param("id");
       const body = await c.req.json<ApproveNcrRequest>();
       
-      const approvedBy = c.get("authUser").id;
+      const authUser = c.get("authUser");
+      const approvedBy = authUser.id;
       const now = new Date().toISOString();
       
       const newStatus = body.approved ? "approved" : "rejected";
@@ -144,6 +184,16 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
       const row = await c.env.DB!.prepare(`SELECT * FROM "ncrs" WHERE "id" = ?`).bind(id).first<Record<string, unknown>>();
       if (!row) return c.json({ ok: false, error: "NCR not found" }, 404);
       
+      if (authUser.role === "manager") {
+        const shipRow = await c.env.DB!.prepare(`SELECT "projectId" FROM "ships" WHERE "id" = (SELECT "shipId" FROM "ncrs" WHERE "id" = ?)`).bind(id).first<{ projectId: string }>();
+        if (shipRow) {
+          const hasAccess = await checkProjectAccess(c.env.DB!, authUser, shipRow.projectId);
+          if (!hasAccess) {
+            return c.json({ ok: false, error: "forbidden" }, 403);
+          }
+        }
+      }
+
       await c.env.DB!
         .prepare(`UPDATE "ncrs" SET "status" = ?, "approvedBy" = ?, "approvedAt" = ?, "updatedAt" = ? WHERE "id" = ?`)
         .bind(newStatus, approvedBy, now, now, id)

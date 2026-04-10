@@ -182,8 +182,13 @@ export function Observations() {
     exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab);
   };
 
-  const handleExportExcel = () => {
-    exportObservationsExcel(items, comments, getProjectName() || "All Projects", activeTab);
+  const handleExportExcel = async () => {
+    try {
+      await exportObservationsExcel(items, comments, getProjectName() || "All Projects", activeTab);
+    } catch (err: any) {
+      alert("Export Excel failed: " + (err.message || String(err)));
+      console.error(err);
+    }
   };
 
   // ---- 新增类型 ----

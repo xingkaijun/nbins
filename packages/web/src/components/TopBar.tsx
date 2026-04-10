@@ -14,7 +14,7 @@ export function TopBar() {
   const location = useLocation();
   const navigate = useNavigate();
   const { session, logout } = useAuth();
-  const isGlobalHall = location.pathname === "/" || location.pathname === "/admin";
+  const isGlobalHall = location.pathname === "/";
 
   function handleLogout() {
     logout();
@@ -24,11 +24,11 @@ export function TopBar() {
   return (
     <header className="topbar">
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-        <div style={{ background: '#fff', padding: '4px', borderRadius: '8px', border: '1px solid rgba(148, 163, 184, 0.2)' }}>
+        <div style={{ background: '#fff', padding: '6px 8px', borderRadius: '10px', border: '1px solid rgba(148, 163, 184, 0.2)' }}>
           <img
             src="https://i.postimg.cc/7LVr6n5m/PG-Logo.jpg"
             alt="PG Logo"
-            style={{ height: '24px', width: 'auto', objectFit: 'contain' }}
+            style={{ height: '40px', width: 'auto', objectFit: 'contain', display: 'block' }}
           />
         </div>
         <div>

@@ -451,6 +451,19 @@ export class D1InspectionStorage implements InspectionStorage {
   }
 
   async resolveComment(mutation: ResolveCommentStorageMutation): Promise<void> {
+    // 验证 closedInRoundId 是否存在，避免外键约束错误
+    let closedInRoundId: string | null = mutation.comment.closedInRoundId;
+    if (closedInRoundId) {
+      const roundRow = await this.db
+        .prepare(`SELECT "id" FROM "inspection_rounds" WHERE "id" = ?`)
+        .bind(closedInRoundId)
+        .first();
+      if (!roundRow) {
+        // round 不存在，设置为 null 避免外键约束错误
+        closedInRoundId = null;
+      }
+    }
+
     const statements: D1PreparedStatement[] = [
       this.db
         .prepare(
@@ -462,7 +475,7 @@ export class D1InspectionStorage implements InspectionStorage {
           mutation.comment.status,
           mutation.comment.closedBy,
           mutation.comment.closedAt,
-          mutation.comment.closedInRoundId,
+          closedInRoundId,
           mutation.comment.resolveRemark,
           mutation.comment.updatedAt,
           mutation.comment.id
