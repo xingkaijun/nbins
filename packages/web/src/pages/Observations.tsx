@@ -179,11 +179,11 @@ export function Observations() {
 
   // ---- 导出相关 ----
   const handleExportPdf = () => {
-    exportObservationsPdf(items, comments, getProjectName() || "All Projects");
+    exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab);
   };
 
   const handleExportExcel = () => {
-    exportObservationsExcel(items, comments, getProjectName() || "All Projects");
+    exportObservationsExcel(items, comments, getProjectName() || "All Projects", activeTab);
   };
 
   // ---- 新增类型 ----
