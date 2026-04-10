@@ -70,8 +70,6 @@ export function Observations() {
   const [editRemark, setEditRemark] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
 
-  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
-  const [importSubmitting, setImportSubmitting] = useState(false);
 
   // ---- 加载项目列表 ----
   useEffect(() => {
