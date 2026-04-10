@@ -189,6 +189,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
     try {
       const id = c.req.param("id");
       const body = await c.req.json<{
+        username?: string;
         displayName?: string;
         role?: string;
         disciplines?: string[];
@@ -203,6 +204,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
       const sets: string[] = ['"updatedAt" = ?'];
       const params: unknown[] = [now];
 
+      if (body.username !== undefined) sets.push('"username" = ?'), params.push(body.username);
       if (body.displayName !== undefined) sets.push('"displayName" = ?'), params.push(body.displayName);
       if (body.role !== undefined) sets.push('"role" = ?'), params.push(body.role);
       if (body.disciplines !== undefined) {
@@ -269,6 +271,26 @@ function createUserRoutes(): Hono<UserRouteEnv> {
       return c.json({ ok: true, data: { id, updatedAt: now } });
     } catch (e: any) {
       console.error("PUT /users/:id/password error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
+  routes.delete("/:id", requireAdmin, async (c) => {
+    try {
+      const id = c.req.param("id");
+      const authUser = c.get("authUser");
+      if (authUser.id === id) {
+        return c.json({ ok: false, error: "不能删除自己的账号" }, 400);
+      }
+
+      await c.env.DB!.batch([
+        c.env.DB!.prepare('DELETE FROM "project_members" WHERE "userId" = ?').bind(id),
+        c.env.DB!.prepare('DELETE FROM "users" WHERE "id" = ?').bind(id)
+      ]);
+
+      return c.json({ ok: true, data: { id } });
+    } catch (e: any) {
+      console.error("DELETE /users/:id error:", e);
       return c.json({ ok: false, error: String(e) }, 500);
     }
   });

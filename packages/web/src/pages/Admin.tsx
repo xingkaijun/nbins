@@ -357,7 +357,7 @@ export function Admin() {
     try { discs = JSON.parse(d.disciplines || "[]"); } catch { /* ignore */ }
     try { projIds = JSON.parse(d.accessibleProjectIds || "[]"); } catch { /* ignore */ }
     if (modalMode === "edit" && d.id) {
-      await updateUser(d.id, { displayName: d.displayName, role: d.role as Role, disciplines: discs, accessibleProjectIds: projIds, isActive: d.isActive === "true" });
+      await updateUser(d.id, { username: d.username, displayName: d.displayName, role: d.role as Role, disciplines: discs, accessibleProjectIds: projIds, isActive: d.isActive === "true" });
     } else {
       await createUser({ username: d.username, displayName: d.displayName, password: d.password || "changeme", role: d.role as Role, disciplines: discs, accessibleProjectIds: projIds });
     }
@@ -495,6 +495,18 @@ export function Admin() {
       await loadInspDetail(inspectionDetail.id);
       setToast({ type: "ok", text: "Comment deleted" });
     } catch (e) { setToast({ type: "err", text: errMsg(e, "Failed to delete comment") }); }
+    finally { setWorking(false); }
+  }
+
+  async function handleDeleteUser(id: string, username: string) {
+    if (!window.confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+    setWorking(true);
+    try {
+      const { deleteUser } = await import("../api");
+      await deleteUser(id);
+      setUsers(await fetchUsers());
+      setToast({ type: "ok", text: "User deleted." });
+    } catch (e) { setToast({ type: "err", text: errMsg(e, "Failed to delete user") }); }
     finally { setWorking(false); }
   }
 
@@ -776,7 +788,14 @@ export function Admin() {
       }
       case "users": {
         const u = raw as UserRecord;
-        return <><td>{u.username}</td><td>{u.displayName}</td><td>{u.role}</td><td>{u.disciplines.join(", ") || "—"}</td><td>{u.accessibleProjectIds.map(id => projects.find(p => p.id === id)?.code ?? id).join(", ") || "—"}</td><td>{u.isActive ? "✔" : "✗"}</td>{actionsCell(u.id)}</>;
+        return <><td>{u.username}</td><td>{u.displayName}</td><td>{u.role}</td><td>{u.disciplines.join(", ") || "—"}</td><td>{u.accessibleProjectIds.map(id => projects.find(p => p.id === id)?.code ?? id).join(", ") || "—"}</td><td>{u.isActive ? "✔" : "✗"}</td>
+          <td onClick={e => e.stopPropagation()}>
+            <div className="actions-cell">
+              <button onClick={() => openEdit(row)}>✏️</button>
+              <button className="del" title="Delete" onClick={() => void handleDeleteUser(u.id, u.username)}>🗑️</button>
+            </div>
+          </td>
+        </>;
       }
       case "obsTypes": {
         const o = raw as ObservationType;
@@ -858,7 +877,7 @@ export function Admin() {
         try { projIds = JSON.parse(modalData.accessibleProjectIds || "[]"); } catch { /* */ }
         return (
           <div className="admin-form-grid">
-            <div className="admin-field"><label>Username</label><input value={modalData.username || ""} onChange={e => setField("username", e.target.value)} disabled={modalMode === "edit"} /></div>
+            <div className="admin-field"><label>Username</label><input value={modalData.username || ""} onChange={e => setField("username", e.target.value)} /></div>
             <div className="admin-field"><label>Display Name</label><input value={modalData.displayName || ""} onChange={e => setField("displayName", e.target.value)} /></div>
             <div className="admin-field"><label>Role</label><select value={modalData.role || "inspector"} onChange={e => setField("role", e.target.value)}>{ROLES.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
             <div className="admin-field"><label>Active</label><select value={modalData.isActive ?? "true"} onChange={e => setField("isActive", e.target.value)}><option value="true">Active</option><option value="false">Inactive</option></select></div>

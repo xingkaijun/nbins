@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   updateUser,
+  deleteUser,
   fetchApiMeta,
   fetchProjects,
   fetchShips,
@@ -152,7 +153,7 @@ export function AdminPage() {
         { key: "isActive", label: "Active", type: "select", options: [{ value: "1", label: "true" }, { value: "0", label: "false" }] }
       ],
       formFields: [
-        { key: "username", label: "Username", type: "text", required: true, disabledOnEdit: true },
+        { key: "username", label: "Username", type: "text", required: true },
         { key: "displayName", label: "Display Name", type: "text", required: true },
         { key: "role", label: "Role", type: "select", required: true, options: ROLES.map((role) => ({ value: role, label: role })) },
         { key: "disciplines", label: "Disciplines", type: "tags", options: DISCIPLINES.map((item) => ({ value: item, label: item })) },
@@ -576,6 +577,7 @@ export function AdminPage() {
         if (isCreating.users) await createUser({ ...payload, password: String(currentForm.password ?? "") });
         else {
           await updateUser(String(currentForm.id), {
+            username: payload.username,
             displayName: payload.displayName,
             role: payload.role,
             disciplines: payload.disciplines,
@@ -649,19 +651,36 @@ export function AdminPage() {
   }
 
   async function deleteCurrentRecord() {
-    if (activeTable !== "comments" || !selectedRecord) return;
-    if (!window.confirm("Are you sure you want to delete this record?")) return;
-    setWorking(true);
-    setErrorMessage(null);
-    try {
-      await deleteCommentAdmin(String(selectedRecord.inspectionItemId ?? ""), String(selectedRecord.id ?? ""));
-      await refreshAll();
-      cancelEditor();
-      setStatusMessage("Record deleted.");
-    } catch (error) {
-      setErrorMessage(messageOf(error, "Failed to delete record."));
-    } finally {
-      setWorking(false);
+    if (!selectedRecord) return;
+    if (activeTable === "comments") {
+      if (!window.confirm("Are you sure you want to delete this comment?")) return;
+      setWorking(true);
+      setErrorMessage(null);
+      try {
+        await deleteCommentAdmin(String(selectedRecord.inspectionItemId ?? ""), String(selectedRecord.id ?? ""));
+        await refreshAll();
+        cancelEditor();
+        setStatusMessage("Record deleted.");
+      } catch (error) {
+        setErrorMessage(messageOf(error, "Failed to delete record."));
+      } finally {
+        setWorking(false);
+      }
+    } else if (activeTable === "users") {
+      const username = String(selectedRecord.username ?? selectedRecord.id);
+      if (!window.confirm(`Delete user "${username}"? This cannot be undone.`)) return;
+      setWorking(true);
+      setErrorMessage(null);
+      try {
+        await deleteUser(String(selectedRecord.id));
+        await refreshAll();
+        cancelEditor();
+        setStatusMessage("User deleted.");
+      } catch (error) {
+        setErrorMessage(messageOf(error, "Failed to delete user."));
+      } finally {
+        setWorking(false);
+      }
     }
   }
 
@@ -711,7 +730,7 @@ export function AdminPage() {
             form={currentForm}
             isEditing={!isCreating[activeTable]}
             canSave={!working}
-            canDelete={activeTable === "comments"}
+            canDelete={(activeTable === "comments" || activeTable === "users") && !isCreating[activeTable]}
             onChange={updateDraft}
             onSave={() => void saveCurrentRecord()}
             onDelete={() => void deleteCurrentRecord()}

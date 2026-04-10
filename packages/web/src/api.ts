@@ -524,7 +524,7 @@ export async function createUser(data: {
 
 export async function updateUser(
   userId: string,
-  data: Partial<Pick<UserRecord, "displayName" | "role" | "disciplines" | "accessibleProjectIds">> & {
+  data: Partial<Pick<UserRecord, "username" | "displayName" | "role" | "disciplines" | "accessibleProjectIds">> & {
     isActive?: boolean;
   }
 ): Promise<{ id: string; updatedAt: string }> {
@@ -542,6 +542,10 @@ export async function updateUserPassword(
     method: "PUT",
     body: JSON.stringify({ password })
   });
+}
+
+export async function deleteUser(userId: string): Promise<void> {
+  await requestJson<unknown>(`/users/${userId}`, { method: "DELETE" });
 }
 
 export async function batchImportInspections(payload: {
