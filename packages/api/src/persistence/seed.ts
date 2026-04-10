@@ -144,4 +144,29 @@ function generateCustomMockData(snapshot: InspectionStorageSnapshot) {
       }
     }
   }
+
+  // 5. Observations — 每条船 2 条巡检意见
+  const obsTypes = ["patrol", "sea_trial"];
+  const locations = ["FR120 Port", "DB Tank #3", "Engine Room", "Upper Deck"];
+  for (const ship of ships) {
+    for (let i = 0; i < 2; i++) {
+      snapshot.observations.push({
+        id: `obs-${ship.id}-${i}`,
+        shipId: ship.id,
+        type: obsTypes[i],
+        discipline: disciplines[i] as any,
+        authorId: ship.projectId === "proj-A" ? "user-inspector-1" : "user-inspector-2",
+        serialNo: i + 1,
+        location: locations[i],
+        date: now,
+        content: `Observation on ${ship.shipName}: ${obsTypes[i]} finding at ${locations[i]}.`,
+        remark: i === 0 ? "Follow up required" : null,
+        status: "open",
+        closedBy: null,
+        closedAt: null,
+        createdAt: now,
+        updatedAt: now
+      });
+    }
+  }
 }

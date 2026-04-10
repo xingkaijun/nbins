@@ -103,8 +103,11 @@ export interface ObservationItem {
   discipline: Discipline;
   authorId: string;
   authorName?: string;
+  serialNo: number;
+  location: string | null;
   date: string;
   content: string;
+  remark: string | null;
   status: "open" | "closed";
   closedBy: string | null;
   closedAt: string | null;
@@ -112,11 +115,30 @@ export interface ObservationItem {
   updatedAt: string;
 }
 
+/** Inspection Comments 聚合视图（只读） */
+export interface InspectionCommentView {
+  id: string;
+  shipId: string;
+  hullNumber: string;
+  discipline: Discipline;
+  inspectionItemName: string;
+  roundNumber: number;
+  localId: number;
+  content: string;
+  status: "open" | "closed";
+  authorId: string;
+  authorName: string;
+  createdAt: string;
+  closedAt: string | null;
+  closedBy: string | null;
+  resolveRemark: string | null;
+}
+
 /** 预置的默认意见类型编码 */
 export const DEFAULT_OBSERVATION_TYPES = [
-  { code: "patrol", label: "巡检" },
-  { code: "sea_trial", label: "试航" },
-  { code: "dock_trial", label: "系泊试验" }
+  { code: "patrol", label: "Patrol" },
+  { code: "sea_trial", label: "Sea Trial" },
+  { code: "dock_trial", label: "Dock Trial" }
 ] as const;
 
 export * from "./inspection-detail.ts";

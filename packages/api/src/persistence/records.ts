@@ -114,8 +114,11 @@ export interface ObservationRecord {
   type: string;          // 关联 observation_types.code，不做外键强约束
   discipline: Discipline;
   authorId: string;
+  serialNo: number;      // 序号（同船同类型维度自增）
+  location: string | null; // 位置描述（如 FR120, DB Tank）
   date: string;
   content: string;
+  remark: string | null;   // 备注（独立于意见正文）
   status: "open" | "closed";
   closedBy: string | null;
   closedAt: string | null;

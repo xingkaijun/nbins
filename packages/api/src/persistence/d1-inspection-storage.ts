@@ -193,7 +193,7 @@ export class D1InspectionStorage implements InspectionStorage {
   async write(next: InspectionStorageSnapshot): Promise<void> {
     // DELETEs must run first, in their own batch
     const deleteStatements: D1PreparedStatement[] = [];
-    for (const tableName of ["comments", "inspection_rounds", "inspection_items", "ships", "project_members", "projects", "users"]) {
+    for (const tableName of ["observations", "comments", "inspection_rounds", "inspection_items", "ships", "project_members", "projects", "users"]) {
       deleteStatements.push(this.db.prepare(`DELETE FROM "${tableName}"`));
     }
     await this.db.batch(deleteStatements);
@@ -347,6 +347,33 @@ export class D1InspectionStorage implements InspectionStorage {
             record.closedBy,
             record.closedAt,
             record.resolveRemark,
+            record.createdAt,
+            record.updatedAt
+          )
+      );
+    }
+
+    for (const record of next.observations) {
+      insertStatements.push(
+        this.db
+          .prepare(
+            `INSERT INTO "observations" ("id", "shipId", "type", "discipline", "authorId", "serialNo", "location", "date", "content", "remark", "status", "closedBy", "closedAt", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+          )
+          .bind(
+            record.id,
+            record.shipId,
+            record.type,
+            record.discipline,
+            record.authorId,
+            record.serialNo,
+            record.location,
+            record.date,
+            record.content,
+            record.remark,
+            record.status,
+            record.closedBy,
+            record.closedAt,
             record.createdAt,
             record.updatedAt
           )

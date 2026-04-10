@@ -15,14 +15,123 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
   
   routes.use("*", createRequireAuth());
 
+  // 项目级查询（跨船号）
+  routes.get("/observations", async (c) => {
+    try {
+      const projectId = c.req.query("projectId");
+      const shipId = c.req.query("shipId");
+      const type = c.req.query("type");
+      const discipline = c.req.query("discipline");
+      const status = c.req.query("status");
+
+      let sql = `
+        SELECT o.*, u."displayName" AS "authorName"
+        FROM "observations" o
+        LEFT JOIN "users" u ON u."id" = o."authorId"
+        INNER JOIN "ships" s ON s."id" = o."shipId"
+        WHERE 1=1
+      `;
+      const params: unknown[] = [];
+
+      if (projectId) {
+        sql += ` AND s."projectId" = ?`;
+        params.push(projectId);
+      }
+      if (shipId) {
+        sql += ` AND o."shipId" = ?`;
+        params.push(shipId);
+      }
+      if (type) {
+        sql += ` AND o."type" = ?`;
+        params.push(type);
+      }
+      if (discipline) {
+        sql += ` AND o."discipline" = ?`;
+        params.push(discipline);
+      }
+      if (status) {
+        sql += ` AND o."status" = ?`;
+        params.push(status);
+      }
+
+      sql += ` ORDER BY o."serialNo" ASC, o."date" DESC, o."createdAt" DESC`;
+
+      const result = await c.env.DB!.prepare(sql).bind(...params).all();
+      return c.json({ ok: true, data: result.results ?? [] });
+    } catch (e: any) {
+      console.error("GET /observations error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
+  // Inspection Comments 聚合（只读）
+  routes.get("/observations/inspection-comments", async (c) => {
+    try {
+      const projectId = c.req.query("projectId");
+      const shipId = c.req.query("shipId");
+      const discipline = c.req.query("discipline");
+      const status = c.req.query("status");
+
+      let sql = `
+        SELECT
+          cm."id",
+          ii."shipId",
+          sh."hullNumber",
+          ii."discipline",
+          ii."itemName" AS "inspectionItemName",
+          ir."roundNumber",
+          cm."localId",
+          cm."content",
+          cm."status",
+          cm."authorId",
+          u."displayName" AS "authorName",
+          cm."createdAt",
+          cm."closedAt",
+          cm."closedBy",
+          cm."resolveRemark"
+        FROM "comments" cm
+        INNER JOIN "inspection_items" ii ON ii."id" = cm."inspectionItemId"
+        INNER JOIN "inspection_rounds" ir ON ir."id" = cm."createdInRoundId"
+        INNER JOIN "ships" sh ON sh."id" = ii."shipId"
+        LEFT JOIN "users" u ON u."id" = cm."authorId"
+        WHERE 1=1
+      `;
+      const params: unknown[] = [];
+
+      if (projectId) {
+        sql += ` AND sh."projectId" = ?`;
+        params.push(projectId);
+      }
+      if (shipId) {
+        sql += ` AND ii."shipId" = ?`;
+        params.push(shipId);
+      }
+      if (discipline) {
+        sql += ` AND ii."discipline" = ?`;
+        params.push(discipline);
+      }
+      if (status) {
+        sql += ` AND cm."status" = ?`;
+        params.push(status);
+      }
+
+      sql += ` ORDER BY cm."createdAt" DESC`;
+
+      const result = await c.env.DB!.prepare(sql).bind(...params).all();
+      return c.json({ ok: true, data: result.results ?? [] });
+    } catch (e: any) {
+      console.error("GET /observations/inspection-comments error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
+  // 按船号查询
   routes.get("/ships/:shipId/observations", async (c) => {
     try {
       const shipId = c.req.param("shipId");
       const type = c.req.query("type");
       const discipline = c.req.query("discipline");
       const status = c.req.query("status");
-      const dateFrom = c.req.query("date_from");
-      const dateTo = c.req.query("date_to");
 
       let sql = `
         SELECT o.*, u."displayName" AS "authorName"
@@ -44,16 +153,8 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
         sql += ` AND o."status" = ?`;
         params.push(status);
       }
-      if (dateFrom) {
-        sql += ` AND o."date" >= ?`;
-        params.push(dateFrom);
-      }
-      if (dateTo) {
-        sql += ` AND o."date" <= ?`;
-        params.push(dateTo);
-      }
 
-      sql += ` ORDER BY o."date" DESC, o."createdAt" DESC`;
+      sql += ` ORDER BY o."serialNo" ASC, o."date" DESC, o."createdAt" DESC`;
 
       const result = await c.env.DB!.prepare(sql).bind(...params).all();
       return c.json({ ok: true, data: result.results ?? [] });
@@ -63,67 +164,119 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
     }
   });
 
+  // 新增单条
   routes.post("/ships/:shipId/observations", async (c) => {
     try {
       const shipId = c.req.param("shipId");
       const body = await c.req.json<{
         type: string;
         discipline: string;
-        authorId: string;
+        location?: string;
         date: string;
         content: string;
+        remark?: string;
       }>();
 
       if (!body.type || !body.discipline || !body.content || !body.date) {
-        return c.json({ ok: false, error: "type, discipline, date, content 为必填项" }, 400);
+        return c.json({ ok: false, error: "type, discipline, date, content are required" }, 400);
       }
 
+      // 计算序号：同船+同类型下的最大序号+1
+      const maxRow = await c.env.DB!
+        .prepare(`SELECT MAX("serialNo") as "maxNo" FROM "observations" WHERE "shipId" = ? AND "type" = ?`)
+        .bind(shipId, body.type)
+        .first<{ maxNo: number | null }>();
+      const serialNo = (maxRow?.maxNo ?? 0) + 1;
+
       const now = new Date().toISOString();
-      const record: ObservationRecord = {
-        id: generateId(),
-        shipId,
-        type: body.type,
-        discipline: body.discipline as ObservationRecord["discipline"],
-        authorId: c.get("authUser").id,
-        date: body.date,
-        content: body.content,
-        status: "open",
-        closedBy: null,
-        closedAt: null,
-        createdAt: now,
-        updatedAt: now
-      };
+      const id = generateId();
 
       await c.env.DB!
         .prepare(
           `INSERT INTO "observations"
-           ("id", "shipId", "type", "discipline", "authorId", "date", "content", "status", "createdAt", "updatedAt")
-           VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`
+           ("id", "shipId", "type", "discipline", "authorId", "serialNo", "location", "date", "content", "remark", "status", "createdAt", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`
         )
         .bind(
-          record.id,
-          record.shipId,
-          record.type,
-          record.discipline,
-          record.authorId,
-          record.date,
-          record.content,
-          record.createdAt,
-          record.updatedAt
+          id, shipId, body.type, body.discipline,
+          c.get("authUser").id,
+          serialNo,
+          body.location ?? null,
+          body.date, body.content,
+          body.remark ?? null,
+          now, now
         )
         .run();
 
-      return c.json({ ok: true, data: record });
+      return c.json({ ok: true, data: { id, serialNo, shipId, type: body.type, createdAt: now } });
     } catch (e: any) {
       console.error("POST /ships/:shipId/observations error:", e);
       return c.json({ ok: false, error: String(e) }, 500);
     }
   });
 
+  // 粘贴批量导入
+  routes.post("/ships/:shipId/observations/batch", async (c) => {
+    try {
+      const shipId = c.req.param("shipId");
+      const body = await c.req.json<{
+        type: string;
+        items: Array<{
+          discipline: string;
+          location?: string;
+          date: string;
+          content: string;
+          remark?: string;
+        }>;
+      }>();
+
+      if (!body.type || !Array.isArray(body.items) || body.items.length === 0) {
+        return c.json({ ok: false, error: "type and items[] are required" }, 400);
+      }
+
+      // 获取当前最大序号
+      const maxRow = await c.env.DB!
+        .prepare(`SELECT MAX("serialNo") as "maxNo" FROM "observations" WHERE "shipId" = ? AND "type" = ?`)
+        .bind(shipId, body.type)
+        .first<{ maxNo: number | null }>();
+      let nextSerial = (maxRow?.maxNo ?? 0) + 1;
+
+      const now = new Date().toISOString();
+      const authorId = c.get("authUser").id;
+
+      const stmts = body.items.map((item) => {
+        const id = generateId();
+        const serial = nextSerial++;
+        return c.env.DB!
+          .prepare(
+            `INSERT INTO "observations"
+             ("id", "shipId", "type", "discipline", "authorId", "serialNo", "location", "date", "content", "remark", "status", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)`
+          )
+          .bind(
+            id, shipId, body.type, item.discipline,
+            authorId, serial,
+            item.location ?? null,
+            item.date, item.content,
+            item.remark ?? null,
+            now, now
+          );
+      });
+
+      // D1 batch 执行
+      await c.env.DB!.batch(stmts);
+
+      return c.json({ ok: true, data: { imported: body.items.length } });
+    } catch (e: any) {
+      console.error("POST /ships/:shipId/observations/batch error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
+  // 获取单条
   routes.get("/observations/:id", async (c) => {
     try {
       const id = c.req.param("id");
-
       const result = await c.env.DB!
         .prepare(
           `SELECT o.*, u."displayName" AS "authorName"
@@ -135,7 +288,7 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
         .first();
 
       if (!result) {
-        return c.json({ ok: false, error: "意见记录不存在" }, 404);
+        return c.json({ ok: false, error: "Observation not found" }, 404);
       }
 
       return c.json({ ok: true, data: result });
@@ -145,16 +298,17 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
     }
   });
 
+  // 更新单条
   routes.put("/observations/:id", async (c) => {
     try {
       const id = c.req.param("id");
       const body = await c.req.json<{
-        shipId?: string;
         content?: string;
         type?: string;
         discipline?: string;
-        authorId?: string;
+        location?: string | null;
         date?: string;
+        remark?: string | null;
         status?: "open" | "closed";
         closedBy?: string | null;
         closedAt?: string | null;
@@ -165,11 +319,11 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
       const params: unknown[] = [now];
 
       if (body.content !== undefined) sets.push('"content" = ?'), params.push(body.content);
-      if (body.shipId !== undefined) sets.push('"shipId" = ?'), params.push(body.shipId);
       if (body.type !== undefined) sets.push('"type" = ?'), params.push(body.type);
       if (body.discipline !== undefined) sets.push('"discipline" = ?'), params.push(body.discipline);
-      if (body.authorId !== undefined) sets.push('"authorId" = ?'), params.push(body.authorId);
+      if (body.location !== undefined) sets.push('"location" = ?'), params.push(body.location);
       if (body.date !== undefined) sets.push('"date" = ?'), params.push(body.date);
+      if (body.remark !== undefined) sets.push('"remark" = ?'), params.push(body.remark);
       if (body.status !== undefined) sets.push('"status" = ?'), params.push(body.status);
       if (body.closedBy !== undefined) sets.push('"closedBy" = ?'), params.push(body.closedBy);
       if (body.closedAt !== undefined) sets.push('"closedAt" = ?'), params.push(body.closedAt);
@@ -188,6 +342,7 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
     }
   });
 
+  // 关闭
   routes.put("/observations/:id/close", async (c) => {
     try {
       const id = c.req.param("id");
@@ -204,7 +359,7 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
         .run();
 
       if (info.meta?.changes === 0) {
-        return c.json({ ok: false, error: "意见不存在或已关闭" }, 404);
+        return c.json({ ok: false, error: "Observation not found or already closed" }, 404);
       }
 
       return c.json({ ok: true, data: { id, status: "closed", closedBy, closedAt: now } });

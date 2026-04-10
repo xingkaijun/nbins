@@ -1,6 +1,7 @@
 import type {
   DashboardSnapshot,
   Discipline,
+  InspectionCommentView,
   InspectionItemDetailResponse,
   InspectionListItem,
   ObservationItem,
@@ -321,31 +322,67 @@ export async function updateObservationType(
 }
 
 export async function fetchObservations(
-  shipId: string,
   filters?: {
+    projectId?: string;
+    shipId?: string;
     type?: string;
     discipline?: string;
     status?: string;
-    date_from?: string;
-    date_to?: string;
   }
 ): Promise<ObservationItem[]> {
   return requestJson<ObservationItem[]>(
-    withQuery(`/ships/${shipId}/observations`, {
+    withQuery("/observations", {
+      projectId: filters?.projectId,
+      shipId: filters?.shipId,
       type: filters?.type,
       discipline: filters?.discipline,
       status: filters?.status,
-      date_from: filters?.date_from,
-      date_to: filters?.date_to
+    })
+  );
+}
+
+export async function fetchInspectionComments(
+  filters?: {
+    projectId?: string;
+    shipId?: string;
+    discipline?: string;
+    status?: string;
+  }
+): Promise<InspectionCommentView[]> {
+  return requestJson<InspectionCommentView[]>(
+    withQuery("/observations/inspection-comments", {
+      projectId: filters?.projectId,
+      shipId: filters?.shipId,
+      discipline: filters?.discipline,
+      status: filters?.status,
     })
   );
 }
 
 export async function createObservation(
   shipId: string,
-  data: { type: string; discipline: string; authorId: string; date: string; content: string }
+  data: { type: string; discipline: string; location?: string; date: string; content: string; remark?: string }
 ): Promise<ObservationItem> {
   return requestJson<ObservationItem>(`/ships/${shipId}/observations`, {
+    method: "POST",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function batchImportObservations(
+  shipId: string,
+  data: {
+    type: string;
+    items: Array<{
+      discipline: string;
+      location?: string;
+      date: string;
+      content: string;
+      remark?: string;
+    }>;
+  }
+): Promise<{ imported: number }> {
+  return requestJson<{ imported: number }>(`/ships/${shipId}/observations/batch`, {
     method: "POST",
     body: JSON.stringify(data)
   });
@@ -357,9 +394,10 @@ export async function updateObservation(
     shipId?: string;
     type?: string;
     discipline?: string;
-    authorId?: string;
+    location?: string | null;
     date?: string;
     content?: string;
+    remark?: string | null;
     status?: "open" | "closed";
     closedBy?: string | null;
     closedAt?: string | null;
@@ -372,15 +410,11 @@ export async function updateObservation(
 }
 
 export async function closeObservation(
-  observationId: string,
-  closedBy?: string
+  observationId: string
 ): Promise<{ id: string; status: string; closedBy: string; closedAt: string }> {
   return requestJson<{ id: string; status: string; closedBy: string; closedAt: string }>(
     `/observations/${observationId}/close`,
-    {
-      method: "PUT",
-      body: JSON.stringify({ closedBy: closedBy ?? "sys-user" })
-    }
+    { method: "PUT", body: JSON.stringify({}) }
   );
 }
 

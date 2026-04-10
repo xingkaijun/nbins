@@ -1,24 +1,38 @@
 import React, { useEffect, useState, useCallback } from "react";
-import type { ObservationItem, ObservationType, Discipline } from "@nbins/shared";
+import type { ObservationItem, ObservationType, InspectionCommentView, Discipline } from "@nbins/shared";
 import { DISCIPLINES, DEFAULT_OBSERVATION_TYPES } from "@nbins/shared";
 import {
   fetchObservations,
   fetchObservationTypes,
+  fetchInspectionComments,
   createObservation,
   createObservationType,
-  closeObservation
+  closeObservation,
+  batchImportObservations,
+  fetchProjects,
+  fetchShips,
 } from "../api";
+import type { ProjectRecord, ShipRecord } from "../api";
 
-// 默认使用第一条船做演示
-const DEMO_SHIP_ID = "ship-h2748";
+type ActiveTab = "observations" | "inspection-comments";
 
 export function Observations() {
+  // 项目与船号级联
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
+  const [ships, setShips] = useState<ShipRecord[]>([]);
+  const [selectedProjectId, setSelectedProjectId] = useState("");
+  const [selectedShipId, setSelectedShipId] = useState("");
+
+  // Tab
+  const [activeTab, setActiveTab] = useState<ActiveTab>("observations");
+
+  // Observations 数据
   const [items, setItems] = useState<ObservationItem[]>([]);
   const [types, setTypes] = useState<ObservationType[]>([]);
+  const [comments, setComments] = useState<InspectionCommentView[]>([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  // 筛选状态
+  // 筛选
   const [filterType, setFilterType] = useState("");
   const [filterDiscipline, setFilterDiscipline] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
@@ -27,398 +41,439 @@ export function Observations() {
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState("");
   const [formDiscipline, setFormDiscipline] = useState<string>("HULL");
+  const [formLocation, setFormLocation] = useState("");
   const [formDate, setFormDate] = useState(new Date().toLocaleDateString("en-CA"));
   const [formContent, setFormContent] = useState("");
+  const [formRemark, setFormRemark] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
-  // 新增类型弹窗
+  // 新增类型
   const [showTypeForm, setShowTypeForm] = useState(false);
   const [newTypeCode, setNewTypeCode] = useState("");
   const [newTypeLabel, setNewTypeLabel] = useState("");
 
-  // 加载意见类型列表
-  const loadTypes = useCallback(async () => {
-    try {
-      const data = await fetchObservationTypes();
-      if (data.length > 0) {
-        setTypes(data);
-      } else {
-        // 如果后台还没有类型，显示预置的默认项
-        setTypes(
-          DEFAULT_OBSERVATION_TYPES.map((t, i) => ({
-            id: `default-${t.code}`,
-            code: t.code,
-            label: t.label,
-            sortOrder: i,
-            createdAt: "",
-            updatedAt: ""
-          }))
-        );
-      }
-    } catch {
-      // API 不可用时使用默认类型
-      setTypes(
-        DEFAULT_OBSERVATION_TYPES.map((t, i) => ({
-          id: `default-${t.code}`,
-          code: t.code,
-          label: t.label,
-          sortOrder: i,
-          createdAt: "",
-          updatedAt: ""
-        }))
-      );
-    }
+  // 粘贴导入
+  const [showImport, setShowImport] = useState(false);
+  const [importType, setImportType] = useState("patrol");
+  const [pasteText, setPasteText] = useState("");
+  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+
+  // ---- 加载项目列表 ----
+  useEffect(() => {
+    fetchProjects().then((p) => {
+      setProjects(p);
+      if (p.length > 0) setSelectedProjectId(p[0].id);
+    }).catch(() => {});
   }, []);
 
-  // 加载意见列表
-  const loadObservations = useCallback(async () => {
+  // ---- 项目变更 → 加载船列表 ----
+  useEffect(() => {
+    if (!selectedProjectId) { setShips([]); return; }
+    fetchShips(selectedProjectId).then((s) => {
+      setShips(s);
+      if (s.length > 0) setSelectedShipId(s[0].id);
+      else setSelectedShipId("");
+    }).catch(() => {});
+  }, [selectedProjectId]);
+
+  // ---- 加载意见类型 ----
+  useEffect(() => {
+    fetchObservationTypes().then((data) => {
+      setTypes(data.length > 0 ? data : DEFAULT_OBSERVATION_TYPES.map((t, i) => ({ id: `default-${t.code}`, code: t.code, label: t.label, sortOrder: i, createdAt: "", updatedAt: "" })));
+    }).catch(() => {
+      setTypes(DEFAULT_OBSERVATION_TYPES.map((t, i) => ({ id: `default-${t.code}`, code: t.code, label: t.label, sortOrder: i, createdAt: "", updatedAt: "" })));
+    });
+  }, []);
+
+  // ---- 加载数据 ----
+  const loadData = useCallback(async () => {
+    if (!selectedProjectId) return;
     setLoading(true);
-    setError(null);
     try {
-      const filters: Record<string, string> = {};
-      if (filterType) filters.type = filterType;
-      if (filterDiscipline) filters.discipline = filterDiscipline;
-      if (filterStatus) filters.status = filterStatus;
-      const data = await fetchObservations(DEMO_SHIP_ID, filters);
-      setItems(data);
-    } catch (e: any) {
-      setError(e.message || "加载失败");
-      setItems([]);
-    } finally {
-      setLoading(false);
-    }
-  }, [filterType, filterDiscipline, filterStatus]);
+      if (activeTab === "observations") {
+        const filters: Record<string, string> = { projectId: selectedProjectId };
+        if (selectedShipId) filters.shipId = selectedShipId;
+        if (filterType) filters.type = filterType;
+        if (filterDiscipline) filters.discipline = filterDiscipline;
+        if (filterStatus) filters.status = filterStatus;
+        const data = await fetchObservations(filters);
+        setItems(data);
+      } else {
+        const filters: Record<string, string> = { projectId: selectedProjectId };
+        if (selectedShipId) filters.shipId = selectedShipId;
+        if (filterDiscipline) filters.discipline = filterDiscipline;
+        if (filterStatus) filters.status = filterStatus;
+        const data = await fetchInspectionComments(filters);
+        setComments(data);
+      }
+    } catch { /* ignore */ } finally { setLoading(false); }
+  }, [selectedProjectId, selectedShipId, activeTab, filterType, filterDiscipline, filterStatus]);
 
-  useEffect(() => {
-    void loadTypes();
-  }, [loadTypes]);
+  useEffect(() => { void loadData(); }, [loadData]);
 
-  useEffect(() => {
-    void loadObservations();
-  }, [loadObservations]);
-
-  // 提交新意见
+  // ---- 新增单条 ----
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formType || !formContent.trim()) return;
+    if (!formType || !formContent.trim() || !selectedShipId) return;
     setSubmitting(true);
     try {
-      await createObservation(DEMO_SHIP_ID, {
-        type: formType,
-        discipline: formDiscipline,
-        authorId: "sys-user",
-        date: formDate,
-        content: formContent.trim()
+      await createObservation(selectedShipId, {
+        type: formType, discipline: formDiscipline,
+        location: formLocation || undefined,
+        date: formDate, content: formContent.trim(),
+        remark: formRemark || undefined,
       });
-      setFormContent("");
-      setShowForm(false);
-      void loadObservations();
-    } catch (e: any) {
-      alert("提交失败: " + (e.message || "未知错误"));
-    } finally {
-      setSubmitting(false);
-    }
+      setFormContent(""); setFormLocation(""); setFormRemark(""); setShowForm(false);
+      void loadData();
+    } catch (err: any) { alert("Submit failed: " + (err.message || "Unknown error")); }
+    finally { setSubmitting(false); }
   };
 
-  // 关闭意见
+  // ---- 关闭意见 ----
   const handleClose = async (id: string) => {
-    try {
-      await closeObservation(id, "sys-user");
-      void loadObservations();
-    } catch (e: any) {
-      alert("关闭失败: " + (e.message || "未知错误"));
-    }
+    try { await closeObservation(id); void loadData(); }
+    catch (err: any) { alert("Close failed: " + (err.message || "Unknown error")); }
   };
 
-  // 新增自定义类型
+  // ---- 新增类型 ----
   const handleAddType = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newTypeCode.trim() || !newTypeLabel.trim()) return;
     try {
-      await createObservationType({
-        code: newTypeCode.trim().toLowerCase().replace(/\s+/g, "_"),
-        label: newTypeLabel.trim(),
-        sortOrder: types.length
-      });
-      setNewTypeCode("");
-      setNewTypeLabel("");
-      setShowTypeForm(false);
-      void loadTypes();
-    } catch (e: any) {
-      alert("新增类型失败: " + (e.message || "未知错误"));
-    }
+      await createObservationType({ code: newTypeCode.trim().toLowerCase().replace(/\s+/g, "_"), label: newTypeLabel.trim(), sortOrder: types.length });
+      setNewTypeCode(""); setNewTypeLabel(""); setShowTypeForm(false);
+      const data = await fetchObservationTypes();
+      if (data.length > 0) setTypes(data);
+    } catch (err: any) { alert("Add type failed: " + (err.message || "Unknown error")); }
   };
 
-  const getTypeLabel = (code: string) => {
-    const found = types.find((t) => t.code === code);
-    return found?.label ?? code;
+  // ---- 粘贴解析 ----
+  const handleParse = () => {
+    const lines = pasteText.trim().split("\n").filter(l => l.trim());
+    const parsed: ParsedRow[] = lines.map((line, idx) => {
+      const cols = line.split("\t");
+      const discipline = (cols[0] || "").trim().toUpperCase();
+      const location = (cols[1] || "").trim();
+      const date = (cols[2] || "").trim();
+      const content = (cols[3] || "").trim();
+      const remark = (cols[4] || "").trim();
+      const errors: string[] = [];
+      if (!discipline || !DISCIPLINES.includes(discipline as any)) errors.push("Invalid discipline");
+      if (!date) errors.push("Missing date");
+      if (!content) errors.push("Missing content");
+      return { idx: idx + 1, discipline, location, date, content, remark, errors, valid: errors.length === 0 };
+    });
+    setParsedRows(parsed);
   };
+
+  // ---- 批量导入 ----
+  const handleImport = async () => {
+    if (!selectedShipId) return;
+    const validRows = parsedRows.filter(r => r.valid);
+    if (validRows.length === 0) return;
+    setImportSubmitting(true);
+    try {
+      await batchImportObservations(selectedShipId, {
+        type: importType,
+        items: validRows.map(r => ({
+          discipline: r.discipline,
+          location: r.location || undefined,
+          date: r.date,
+          content: r.content,
+          remark: r.remark || undefined,
+        })),
+      });
+      setShowImport(false); setPasteText(""); setParsedRows([]);
+      void loadData();
+    } catch (err: any) { alert("Import failed: " + (err.message || "Unknown error")); }
+    finally { setImportSubmitting(false); }
+  };
+
+  const getTypeLabel = (code: string) => types.find(t => t.code === code)?.label ?? code;
+  const getProjectName = () => projects.find(p => p.id === selectedProjectId)?.name ?? "";
+  const validCount = parsedRows.filter(r => r.valid).length;
 
   return (
-    <main className="observations-page" style={{ padding: "24px 32px", maxWidth: 1200, margin: "0 auto" }}>
+    <main style={{ padding: "24px 32px", maxWidth: 1280, margin: "0 auto" }}>
       {/* 页面标题 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "var(--nb-text)" }}>
-            巡检 / 试航意见
+          <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: "var(--nb-text)", letterSpacing: "-0.02em" }}>
+            OBSERVATION MANAGEMENT
           </h1>
-          <p style={{ fontSize: 13, color: "var(--nb-text-muted)", margin: "4px 0 0" }}>
-            OBSERVATION MANAGEMENT · Ship: {DEMO_SHIP_ID}
+          <p style={{ fontSize: 12, color: "var(--nb-text-muted)", margin: "4px 0 0", fontWeight: 600, letterSpacing: "0.03em" }}>
+            {getProjectName() && `Project: ${getProjectName()}`}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="nb-btn nb-btn-secondary"
-            onClick={() => setShowTypeForm(!showTypeForm)}
-            style={btnStyle("secondary")}
-          >
-            + 自定义类型
-          </button>
-          <button
-            className="nb-btn nb-btn-primary"
-            onClick={() => setShowForm(!showForm)}
-            style={btnStyle("primary")}
-          >
-            + 新增意见
-          </button>
-        </div>
+        {activeTab === "observations" && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <button onClick={() => setShowTypeForm(!showTypeForm)} style={btnStyle("secondary")}>+ Custom Type</button>
+            <button onClick={() => setShowImport(!showImport)} style={btnStyle("secondary")}>Paste Import</button>
+            <button onClick={() => setShowForm(!showForm)} style={btnStyle("primary")}>+ New Observation</button>
+          </div>
+        )}
       </div>
 
-      {/* 新增类型表单 */}
+      {/* 项目/船号筛选 */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <label style={inlineLabelStyle}>
+          <span>Project</span>
+          <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)} style={selectStyle}>
+            {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
+          </select>
+        </label>
+        <label style={inlineLabelStyle}>
+          <span>Ship</span>
+          <select value={selectedShipId} onChange={e => setSelectedShipId(e.target.value)} style={selectStyle}>
+            <option value="">All ships</option>
+            {ships.map(s => <option key={s.id} value={s.id}>{s.shipName} ({s.hullNumber})</option>)}
+          </select>
+        </label>
+      </div>
+
+      {/* Tabs */}
+      <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: "2px solid var(--nb-border, #e2e8f0)" }}>
+        <button onClick={() => setActiveTab("observations")} style={tabStyle(activeTab === "observations")}>Observations</button>
+        <button onClick={() => setActiveTab("inspection-comments")} style={tabStyle(activeTab === "inspection-comments")}>Inspection Comments</button>
+      </div>
+
+      {/* 筛选栏 */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        {activeTab === "observations" && (
+          <select value={filterType} onChange={e => setFilterType(e.target.value)} style={selectStyle}>
+            <option value="">All Types</option>
+            {types.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
+          </select>
+        )}
+        <select value={filterDiscipline} onChange={e => setFilterDiscipline(e.target.value)} style={selectStyle}>
+          <option value="">All Disciplines</option>
+          {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+        </select>
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
+          <option value="">All Status</option>
+          <option value="open">Open</option>
+          <option value="closed">Closed</option>
+        </select>
+        <span style={{ fontSize: 12, color: "var(--nb-text-muted)", fontWeight: 600 }}>
+          {activeTab === "observations" ? `${items.length} records` : `${comments.length} records`}
+        </span>
+      </div>
+
+      {/* 新增类型 */}
       {showTypeForm && (
         <form onSubmit={handleAddType} style={formBoxStyle}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>新增意见类型</h3>
+          <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700 }}>Add Custom Observation Type</h3>
           <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
-            <label style={labelStyle}>
-              <span>编码 (英文)</span>
-              <input
-                type="text"
-                value={newTypeCode}
-                onChange={(e) => setNewTypeCode(e.target.value)}
-                placeholder="如 hatch_cover"
-                style={inputStyle}
-                required
-              />
-            </label>
-            <label style={labelStyle}>
-              <span>显示名称</span>
-              <input
-                type="text"
-                value={newTypeLabel}
-                onChange={(e) => setNewTypeLabel(e.target.value)}
-                placeholder="如 舱盖检查"
-                style={inputStyle}
-                required
-              />
-            </label>
-            <button type="submit" style={btnStyle("primary")}>确认添加</button>
-            <button type="button" onClick={() => setShowTypeForm(false)} style={btnStyle("secondary")}>取消</button>
+            <label style={fieldLabelStyle}><span>Code</span><input type="text" value={newTypeCode} onChange={e => setNewTypeCode(e.target.value)} placeholder="e.g. hatch_cover" style={inputStyle} required /></label>
+            <label style={fieldLabelStyle}><span>Label</span><input type="text" value={newTypeLabel} onChange={e => setNewTypeLabel(e.target.value)} placeholder="e.g. Hatch Cover" style={inputStyle} required /></label>
+            <button type="submit" style={btnStyle("primary")}>Add</button>
+            <button type="button" onClick={() => setShowTypeForm(false)} style={btnStyle("secondary")}>Cancel</button>
           </div>
         </form>
+      )}
+
+      {/* 粘贴导入弹窗 */}
+      {showImport && (
+        <div style={formBoxStyle}>
+          <h3 style={{ margin: "0 0 8px", fontSize: 14, fontWeight: 700 }}>Paste Import</h3>
+          <p style={{ fontSize: 12, color: "var(--nb-text-muted)", margin: "0 0 12px" }}>
+            Expected columns (tab-separated): <strong>Discipline | Location | Date | Content | Remark</strong>
+          </p>
+          <div style={{ display: "flex", gap: 12, marginBottom: 12, alignItems: "flex-end" }}>
+            <label style={fieldLabelStyle}>
+              <span>Type</span>
+              <select value={importType} onChange={e => setImportType(e.target.value)} style={inputStyle}>
+                {types.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
+              </select>
+            </label>
+          </div>
+          <textarea
+            value={pasteText} onChange={e => setPasteText(e.target.value)}
+            placeholder="Paste rows from Excel here..."
+            rows={5} style={{ ...inputStyle, width: "100%", resize: "vertical", fontFamily: "monospace", fontSize: 12 }}
+          />
+          <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+            <button onClick={handleParse} style={btnStyle("secondary")}>Parse</button>
+            <button onClick={() => { setShowImport(false); setPasteText(""); setParsedRows([]); }} style={btnStyle("secondary")}>Cancel</button>
+          </div>
+
+          {parsedRows.length > 0 && (
+            <div style={{ marginTop: 12 }}>
+              <h4 style={{ fontSize: 13, fontWeight: 700, margin: "0 0 8px" }}>Preview ({validCount} / {parsedRows.length} valid)</h4>
+              <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid var(--nb-border)", borderRadius: 6 }}>
+                <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
+                  <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "1px solid var(--nb-border)" }}>
+                    <th style={thStyle}>#</th><th style={thStyle}>Disc</th><th style={thStyle}>Location</th><th style={thStyle}>Date</th><th style={thStyle}>Content</th><th style={thStyle}>Remark</th><th style={thStyle}>Status</th>
+                  </tr></thead>
+                  <tbody>
+                    {parsedRows.map(r => (
+                      <tr key={r.idx} style={{ borderBottom: "1px solid var(--nb-border)", background: r.valid ? "transparent" : "#fef2f2" }}>
+                        <td style={tdStyle}>{r.idx}</td><td style={tdStyle}>{r.discipline}</td><td style={tdStyle}>{r.location}</td>
+                        <td style={tdStyle}>{r.date}</td><td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.content}</td>
+                        <td style={tdStyle}>{r.remark}</td>
+                        <td style={tdStyle}>{r.valid ? <span style={{ color: "#22c55e" }}>✓</span> : <span style={{ color: "#ef4444" }}>{r.errors.join(", ")}</span>}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {validCount > 0 && (
+                <button onClick={handleImport} disabled={importSubmitting} style={{ ...btnStyle("primary"), marginTop: 8 }}>
+                  {importSubmitting ? "Importing..." : `Import ${validCount} rows`}
+                </button>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* 新增意见表单 */}
       {showForm && (
         <form onSubmit={handleSubmit} style={formBoxStyle}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>新增巡检/试航意见</h3>
+          <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700 }}>New Observation</h3>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <label style={labelStyle}>
-              <span>类型</span>
-              <select value={formType} onChange={(e) => setFormType(e.target.value)} style={inputStyle} required>
-                <option value="">-- 选择类型 --</option>
-                {types.map((t) => (
-                  <option key={t.code} value={t.code}>{t.label} ({t.code})</option>
-                ))}
+            <label style={fieldLabelStyle}><span>Type</span>
+              <select value={formType} onChange={e => setFormType(e.target.value)} style={inputStyle} required>
+                <option value="">-- Select --</option>
+                {types.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
               </select>
             </label>
-            <label style={labelStyle}>
-              <span>专业</span>
-              <select
-                value={formDiscipline}
-                onChange={(e) => setFormDiscipline(e.target.value)}
-                style={inputStyle}
-              >
-                {DISCIPLINES.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
+            <label style={fieldLabelStyle}><span>Discipline</span>
+              <select value={formDiscipline} onChange={e => setFormDiscipline(e.target.value)} style={inputStyle}>
+                {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </label>
-            <label style={labelStyle}>
-              <span>日期</span>
-              <input type="date" value={formDate} onChange={(e) => setFormDate(e.target.value)} style={inputStyle} required />
+            <label style={fieldLabelStyle}><span>Location</span>
+              <input type="text" value={formLocation} onChange={e => setFormLocation(e.target.value)} placeholder="e.g. FR120" style={inputStyle} />
+            </label>
+            <label style={fieldLabelStyle}><span>Date</span>
+              <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} style={inputStyle} required />
             </label>
           </div>
-          <label style={{ ...labelStyle, marginTop: 12, display: "block" }}>
-            <span>意见内容</span>
-            <textarea
-              value={formContent}
-              onChange={(e) => setFormContent(e.target.value)}
-              placeholder="描述具体的观察意见..."
-              rows={3}
-              style={{ ...inputStyle, resize: "vertical", width: "100%" }}
-              required
-            />
+          <label style={{ ...fieldLabelStyle, marginTop: 12, display: "block" }}><span>Content</span>
+            <textarea value={formContent} onChange={e => setFormContent(e.target.value)} placeholder="Describe the observation..." rows={3} style={{ ...inputStyle, resize: "vertical", width: "100%" }} required />
+          </label>
+          <label style={{ ...fieldLabelStyle, marginTop: 8, display: "block" }}><span>Remark</span>
+            <input type="text" value={formRemark} onChange={e => setFormRemark(e.target.value)} placeholder="Optional remark" style={{ ...inputStyle, width: "100%" }} />
           </label>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button type="submit" disabled={submitting} style={btnStyle("primary")}>
-              {submitting ? "提交中..." : "提交"}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)} style={btnStyle("secondary")}>取消</button>
+            <button type="submit" disabled={submitting} style={btnStyle("primary")}>{submitting ? "Submitting..." : "Submit"}</button>
+            <button type="button" onClick={() => setShowForm(false)} style={btnStyle("secondary")}>Cancel</button>
           </div>
         </form>
       )}
 
-      {/* 筛选栏 */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        <select value={filterType} onChange={(e) => setFilterType(e.target.value)} style={filterSelectStyle}>
-          <option value="">全部类型</option>
-          {types.map((t) => (
-            <option key={t.code} value={t.code}>{t.label}</option>
-          ))}
-        </select>
-        <select value={filterDiscipline} onChange={(e) => setFilterDiscipline(e.target.value)} style={filterSelectStyle}>
-          <option value="">全部专业</option>
-          {DISCIPLINES.map((d) => (
-            <option key={d} value={d}>{d}</option>
-          ))}
-        </select>
-        <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={filterSelectStyle}>
-          <option value="">全部状态</option>
-          <option value="open">Open</option>
-          <option value="closed">Closed</option>
-        </select>
-        <span style={{ fontSize: 13, color: "var(--nb-text-muted)", alignSelf: "center" }}>
-          共 {items.length} 条记录
-        </span>
-      </div>
-
-      {/* 列表 */}
+      {/* 主内容区 */}
       {loading ? (
-        <p style={{ color: "var(--nb-text-muted)", textAlign: "center", padding: 40 }}>加载中...</p>
-      ) : error ? (
-        <p style={{ color: "#ef4444", textAlign: "center", padding: 40 }}>{error}</p>
-      ) : items.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
-          <p style={{ fontSize: 15 }}>暂无观察意见记录</p>
-          <p style={{ fontSize: 13 }}>点击「+ 新增意见」开始添加</p>
-        </div>
+        <p style={{ color: "var(--nb-text-muted)", textAlign: "center", padding: 40 }}>Loading...</p>
+      ) : activeTab === "observations" ? (
+        items.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
+            <p style={{ fontSize: 14 }}>No observation records found</p>
+            <p style={{ fontSize: 12 }}>Click "+ New Observation" or "Paste Import" to start adding.</p>
+          </div>
+        ) : (
+          <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
+            <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+              <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
+                <th style={thStyle}>#</th><th style={thStyle}>Type</th><th style={thStyle}>Discipline</th>
+                <th style={thStyle}>Location</th><th style={thStyle}>Date</th><th style={thStyle}>Content</th>
+                <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Action</th>
+              </tr></thead>
+              <tbody>
+                {items.map(item => (
+                  <tr key={item.id} style={{ borderBottom: "1px solid var(--nb-border)" }}>
+                    <td style={tdStyle}>{item.serialNo}</td>
+                    <td style={tdStyle}><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
+                    <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
+                    <td style={tdStyle}>{item.location || "—"}</td>
+                    <td style={tdStyle}>{item.date}</td>
+                    <td style={{ ...tdStyle, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.content}</td>
+                    <td style={tdStyle}>{item.authorName ?? item.authorId}</td>
+                    <td style={tdStyle}><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
+                    <td style={tdStyle}>
+                      {item.status === "open" && <button onClick={() => handleClose(item.id)} style={{ ...btnStyle("secondary"), fontSize: 11, padding: "3px 8px" }}>Close</button>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {items.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                background: "var(--nb-surface)",
-                border: "1px solid var(--nb-border)",
-                borderRadius: 10,
-                padding: "14px 18px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: 16
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                  <span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>
-                    {item.status === "open" ? "OPEN" : "CLOSED"}
-                  </span>
-                  <span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span>
-                  <span style={tagStyle("#0ea5e9")}>{item.discipline}</span>
-                  <span style={{ fontSize: 12, color: "var(--nb-text-muted)" }}>{item.date}</span>
-                </div>
-                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--nb-text)" }}>
-                  {item.content}
-                </p>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--nb-text-muted)" }}>
-                  by {item.authorName ?? item.authorId}
-                  {item.closedAt && ` · closed ${item.closedAt.slice(0, 10)}`}
-                </p>
-              </div>
-              {item.status === "open" && (
-                <button
-                  onClick={() => handleClose(item.id)}
-                  style={{ ...btnStyle("secondary"), fontSize: 12, padding: "4px 10px", whiteSpace: "nowrap" }}
-                >
-                  关闭
-                </button>
-              )}
-            </div>
-          ))}
-        </div>
+        comments.length === 0 ? (
+          <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
+            <p style={{ fontSize: 14 }}>No inspection comments found</p>
+            <p style={{ fontSize: 12 }}>Inspection comments are generated from the inspection submission workflow.</p>
+          </div>
+        ) : (
+          <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
+            <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+              <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
+                <th style={thStyle}>#</th><th style={thStyle}>Ship</th><th style={thStyle}>Discipline</th>
+                <th style={thStyle}>Inspection Item</th><th style={thStyle}>Round</th><th style={thStyle}>Content</th>
+                <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Closed At</th>
+              </tr></thead>
+              <tbody>
+                {comments.map(cm => (
+                  <tr key={cm.id} style={{ borderBottom: "1px solid var(--nb-border)" }}>
+                    <td style={tdStyle}>{cm.localId}</td>
+                    <td style={tdStyle}>{cm.hullNumber}</td>
+                    <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
+                    <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cm.inspectionItemName}</td>
+                    <td style={tdStyle}>R{cm.roundNumber}</td>
+                    <td style={{ ...tdStyle, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cm.content}</td>
+                    <td style={tdStyle}>{cm.authorName}</td>
+                    <td style={tdStyle}><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
+                    <td style={tdStyle}>{cm.closedAt ? cm.closedAt.slice(0, 10) : "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )
       )}
     </main>
   );
 }
 
-// ---- 内联样式 helpers ----
+// ---- 数据类型 ----
+interface ParsedRow {
+  idx: number;
+  discipline: string;
+  location: string;
+  date: string;
+  content: string;
+  remark: string;
+  errors: string[];
+  valid: boolean;
+}
 
+// ---- 内联样式 ----
 function btnStyle(variant: "primary" | "secondary"): React.CSSProperties {
-  const base: React.CSSProperties = {
-    border: "none",
-    borderRadius: 6,
-    padding: "7px 14px",
-    fontSize: 13,
-    fontWeight: 600,
-    cursor: "pointer",
-    transition: "background 0.15s"
-  };
-  if (variant === "primary") {
-    return { ...base, background: "var(--nb-accent, #0f766e)", color: "#fff" };
-  }
+  const base: React.CSSProperties = { border: "none", borderRadius: 6, padding: "7px 14px", fontSize: 12, fontWeight: 700, cursor: "pointer", transition: "background 0.15s", letterSpacing: "0.02em" };
+  if (variant === "primary") return { ...base, background: "var(--nb-text, #1e293b)", color: "#fff" };
+  return { ...base, background: "var(--nb-surface, #f1f5f9)", color: "var(--nb-text, #334155)", border: "1px solid var(--nb-border, #e2e8f0)" };
+}
+
+function tabStyle(active: boolean): React.CSSProperties {
   return {
-    ...base,
-    background: "var(--nb-surface, #f1f5f9)",
-    color: "var(--nb-text, #334155)",
-    border: "1px solid var(--nb-border, #e2e8f0)"
+    padding: "10px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+    border: "none", borderBottom: active ? "2px solid var(--nb-text)" : "2px solid transparent",
+    background: "transparent", color: active ? "var(--nb-text)" : "var(--nb-text-muted)",
+    transition: "all 0.15s", letterSpacing: "0.02em",
   };
 }
 
-const formBoxStyle: React.CSSProperties = {
-  background: "var(--nb-surface)",
-  border: "1px solid var(--nb-border)",
-  borderRadius: 10,
-  padding: "16px 20px",
-  marginBottom: 16
-};
-
-const labelStyle: React.CSSProperties = {
-  display: "flex",
-  flexDirection: "column",
-  gap: 4,
-  fontSize: 13,
-  color: "var(--nb-text-muted)",
-  fontWeight: 500
-};
-
-const inputStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: 6,
-  border: "1px solid var(--nb-border, #e2e8f0)",
-  fontSize: 13,
-  background: "var(--nb-bg, #fff)",
-  color: "var(--nb-text, #334155)",
-  minWidth: 140
-};
-
-const filterSelectStyle: React.CSSProperties = {
-  padding: "6px 10px",
-  borderRadius: 6,
-  border: "1px solid var(--nb-border, #e2e8f0)",
-  fontSize: 13,
-  background: "var(--nb-surface, #f8fafc)",
-  color: "var(--nb-text, #334155)"
-};
+const formBoxStyle: React.CSSProperties = { background: "var(--nb-surface)", border: "1px solid var(--nb-border)", borderRadius: 10, padding: "16px 20px", marginBottom: 16 };
+const fieldLabelStyle: React.CSSProperties = { display: "flex", flexDirection: "column", gap: 4, fontSize: 12, color: "var(--nb-text-muted)", fontWeight: 600 };
+const inlineLabelStyle: React.CSSProperties = { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "var(--nb-text-muted)", fontWeight: 600 };
+const inputStyle: React.CSSProperties = { padding: "6px 10px", borderRadius: 6, border: "1px solid var(--nb-border, #e2e8f0)", fontSize: 13, background: "var(--nb-bg, #fff)", color: "var(--nb-text, #334155)", minWidth: 130 };
+const selectStyle: React.CSSProperties = { ...inputStyle, minWidth: 150 };
+const thStyle: React.CSSProperties = { padding: "8px 12px", textAlign: "left", fontSize: 11, fontWeight: 800, color: "var(--nb-text-muted)", letterSpacing: "0.05em", textTransform: "uppercase" };
+const tdStyle: React.CSSProperties = { padding: "8px 12px", verticalAlign: "middle" };
 
 function tagStyle(color: string): React.CSSProperties {
-  return {
-    fontSize: 11,
-    fontWeight: 700,
-    padding: "2px 8px",
-    borderRadius: 4,
-    background: `${color}18`,
-    color: color,
-    letterSpacing: 0.5,
-    textTransform: "uppercase" as const
-  };
+  return { fontSize: 10, fontWeight: 700, padding: "2px 7px", borderRadius: 4, background: `${color}18`, color, letterSpacing: 0.5, textTransform: "uppercase" as const };
 }
