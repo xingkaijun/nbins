@@ -1,52 +1,47 @@
 import { Hono } from "hono";
 import type { Bindings } from "../env.ts";
-import type { InspectionStorage } from "../persistence/inspection-storage.ts";
 import type { ShipRecord } from "../persistence/records.ts";
-import { createInspectionStorageResolver } from "../persistence/storage-factory.ts";
-import { isD1Enabled } from "./route-helpers.ts";
+import { createRequireAuth, createRequireRole } from "../auth.ts";
+import type { AuthContextVariables } from "../auth.ts";
 
 function generateId(): string {
   return crypto.randomUUID();
 }
 
-function createShipRoutes(
-  resolveStorage: (bindings?: Bindings) => InspectionStorage = createInspectionStorageResolver()
-): Hono<{ Bindings: Bindings }> {
-  const routes = new Hono<{ Bindings: Bindings }>();
+type ShipRouteEnv = { Bindings: Bindings; Variables: AuthContextVariables };
+
+function createShipRoutes(): Hono<ShipRouteEnv> {
+  const routes = new Hono<ShipRouteEnv>();
+  
+  routes.use("*", createRequireAuth());
+
+  // 角色守卫
+  const requireAdminOrManager = createRequireRole<ShipRouteEnv>(["admin", "manager"]);
 
   routes.get("/", async (c) => {
     try {
       const projectId = c.req.query("projectId");
       const status = c.req.query("status");
 
-      if (isD1Enabled(c.env)) {
-        const conditions: string[] = [];
-        const params: unknown[] = [];
+      const conditions: string[] = [];
+      const params: unknown[] = [];
 
-        if (projectId) {
-          conditions.push('"projectId" = ?');
-          params.push(projectId);
-        }
-        if (status) {
-          conditions.push('"status" = ?');
-          params.push(status);
-        }
-
-        const where = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
-        const result = await c.env.DB!
-          .prepare(`SELECT * FROM "ships"${where} ORDER BY "hullNumber" ASC`)
-          .bind(...params)
-          .all();
-
-        return c.json({ ok: true, data: result.results ?? [] });
+      if (projectId) {
+        conditions.push('"projectId" = ?');
+        params.push(projectId);
+      }
+      if (status) {
+        conditions.push('"status" = ?');
+        params.push(status);
       }
 
-      const snapshot = await resolveStorage(c.env).read();
-      const ships = snapshot.ships
-        .filter((ship) => (!projectId || ship.projectId === projectId) && (!status || ship.status === status))
-        .sort((left, right) => left.hullNumber.localeCompare(right.hullNumber));
+      const where = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
+      const result = await c.env.DB!
+        .prepare(`SELECT * FROM "ships"${where} ORDER BY "hullNumber" ASC`)
+        .bind(...params)
+        .all();
 
-      return c.json({ ok: true, data: ships });
+      return c.json({ ok: true, data: result.results ?? [] });
     } catch (e: any) {
       console.error("GET /ships error:", e);
       return c.json({ ok: false, error: String(e) }, 500);
@@ -57,21 +52,10 @@ function createShipRoutes(
     try {
       const id = c.req.param("id");
 
-      if (isD1Enabled(c.env)) {
-        const ship = await c.env.DB!
-          .prepare('SELECT * FROM "ships" WHERE "id" = ?')
-          .bind(id)
-          .first();
-
-        if (!ship) {
-          return c.json({ ok: false, error: "船舶不存在" }, 404);
-        }
-
-        return c.json({ ok: true, data: ship });
-      }
-
-      const snapshot = await resolveStorage(c.env).read();
-      const ship = snapshot.ships.find((record) => record.id === id);
+      const ship = await c.env.DB!
+        .prepare('SELECT * FROM "ships" WHERE "id" = ?')
+        .bind(id)
+        .first();
 
       if (!ship) {
         return c.json({ ok: false, error: "船舶不存在" }, 404);
@@ -84,7 +68,7 @@ function createShipRoutes(
     }
   });
 
-  routes.post("/", async (c) => {
+  routes.post("/", requireAdminOrManager, async (c) => {
     try {
       const body = await c.req.json<{
         projectId: string;
@@ -109,43 +93,31 @@ function createShipRoutes(
         updatedAt: now
       };
 
-      if (isD1Enabled(c.env)) {
-        const project = await c.env.DB!
-          .prepare('SELECT "id" FROM "projects" WHERE "id" = ?')
-          .bind(body.projectId)
-          .first();
+      const project = await c.env.DB!
+        .prepare('SELECT "id" FROM "projects" WHERE "id" = ?')
+        .bind(body.projectId)
+        .first();
 
-        if (!project) {
-          return c.json({ ok: false, error: `关联项目 '${body.projectId}' 不存在` }, 400);
-        }
-
-        await c.env.DB!
-          .prepare(
-            `INSERT INTO "ships"
-             ("id", "projectId", "hullNumber", "shipName", "shipType", "status", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, 'building', ?, ?)`
-          )
-          .bind(
-            record.id,
-            record.projectId,
-            record.hullNumber,
-            record.shipName,
-            record.shipType,
-            record.createdAt,
-            record.updatedAt
-          )
-          .run();
-      } else {
-        const storage = resolveStorage(c.env);
-        const snapshot = await storage.read();
-
-        if (!snapshot.projects.some((project) => project.id === record.projectId)) {
-          return c.json({ ok: false, error: `关联项目 '${body.projectId}' 不存在` }, 400);
-        }
-
-        snapshot.ships.push(record);
-        await storage.write(snapshot);
+      if (!project) {
+        return c.json({ ok: false, error: `关联项目 '${body.projectId}' 不存在` }, 400);
       }
+
+      await c.env.DB!
+        .prepare(
+          `INSERT INTO "ships"
+           ("id", "projectId", "hullNumber", "shipName", "shipType", "status", "createdAt", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, 'building', ?, ?)`
+        )
+        .bind(
+          record.id,
+          record.projectId,
+          record.hullNumber,
+          record.shipName,
+          record.shipType,
+          record.createdAt,
+          record.updatedAt
+        )
+        .run();
 
       return c.json({ ok: true, data: record });
     } catch (e: any) {
@@ -154,7 +126,7 @@ function createShipRoutes(
     }
   });
 
-  routes.put("/:id", async (c) => {
+  routes.put("/:id", requireAdminOrManager, async (c) => {
     try {
       const id = c.req.param("id");
       const body = await c.req.json<{
@@ -166,43 +138,24 @@ function createShipRoutes(
       }>();
       const now = new Date().toISOString();
 
-      if (isD1Enabled(c.env)) {
-        const sets: string[] = ['"updatedAt" = ?'];
-        const params: unknown[] = [now];
+      const sets: string[] = ['"updatedAt" = ?'];
+      const params: unknown[] = [now];
 
-        if (body.projectId !== undefined) sets.push('"projectId" = ?'), params.push(body.projectId);
-        if (body.hullNumber !== undefined) sets.push('"hullNumber" = ?'), params.push(body.hullNumber);
-        if (body.shipName !== undefined) sets.push('"shipName" = ?'), params.push(body.shipName);
-        if (body.shipType !== undefined) sets.push('"shipType" = ?'), params.push(body.shipType);
-        if (body.status !== undefined) sets.push('"status" = ?'), params.push(body.status);
+      if (body.projectId !== undefined) sets.push('"projectId" = ?'), params.push(body.projectId);
+      if (body.hullNumber !== undefined) sets.push('"hullNumber" = ?'), params.push(body.hullNumber);
+      if (body.shipName !== undefined) sets.push('"shipName" = ?'), params.push(body.shipName);
+      if (body.shipType !== undefined) sets.push('"shipType" = ?'), params.push(body.shipType);
+      if (body.status !== undefined) sets.push('"status" = ?'), params.push(body.status);
 
-        params.push(id);
+      params.push(id);
 
-        const info = await c.env.DB!
-          .prepare(`UPDATE "ships" SET ${sets.join(", ")} WHERE "id" = ?`)
-          .bind(...params)
-          .run();
+      const info = await c.env.DB!
+        .prepare(`UPDATE "ships" SET ${sets.join(", ")} WHERE "id" = ?`)
+        .bind(...params)
+        .run();
 
-        if (info.meta?.changes === 0) {
-          return c.json({ ok: false, error: "船舶不存在" }, 404);
-        }
-      } else {
-        const storage = resolveStorage(c.env);
-        const snapshot = await storage.read();
-        const ship = snapshot.ships.find((record) => record.id === id);
-
-        if (!ship) {
-          return c.json({ ok: false, error: "船舶不存在" }, 404);
-        }
-
-        if (body.projectId !== undefined) ship.projectId = body.projectId;
-        if (body.hullNumber !== undefined) ship.hullNumber = body.hullNumber;
-        if (body.shipName !== undefined) ship.shipName = body.shipName;
-        if (body.shipType !== undefined) ship.shipType = body.shipType;
-        if (body.status === "building" || body.status === "delivered") ship.status = body.status;
-        ship.updatedAt = now;
-
-        await storage.write(snapshot);
+      if (info.meta?.changes === 0) {
+        return c.json({ ok: false, error: "船舶不存在" }, 404);
       }
 
       return c.json({ ok: true, data: { id, updatedAt: now } });

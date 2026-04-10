@@ -1,6 +1,6 @@
 import { Hono } from "hono";
 import { cors } from "hono/cors";
-import { createMockDashboardSnapshot } from "@nbins/shared";
+import { DISCIPLINES } from "@nbins/shared";
 import type { Bindings } from "./env.ts";
 import { createInspectionStorageResolver } from "./persistence/storage-factory.ts";
 import { createAuthRoutes } from "./routes/auth.ts";
@@ -12,6 +12,7 @@ import { createProjectRoutes } from "./routes/projects.ts";
 import { createShipRoutes } from "./routes/ships.ts";
 import { createUserRoutes } from "./routes/users.ts";
 import { createNcrRoutes } from "./routes/ncrs.ts";
+
 function createApp(): Hono<{ Bindings: Bindings }> {
   const app = new Hono<{ Bindings: Bindings }>();
   const resolveStorage = createInspectionStorageResolver();
@@ -40,14 +41,12 @@ function createApp(): Hono<{ Bindings: Bindings }> {
   });
 
   app.get("/api/meta", (c) => {
-    const snapshot = createMockDashboardSnapshot();
-
     return c.json({
       appName: c.env.APP_NAME ?? "NBINS",
       environment: c.env.APP_ENV ?? "development",
-      storageMode: c.env.D1_DRIVER === "d1" && c.env.DB ? "d1" : "mock",
-      generatedAt: snapshot.generatedAt,
-      disciplines: [...new Set(snapshot.items.map((item) => item.discipline))],
+      storageMode: "d1",
+      generatedAt: new Date().toISOString(),
+      disciplines: DISCIPLINES.filter((d: string) => d !== "all"),
       routes: [
         "/health",
         "/api/meta",
@@ -77,15 +76,27 @@ function createApp(): Hono<{ Bindings: Bindings }> {
     });
   });
 
-  app.route("/api/dev", devRoutes);
+  // P0: 生产环境禁用调试路由
+  app.route("/api/dev", (() => {
+    const dev = new Hono<{ Bindings: Bindings }>();
+    dev.all("*", (c) => {
+      if (c.env.APP_ENV === "production") {
+        return c.json({ ok: false, error: "Not available in production" }, 404);
+      }
+      // 非生产环境正常转发
+      return devRoutes.fetch(c.req.raw, c.env);
+    });
+    return dev;
+  })());
+
   app.route("/api/auth", createAuthRoutes());
   app.route("/api/inspections", createInspectionRoutes(resolveStorage));
   app.route("/api/observation-types", createObservationTypeRoutes());
-  app.route("/api/projects", createProjectRoutes(resolveStorage));
-  app.route("/api/ships", createShipRoutes(resolveStorage));
-  app.route("/api/users", createUserRoutes(resolveStorage));
-  app.route("/api", createObservationRoutes(resolveStorage));
-  app.route("/api/ncrs", createNcrRoutes(resolveStorage));
+  app.route("/api/projects", createProjectRoutes());
+  app.route("/api/ships", createShipRoutes());
+  app.route("/api/users", createUserRoutes());
+  app.route("/api", createObservationRoutes());
+  app.route("/api/ncrs", createNcrRoutes());
 
   return app;
 }

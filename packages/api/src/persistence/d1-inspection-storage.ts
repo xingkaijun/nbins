@@ -50,6 +50,7 @@ export class D1InspectionStorage implements InspectionStorage {
       inspectionItems: inspectionItems.map(mapInspectionItemRecord),
       inspectionRounds: inspectionRounds.map(mapInspectionRoundRecord),
       comments: comments.map(mapCommentRecord),
+      observations: [],
       ncrs: []
     };
   }

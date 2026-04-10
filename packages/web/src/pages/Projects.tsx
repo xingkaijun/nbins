@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { fetchProjects } from '../api';
 
 export function Projects() {
   const navigate = useNavigate();
@@ -7,11 +8,10 @@ export function Projects() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetch('/api/projects')
-      .then(res => res.json())
-      .then(res => {
-        if (res.ok && res.data) {
-          setProjects(res.data.map((p: any) => ({
+    fetchProjects()
+      .then(data => {
+        if (data) {
+          setProjects(data.map((p: any) => ({
              id: p.id,
              name: p.name,
              code: p.code,

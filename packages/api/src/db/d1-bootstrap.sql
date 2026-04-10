@@ -116,3 +116,17 @@ CREATE TABLE IF NOT EXISTS "observations" (
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS "ncrs" (
+  "id" TEXT PRIMARY KEY,
+  "shipId" TEXT NOT NULL REFERENCES "ships"("id"),
+  "title" TEXT NOT NULL,
+  "content" TEXT NOT NULL,
+  "authorId" TEXT NOT NULL REFERENCES "users"("id"),
+  "status" TEXT NOT NULL,
+  "approvedBy" TEXT REFERENCES "users"("id"),
+  "approvedAt" TEXT,
+  "attachments" TEXT NOT NULL DEFAULT '[]',
+  "createdAt" TEXT NOT NULL,
+  "updatedAt" TEXT NOT NULL
+);

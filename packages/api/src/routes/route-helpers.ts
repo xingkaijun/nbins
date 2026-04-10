@@ -1,15 +1,7 @@
-import { DEFAULT_OBSERVATION_TYPES } from "@nbins/shared";
 import type {
-  ObservationRecord,
-  ObservationTypeRecord,
   ProjectRecord,
   UserRecord
 } from "../persistence/records.ts";
-import type { Bindings } from "../env.ts";
-
-export function isD1Enabled(bindings: Bindings | undefined | null): boolean {
-  return Boolean(bindings) && (bindings as Bindings).D1_DRIVER === "d1" && Boolean((bindings as Bindings).DB);
-}
 
 export function parseStringArray(value: unknown): string[] {
   if (Array.isArray(value)) {
@@ -60,18 +52,3 @@ export function mapUserRecord(row: Record<string, unknown>): UserRecord {
     updatedAt: String(row.updatedAt)
   };
 }
-
-const mockObservationNow = new Date().toISOString();
-
-export const mockObservationTypes: ObservationTypeRecord[] = DEFAULT_OBSERVATION_TYPES.map(
-  (type, index) => ({
-    id: `observation-type-${type.code}`,
-    code: type.code,
-    label: type.label,
-    sortOrder: index,
-    createdAt: mockObservationNow,
-    updatedAt: mockObservationNow
-  })
-);
-
-export const mockObservations: ObservationRecord[] = [];

@@ -1,0 +1,8 @@
+﻿
+> @nbins/web@0.1.0 typecheck D:\Code\nbins\packages\web
+> tsc -p tsconfig.app.json
+
+src/App.tsx(8,23): error TS2307: Cannot find module './pages/Admin' or its corresponding type declarations.
+D:\Code\nbins\packages\web:
+鈥塃RR_PNPM_RECURSIVE_RUN_FIRST_FAIL鈥?@nbins/web@0.1.0 typecheck: `tsc -p tsconfig.app.json`
+Exit status 2

@@ -1,33 +1,32 @@
 import { Hono } from "hono";
 import type { Bindings } from "../env.ts";
 import type { ObservationTypeRecord } from "../persistence/records.ts";
-import { isD1Enabled, mockObservationTypes } from "./route-helpers.ts";
+import { createRequireAuth, createRequireRole } from "../auth.ts";
+import type { AuthContextVariables } from "../auth.ts";
 
 function generateId(): string {
   return crypto.randomUUID();
 }
 
-function createObservationTypeRoutes(): Hono<{ Bindings: Bindings }> {
-  const routes = new Hono<{ Bindings: Bindings }>();
+type ObsTypeRouteEnv = { Bindings: Bindings; Variables: AuthContextVariables };
+
+function createObservationTypeRoutes(): Hono<ObsTypeRouteEnv> {
+  const routes = new Hono<ObsTypeRouteEnv>();
+  
+  routes.use("*", createRequireAuth());
+
+  // 角色守卫
+  const requireAdmin = createRequireRole<ObsTypeRouteEnv>(["admin"]);
 
   routes.get("/", async (c) => {
     try {
-      if (isD1Enabled(c.env)) {
-        const result = await c.env.DB!
-          .prepare('SELECT * FROM "observation_types" ORDER BY "sortOrder" ASC, "code" ASC')
-          .all();
-
-        return c.json({
-          ok: true,
-          data: result.results ?? []
-        });
-      }
+      const result = await c.env.DB!
+        .prepare('SELECT * FROM "observation_types" ORDER BY "sortOrder" ASC, "code" ASC')
+        .all();
 
       return c.json({
         ok: true,
-        data: [...mockObservationTypes].sort(
-          (left, right) => left.sortOrder - right.sortOrder || left.code.localeCompare(right.code)
-        )
+        data: result.results ?? []
       });
     } catch (e: any) {
       console.error("GET /observation-types error:", e);
@@ -35,7 +34,7 @@ function createObservationTypeRoutes(): Hono<{ Bindings: Bindings }> {
     }
   });
 
-  routes.post("/", async (c) => {
+  routes.post("/", requireAdmin, async (c) => {
     const body = await c.req.json<{ code: string; label: string; sortOrder?: number }>();
 
     if (!body.code || !body.label) {
@@ -53,21 +52,13 @@ function createObservationTypeRoutes(): Hono<{ Bindings: Bindings }> {
     };
 
     try {
-      if (isD1Enabled(c.env)) {
-        await c.env.DB!
-          .prepare(
-            `INSERT INTO "observation_types" ("id", "code", "label", "sortOrder", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, ?)`
-          )
-          .bind(record.id, record.code, record.label, record.sortOrder, record.createdAt, record.updatedAt)
-          .run();
-      } else {
-        if (mockObservationTypes.some((item) => item.code === record.code)) {
-          return c.json({ ok: false, error: `类型编码 '${record.code}' 已存在` }, 409);
-        }
-
-        mockObservationTypes.push(record);
-      }
+      await c.env.DB!
+        .prepare(
+          `INSERT INTO "observation_types" ("id", "code", "label", "sortOrder", "createdAt", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?)`
+        )
+        .bind(record.id, record.code, record.label, record.sortOrder, record.createdAt, record.updatedAt)
+        .run();
 
       return c.json({ ok: true, data: record });
     } catch (e: any) {
@@ -79,7 +70,7 @@ function createObservationTypeRoutes(): Hono<{ Bindings: Bindings }> {
     }
   });
 
-  routes.put("/:id", async (c) => {
+  routes.put("/:id", requireAdmin, async (c) => {
     try {
       const id = c.req.param("id");
       const body = await c.req.json<{ label?: string; sortOrder?: number }>();
@@ -89,43 +80,27 @@ function createObservationTypeRoutes(): Hono<{ Bindings: Bindings }> {
         return c.json({ ok: false, error: "label 或 sortOrder 至少提供一个" }, 400);
       }
 
-      if (isD1Enabled(c.env)) {
-        const sets: string[] = ['"updatedAt" = ?'];
-        const params: unknown[] = [now];
+      const sets: string[] = ['"updatedAt" = ?'];
+      const params: unknown[] = [now];
 
-        if (body.label !== undefined) {
-          sets.push('"label" = ?');
-          params.push(body.label);
-        }
-        if (body.sortOrder !== undefined) {
-          sets.push('"sortOrder" = ?');
-          params.push(body.sortOrder);
-        }
+      if (body.label !== undefined) {
+        sets.push('"label" = ?');
+        params.push(body.label);
+      }
+      if (body.sortOrder !== undefined) {
+        sets.push('"sortOrder" = ?');
+        params.push(body.sortOrder);
+      }
 
-        params.push(id);
+      params.push(id);
 
-        const info = await c.env.DB!
-          .prepare(`UPDATE "observation_types" SET ${sets.join(", ")} WHERE "id" = ?`)
-          .bind(...params)
-          .run();
+      const info = await c.env.DB!
+        .prepare(`UPDATE "observation_types" SET ${sets.join(", ")} WHERE "id" = ?`)
+        .bind(...params)
+        .run();
 
-        if (info.meta?.changes === 0) {
-          return c.json({ ok: false, error: "意见类型不存在" }, 404);
-        }
-      } else {
-        const record = mockObservationTypes.find((item) => item.id === id);
-
-        if (!record) {
-          return c.json({ ok: false, error: "意见类型不存在" }, 404);
-        }
-
-        if (body.label !== undefined) {
-          record.label = body.label;
-        }
-        if (body.sortOrder !== undefined) {
-          record.sortOrder = body.sortOrder;
-        }
-        record.updatedAt = now;
+      if (info.meta?.changes === 0) {
+        return c.json({ ok: false, error: "意见类型不存在" }, 404);
       }
 
       return c.json({ ok: true, data: { id, updatedAt: now } });
