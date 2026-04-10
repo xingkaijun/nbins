@@ -22,13 +22,30 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
   routes.get("/", async (c) => {
     try {
       const status = c.req.query("status");
+      const authUser = c.get("authUser");
 
-      const sqlParts = ['SELECT * FROM "projects"'];
+      const sqlParts: string[] = [];
       const params: unknown[] = [];
-
+      
+      const conditions: string[] = [];
+      
       if (status) {
-        sqlParts.push('WHERE "status" = ?');
+        conditions.push('"status" = ?');
         params.push(status);
+      }
+
+      if (authUser.role === "admin") {
+        sqlParts.push('SELECT * FROM "projects"');
+        if (conditions.length > 0) {
+          sqlParts.push('WHERE ' + conditions.join(' AND '));
+        }
+      } else {
+        sqlParts.push('SELECT p.* FROM "projects" p');
+        sqlParts.push('INNER JOIN "project_members" pm ON p."id" = pm."projectId"');
+        conditions.push('pm."userId" = ?');
+        params.push(authUser.id);
+        
+        sqlParts.push('WHERE ' + conditions.join(' AND '));
       }
 
       sqlParts.push('ORDER BY "createdAt" DESC');
@@ -51,14 +68,24 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
   routes.get("/:id", async (c) => {
     try {
       const id = c.req.param("id");
+      const authUser = c.get("authUser");
 
-      const projectRow = await c.env.DB!
-        .prepare('SELECT * FROM "projects" WHERE "id" = ?')
-        .bind(id)
-        .first<Record<string, unknown>>();
+      let projectRow;
+      
+      if (authUser.role === "admin") {
+        projectRow = await c.env.DB!
+          .prepare('SELECT * FROM "projects" WHERE "id" = ?')
+          .bind(id)
+          .first<Record<string, unknown>>();
+      } else {
+        projectRow = await c.env.DB!
+          .prepare('SELECT p.* FROM "projects" p INNER JOIN "project_members" pm ON p."id" = pm."projectId" WHERE p."id" = ? AND pm."userId" = ?')
+          .bind(id, authUser.id)
+          .first<Record<string, unknown>>();
+      }
 
       if (!projectRow) {
-        return c.json({ ok: false, error: "项目不存在" }, 404);
+        return c.json({ ok: false, error: "项目不存在或无权访问" }, 404);
       }
 
       const ships = await c.env.DB!
