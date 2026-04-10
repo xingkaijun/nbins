@@ -7,12 +7,14 @@ import {
   fetchInspectionComments,
   createObservation,
   createObservationType,
+  updateObservation,
   closeObservation,
   batchImportObservations,
   fetchProjects,
   fetchShips,
 } from "../api";
 import type { ProjectRecord, ShipRecord } from "../api";
+import { exportObservationsPdf, exportObservationsExcel } from "../utils/export-tools";
 
 type ActiveTab = "observations" | "inspection-comments";
 
@@ -56,6 +58,18 @@ export function Observations() {
   const [showImport, setShowImport] = useState(false);
   const [importType, setImportType] = useState("patrol");
   const [pasteText, setPasteText] = useState("");
+  const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+
+  // 编辑弹窗
+  const [editingItem, setEditingItem] = useState<ObservationItem | null>(null);
+  const [editType, setEditType] = useState("");
+  const [editDiscipline, setEditDiscipline] = useState<string>("HULL");
+  const [editLocation, setEditLocation] = useState("");
+  const [editContent, setEditContent] = useState("");
+  const [editRemark, setEditRemark] = useState("");
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
   const [parsedRows, setParsedRows] = useState<ParsedRow[]>([]);
   const [importSubmitting, setImportSubmitting] = useState(false);
 
@@ -130,10 +144,48 @@ export function Observations() {
     finally { setSubmitting(false); }
   };
 
+  // ---- 单条编辑触发 ----
+  const handleEditClick = (item: ObservationItem) => {
+    setEditingItem(item);
+    setEditType(item.type);
+    setEditDiscipline(item.discipline);
+    setEditLocation(item.location || "");
+    setEditContent(item.content);
+    setEditRemark(item.remark || "");
+  };
+
+  // ---- 提交编辑 ----
+  const handleEditSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingItem || !editType || !editContent.trim()) return;
+    setEditSubmitting(true);
+    try {
+      await updateObservation(editingItem.id, {
+        type: editType,
+        discipline: editDiscipline,
+        location: editLocation || null,
+        content: editContent.trim(),
+        remark: editRemark || null,
+      });
+      setEditingItem(null);
+      void loadData();
+    } catch (err: any) { alert("Update failed: " + (err.message || "Unknown error")); }
+    finally { setEditSubmitting(false); }
+  };
+
   // ---- 关闭意见 ----
   const handleClose = async (id: string) => {
     try { await closeObservation(id); void loadData(); }
     catch (err: any) { alert("Close failed: " + (err.message || "Unknown error")); }
+  };
+
+  // ---- 导出相关 ----
+  const handleExportPdf = () => {
+    exportObservationsPdf(items, comments, getProjectName() || "All Projects");
+  };
+
+  const handleExportExcel = () => {
+    exportObservationsExcel(items, comments, getProjectName() || "All Projects");
   };
 
   // ---- 新增类型 ----
@@ -195,25 +247,29 @@ export function Observations() {
   const validCount = parsedRows.filter(r => r.valid).length;
 
   return (
-    <main style={{ padding: "24px 32px", maxWidth: 1280, margin: "0 auto" }}>
-      {/* 页面标题 */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+    <main className="workspace" style={{ display: "flex", flexDirection: "column" }}>
+      {/* 页面标题区 */}
+      <section className="hero" style={{ paddingBottom: 16 }}>
         <div>
-          <h1 style={{ fontSize: 20, fontWeight: 800, margin: 0, color: "var(--nb-text)", letterSpacing: "-0.02em" }}>
-            OBSERVATION MANAGEMENT
-          </h1>
-          <p style={{ fontSize: 12, color: "var(--nb-text-muted)", margin: "4px 0 0", fontWeight: 600, letterSpacing: "0.03em" }}>
-            {getProjectName() && `Project: ${getProjectName()}`}
-          </p>
-        </div>
-        {activeTab === "observations" && (
-          <div style={{ display: "flex", gap: 8 }}>
-            <button onClick={() => setShowTypeForm(!showTypeForm)} style={btnStyle("secondary")}>+ Custom Type</button>
-            <button onClick={() => setShowImport(!showImport)} style={btnStyle("secondary")}>Paste Import</button>
-            <button onClick={() => setShowForm(!showForm)} style={btnStyle("primary")}>+ New Observation</button>
+          <p className="eyebrow">OBSERVATION MANAGEMENT</p>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <h2 style={{ fontSize: "1.25rem", margin: 0 }}>
+              {getProjectName() ? `Project: ${getProjectName()}` : "ALL PROJECTS"}
+            </h2>
           </div>
-        )}
-      </div>
+        </div>
+        <div className="heroMeta" style={{ gap: 8 }}>
+          <button type="button" onClick={handleExportPdf}>EXPORT PDF</button>
+          <button type="button" onClick={handleExportExcel}>EXPORT EXCEL</button>
+          {activeTab === "observations" && (
+            <>
+              <button type="button" onClick={() => setShowTypeForm(!showTypeForm)}>+ CUSTOM TYPE</button>
+              <button type="button" onClick={() => setShowImport(!showImport)}>PASTE IMPORT</button>
+              <button type="button" onClick={() => setShowForm(!showForm)} style={{ background: "var(--nb-accent)", color: "#fff" }}>+ NEW OBSERVATION</button>
+            </>
+          )}
+        </div>
+      </section>
 
       {/* 项目/船号筛选 */}
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
@@ -393,7 +449,10 @@ export function Observations() {
                     <td style={tdStyle}>{item.authorName ?? item.authorId}</td>
                     <td style={tdStyle}><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
                     <td style={tdStyle}>
-                      {item.status === "open" && <button onClick={() => handleClose(item.id)} style={{ ...btnStyle("secondary"), fontSize: 11, padding: "3px 8px" }}>Close</button>}
+                      <div style={{ display: "flex", gap: 4 }}>
+                        <button onClick={() => handleEditClick(item)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px" }}>Edit</button>
+                        {item.status === "open" && <button onClick={() => handleClose(item.id)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px", color: "#166534" }}>Close</button>}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -433,6 +492,42 @@ export function Observations() {
             </table>
           </div>
         )
+      )}
+
+      {/* 编辑弹窗 */}
+      {editingItem && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", zIndex: 9999 }}>
+          <form style={{ ...formBoxStyle, width: "90%", maxWidth: 500, margin: 0, boxShadow: "0 24px 64px rgba(15, 23, 42, 0.18)" }} onSubmit={handleEditSubmit}>
+            <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800 }}>Edit Observation #{editingItem.serialNo}</h3>
+            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+              <label style={fieldLabelStyle}><span>Type</span>
+                <select value={editType} onChange={e => setEditType(e.target.value)} style={inputStyle} required>
+                  {types.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
+                </select>
+              </label>
+              <label style={fieldLabelStyle}><span>Discipline</span>
+                <select value={editDiscipline} onChange={e => setEditDiscipline(e.target.value)} style={inputStyle}>
+                  {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </label>
+            </div>
+            <label style={{ ...fieldLabelStyle, marginTop: 12, display: "block" }}><span>Location</span>
+              <input type="text" value={editLocation} onChange={e => setEditLocation(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+            </label>
+            <label style={{ ...fieldLabelStyle, marginTop: 12, display: "block" }}><span>Content</span>
+              <textarea value={editContent} onChange={e => setEditContent(e.target.value)} rows={4} style={{ ...inputStyle, resize: "vertical", width: "100%" }} required />
+            </label>
+            <label style={{ ...fieldLabelStyle, marginTop: 12, display: "block" }}><span>Remark</span>
+              <input type="text" value={editRemark} onChange={e => setEditRemark(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
+            </label>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 24 }}>
+              <button type="button" onClick={() => setEditingItem(null)} style={btnStyle("secondary")}>Cancel</button>
+              <button type="submit" disabled={editSubmitting} style={{ ...btnStyle("primary"), background: "var(--nb-accent)", color: "#fff" }}>
+                {editSubmitting ? "Saving..." : "Save Changes"}
+              </button>
+            </div>
+          </form>
+        </div>
       )}
     </main>
   );
