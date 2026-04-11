@@ -42,11 +42,12 @@ export function exportObservationsPdf(
     const logoHeight = 12;
     drawPdfLogo(doc, margin, y, logoHeight);
     
-    // Title on right - "SITE OBSERVATION REPORT"
+    // Title on right
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(22);
     doc.setTextColor(...PRIMARY_BLUE);
-    doc.text('SITE OBSERVATION REPORT', pageWidth - margin, y + 8, { align: 'right' });
+    const reportTitle = mode === "observations" ? 'SITE OBSERVATION REPORT' : 'SITE INSPECTION REPORT';
+    doc.text(reportTitle, pageWidth - margin, y + 8, { align: 'right' });
     
     y += logoHeight + 3;
     
@@ -179,17 +180,27 @@ export function exportObservationsPdf(
       }
       
       // Alternating row colors
-      if (rowIndex % 2 === 1) {
-        doc.setFillColor(...LIGHT_GRAY);
-        doc.rect(margin, y - 2, pageWidth - 2 * margin, 10, 'F');
-      }
-      
-      // Prepare content
       const locationText = doc.splitTextToSize(item.location || '-', 23);
       const contentText = doc.splitTextToSize(item.content || '-', 110);
       const maxLines = Math.max(locationText.length, contentText.length);
+      const rowHeight = maxLines * 4 + 2;
       
-      // Draw cell content
+      if (rowIndex % 2 === 1) {
+        doc.setFillColor(...LIGHT_GRAY);
+        doc.rect(margin, y - 2, pageWidth - 2 * margin, rowHeight, 'F');
+      }
+      
+      // Status background with conditional formatting (draw BEFORE text)
+      const status = (item.status || 'open').toUpperCase();
+      if (status === 'OPEN') {
+        doc.setFillColor(255, 199, 206); // #FFC7CE
+        doc.rect(colX.status, y - 2, 18, rowHeight, 'F');
+      } else if (status === 'CLOSED') {
+        doc.setFillColor(198, 239, 206); // #C6EFCE
+        doc.rect(colX.status, y - 2, 18, rowHeight, 'F');
+      }
+      
+      // Draw cell content (AFTER backgrounds)
       doc.setTextColor(0, 0, 0);
       doc.text(item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : String(item.serialNo || '-'), colX.num + 1, y + 3);
       doc.text(item.type || '-', colX.type + 1, y + 3);
@@ -197,20 +208,15 @@ export function exportObservationsPdf(
       doc.text(locationText, colX.location + 1, y + 3);
       doc.text(contentText, colX.content + 1, y + 3);
       
-      // Status with conditional formatting
-      const status = (item.status || 'open').toUpperCase();
+      // Status text with conditional color
       if (status === 'OPEN') {
-        doc.setFillColor(255, 199, 206); // #FFC7CE
-        doc.rect(colX.status, y - 2, 18, maxLines * 4 + 2, 'F');
         doc.setTextColor(156, 0, 6); // #9C0006
       } else if (status === 'CLOSED') {
-        doc.setFillColor(198, 239, 206); // #C6EFCE
-        doc.rect(colX.status, y - 2, 18, maxLines * 4 + 2, 'F');
         doc.setTextColor(0, 97, 0); // #006100
       }
       doc.text(status, colX.status + 1, y + 3);
       
-      y += maxLines * 4 + 2;
+      y += rowHeight;
       rowIndex++;
     }
   } else {
@@ -280,17 +286,27 @@ export function exportObservationsPdf(
       }
       
       // Alternating row colors
-      if (rowIndex % 2 === 1) {
-        doc.setFillColor(...LIGHT_GRAY);
-        doc.rect(margin, y - 2, pageWidth - 2 * margin, 10, 'F');
-      }
-      
-      // Prepare content
       const itemText = doc.splitTextToSize(cm.inspectionItemName || '-', 38);
       const contentText = doc.splitTextToSize(cm.content || '-', 90);
       const maxLines = Math.max(itemText.length, contentText.length);
+      const rowHeight = maxLines * 4 + 2;
       
-      // Draw cell content
+      if (rowIndex % 2 === 1) {
+        doc.setFillColor(...LIGHT_GRAY);
+        doc.rect(margin, y - 2, pageWidth - 2 * margin, rowHeight, 'F');
+      }
+      
+      // Status background with conditional formatting (draw BEFORE text)
+      const status = (cm.status || 'open').toUpperCase();
+      if (status === 'OPEN') {
+        doc.setFillColor(255, 199, 206); // #FFC7CE
+        doc.rect(colX.status, y - 2, 18, rowHeight, 'F');
+      } else if (status === 'CLOSED') {
+        doc.setFillColor(198, 239, 206); // #C6EFCE
+        doc.rect(colX.status, y - 2, 18, rowHeight, 'F');
+      }
+      
+      // Draw cell content (AFTER backgrounds)
       doc.setTextColor(0, 0, 0);
       doc.text(String(cm.localId || '-'), colX.num + 1, y + 3);
       doc.text(cm.hullNumber || '-', colX.ship + 1, y + 3);
@@ -298,20 +314,15 @@ export function exportObservationsPdf(
       doc.text(itemText, colX.item + 1, y + 3);
       doc.text(contentText, colX.content + 1, y + 3);
       
-      // Status with conditional formatting
-      const status = (cm.status || 'open').toUpperCase();
+      // Status text with conditional color
       if (status === 'OPEN') {
-        doc.setFillColor(255, 199, 206); // #FFC7CE
-        doc.rect(colX.status, y - 2, 18, maxLines * 4 + 2, 'F');
         doc.setTextColor(156, 0, 6); // #9C0006
       } else if (status === 'CLOSED') {
-        doc.setFillColor(198, 239, 206); // #C6EFCE
-        doc.rect(colX.status, y - 2, 18, maxLines * 4 + 2, 'F');
         doc.setTextColor(0, 97, 0); // #006100
       }
       doc.text(status, colX.status + 1, y + 3);
       
-      y += maxLines * 4 + 2;
+      y += rowHeight;
       rowIndex++;
     }
   }
