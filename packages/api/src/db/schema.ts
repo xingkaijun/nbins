@@ -79,6 +79,7 @@ export const projectsTable = sqliteTable<{
   owner: textColumn<string | null>({ nullable: true }),
   shipyard: textColumn<string | null>({ nullable: true }),
   class: textColumn<string | null>({ nullable: true }),
+  disciplines: textColumn<string[]>({ mode: "json", default: [] }),
   reportRecipients: textColumn<string[]>({ mode: "json", default: [] }),
   ncrRecipients: textColumn<string[]>({ mode: "json", default: [] }),
   createdAt: textColumn<string>(),

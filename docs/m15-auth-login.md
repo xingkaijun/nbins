@@ -59,7 +59,7 @@ Success response:
       "username": "li.si",
       "displayName": "Li Si",
       "role": "inspector",
-      "disciplines": ["PAINT", "MACHINERY"]
+      "disciplines": ["PAINT", "MACH"]
     }
   }
 }

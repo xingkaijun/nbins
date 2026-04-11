@@ -29,7 +29,7 @@ function generateCustomMockData(snapshot: InspectionStorageSnapshot) {
     { id: "proj-B", code: "P-02", name: "Beta Container Operations" }
   ];
   for (const p of projs) {
-    snapshot.projects.push({ ...p, status: "active", owner: "Owner ABC", shipyard: "Yard XYZ", class: "LR", reportRecipients: [], ncrRecipients: [], createdAt: now, updatedAt: now });
+    snapshot.projects.push({ ...p, status: "active", owner: "Owner ABC", shipyard: "Yard XYZ", class: "LR", disciplines: [], reportRecipients: [], ncrRecipients: [], createdAt: now, updatedAt: now });
   }
 
   // 2. Ships
@@ -82,7 +82,7 @@ function generateCustomMockData(snapshot: InspectionStorageSnapshot) {
   snapshot.users.push(...userList);
 
   // 4. Inspections
-  const disciplines = ["HULL", "OUTFIT", "MACHINERY", "PAINT"];
+  const disciplines = ["HULL", "OUTFIT", "MACH", "PAINT"];
   const results = ["CX", "AA", "QCC", "OWC", "RJ"];
   for (const ship of ships) {
     for (let i = 0; i < 4; i++) {

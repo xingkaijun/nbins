@@ -38,6 +38,7 @@ export interface ProjectRecord {
   owner: string | null;
   shipyard: string | null;
   class: string | null;
+  disciplines: string[];
   reportRecipients: string[];
   ncrRecipients: string[];
   createdAt: string;
@@ -456,6 +457,7 @@ export async function createProject(data: {
   owner?: string;
   shipyard?: string;
   class?: string;
+  disciplines?: string[];
   reportRecipients?: string[];
   ncrRecipients?: string[];
 }): Promise<ProjectRecord> {
@@ -467,7 +469,7 @@ export async function createProject(data: {
 
 export async function updateProject(
   projectId: string,
-  data: Partial<Pick<ProjectRecord, "name" | "code" | "status" | "owner" | "shipyard" | "class" | "reportRecipients" | "ncrRecipients">>
+  data: Partial<Pick<ProjectRecord, "name" | "code" | "status" | "owner" | "shipyard" | "class" | "disciplines" | "reportRecipients" | "ncrRecipients">>
 ): Promise<{ id: string; updatedAt: string }> {
   return requestJson<{ id: string; updatedAt: string }>(`/projects/${projectId}`, {
     method: "PUT",

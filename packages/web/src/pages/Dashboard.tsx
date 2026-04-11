@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   COMMENT_STATUSES,
+  DISCIPLINES,
   INSPECTION_RESULTS,
   INSPECTION_RESULT_LABELS,
   type InspectionItemComment,
@@ -9,7 +10,7 @@ import {
   type InspectionResult,
   syncListItemWithDetail
 } from "@nbins/shared";
-import { ApiError, fetchInspectionList, fetchInspectionDetail } from "../api";
+import { ApiError, fetchInspectionList, fetchInspectionDetail, fetchProjects, type ProjectRecord } from "../api";
 import { type DetailTransportMode, useInspectionDetail } from "../useInspectionDetail";
 import { generateInspectionChecklistPdf, generateInspectionReport } from "../utils/pdf-generator";
 import { useAuth } from "../auth-context";
@@ -318,11 +319,17 @@ export function Dashboard() {
   const [listLoading, setListLoading] = useState(true);
   const [listMode, setListMode] = useState<DetailTransportMode>("api");
   const [dataGeneratedAt, setDataGeneratedAt] = useState<string>(new Date().toISOString());
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
   
   const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
+
+  // Load projects
+  useEffect(() => {
+    fetchProjects().then(setProjects).catch(() => {});
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -402,7 +409,32 @@ export function Dashboard() {
 
   // Derived filter options
   const hullOptions = useMemo(() => Array.from(new Set(listItems.map(i => i.hullNumber))).sort(), [listItems]);
-  const disciplineOptions = useMemo(() => Array.from(new Set(listItems.map(i => i.discipline))).sort(), [listItems]);
+  
+  // Get effective disciplines from projects configuration
+  const disciplineOptions = useMemo(() => {
+    // Get unique project codes from list items
+    const projectCodes = Array.from(new Set(listItems.map(i => i.projectCode).filter(Boolean)));
+    
+    // If we have projects loaded, use their disciplines configuration
+    if (projects.length > 0 && projectCodes.length > 0) {
+      const allDisciplines = new Set<string>();
+      
+      for (const projectCode of projectCodes) {
+        const project = projects.find(p => p.code === projectCode);
+        if (project) {
+          const projectDisciplines = project.disciplines && project.disciplines.length > 0 
+            ? project.disciplines 
+            : DISCIPLINES;
+          projectDisciplines.forEach(d => allDisciplines.add(d));
+        }
+      }
+      
+      return Array.from(allDisciplines).sort();
+    }
+    
+    // Fallback: extract from actual data
+    return Array.from(new Set(listItems.map(i => i.discipline))).sort();
+  }, [listItems, projects]);
 
   const displayedItems = listItems.filter(item => {
     if (filterDate && item.plannedDate !== filterDate) return false;

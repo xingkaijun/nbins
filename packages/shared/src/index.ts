@@ -8,24 +8,32 @@ export * from "./ncr.ts";
 
 export const DISCIPLINES = [
   "HULL",
-  "OUTFIT",
-  "MACHINERY",
-  "CHS",
-  "ELEC",
   "PAINT",
-  "CCS"
+  "MACH",
+  "ELEC",
+  "OUTFIT",
+  "HSE",
+  "SEC",
+  "DOC",
+  "CHS",
+  "CCS",
+  "PIPE"
 ] as const;
 
 export type Discipline = (typeof DISCIPLINES)[number];
 
 export const DISCIPLINE_LABELS: Record<Discipline, string> = {
   HULL: "HULL",
-  OUTFIT: "OUTFIT",
-  MACHINERY: "MACHINERY",
-  CHS: "CHS",
-  ELEC: "ELEC",
   PAINT: "PAINT",
-  CCS: "CCS"
+  MACH: "MACH",
+  ELEC: "ELEC",
+  OUTFIT: "OUTFIT",
+  HSE: "HSE",
+  SEC: "SEC",
+  DOC: "DOC",
+  CHS: "CHS",
+  CCS: "CCS",
+  PIPE: "PIPE"
 };
 
 export const INSPECTION_RESULTS = ["CX", "AA", "QCC", "OWC", "RJ"] as const;

@@ -140,7 +140,24 @@ export function AdminPage() {
     [users]
   );
 
+  function getProjectDisciplines(projectId: string): readonly string[] {
+    const project = projects.find((item) => item.id === projectId);
+    return project && project.disciplines.length > 0 ? project.disciplines : DISCIPLINES;
+  }
+
+  function getProjectDisciplineOptions(projectId: string) {
+    return getProjectDisciplines(projectId).map((discipline) => ({ value: discipline, label: discipline }));
+  }
+
+  const inspDisciplineOptions = useMemo(() => {
+    const projectId = currentInspFilters.projectId;
+    return projectId
+      ? getProjectDisciplineOptions(projectId)
+      : DISCIPLINES.map((item) => ({ value: item, label: item }));
+  }, [currentInspFilters.projectId, projects]);
+
   const tableConfigs = useMemo<Record<TableKey, AdminTableConfig<any>>>(() => ({
+
     users: {
       key: "users",
       label: "users",
@@ -248,8 +265,9 @@ export function AdminPage() {
       formFields: [
         { key: "shipId", label: "Ship", type: "select", required: true, options: shipOptions },
         { key: "itemName", label: "Item Name", type: "text", required: true },
-        { key: "discipline", label: "Discipline", type: "select", required: true, options: DISCIPLINES.map((item) => ({ value: item, label: item })) },
+        { key: "discipline", label: "Discipline", type: "select", required: true, options: inspDisciplineOptions },
         { key: "workflowStatus", label: "Workflow Status", type: "text" },
+
         { key: "lastRoundResult", label: "Last Round Result", type: "text" },
         { key: "resolvedResult", label: "Resolved Result", type: "text" },
         { key: "currentRound", label: "Current Round", type: "number" },
@@ -275,8 +293,9 @@ export function AdminPage() {
       filters: [
         { key: "projectId", label: "Project", type: "select", options: projectOptions },
         { key: "shipId", label: "Ship", type: "select", options: filteredShipOptions },
-        { key: "discipline", label: "Discipline", type: "select", options: DISCIPLINES.map((item) => ({ value: item, label: item })) },
+        { key: "discipline", label: "Discipline", type: "select", options: inspDisciplineOptions },
         { key: "createdAt", label: "Date", type: "date" },
+
         { key: "inspectionItemId", label: "Item", type: "select", options: inspectionItems.map((i) => ({ value: (i as any).id ?? "", label: i.itemName })) },
         { key: "authorId", label: "Author", type: "select", options: userOptions },
         { key: "status", label: "Status", type: "select", options: [{ value: "open", label: "open" }, { value: "closed", label: "closed" }] }
@@ -385,8 +404,11 @@ export function AdminPage() {
         owner: record?.owner ?? "",
         shipyard: record?.shipyard ?? "",
         class: record?.class ?? "",
-        recipientsText: record?.reportRecipients?.join(", ") ?? ""
+        disciplines: record?.disciplines ?? [],
+        recipientsText: record?.reportRecipients?.join(", ") ?? "",
+        ncrRecipientsText: record?.ncrRecipients?.join(", ") ?? ""
       };
+
     }
     if (tableKey === "ships") {
       const record = row as ShipRecord | null;

@@ -227,8 +227,8 @@ export class D1InspectionStorage implements InspectionStorage {
       insertStatements.push(
         this.db
           .prepare(
-            `INSERT INTO "projects" ("id", "name", "code", "status", "owner", "shipyard", "class", "reportRecipients", "ncrRecipients", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO "projects" ("id", "name", "code", "status", "owner", "shipyard", "class", "disciplines", "reportRecipients", "ncrRecipients", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
             record.id,
@@ -238,6 +238,7 @@ export class D1InspectionStorage implements InspectionStorage {
             record.owner,
             record.shipyard,
             record.class,
+            JSON.stringify(record.disciplines),
             JSON.stringify(record.reportRecipients),
             JSON.stringify(record.ncrRecipients),
             record.createdAt,
@@ -634,6 +635,7 @@ function mapProjectRecord(row: JsonRow): ProjectRecord {
     owner: nullableStringValue(row.owner),
     shipyard: nullableStringValue(row.shipyard),
     class: nullableStringValue(row.class),
+    disciplines: jsonArrayValue(row.disciplines),
     reportRecipients: jsonArrayValue(row.reportRecipients),
     ncrRecipients: jsonArrayValue(row.ncrRecipients),
     createdAt: stringValue(row.createdAt),
@@ -692,6 +694,7 @@ function mapProjectSummaryRecord(row: JsonRow): ProjectRecord {
     owner: nullableStringValue(row.project_owner),
     shipyard: nullableStringValue(row.project_shipyard),
     class: nullableStringValue(row.project_class),
+    disciplines: jsonArrayValue(row.project_disciplines),
     reportRecipients: jsonArrayValue(row.project_reportRecipients),
     ncrRecipients: jsonArrayValue(row.project_ncrRecipients),
     createdAt: stringValue(row.project_createdAt),
