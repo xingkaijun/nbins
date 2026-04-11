@@ -70,6 +70,12 @@ export function Observations() {
   const [editRemark, setEditRemark] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
 
+  /** Get effective disciplines for the currently selected project (empty = all presets) */
+  const projectDisciplines: readonly string[] = (() => {
+    const proj = projects.find(p => p.id === selectedProjectId);
+    return proj && proj.disciplines && proj.disciplines.length > 0 ? proj.disciplines : DISCIPLINES;
+  })();
+
 
   // ---- 加载项目列表 ----
   useEffect(() => {
@@ -250,7 +256,7 @@ export function Observations() {
       const content = (cols[3] || "").trim();
       const remark = (cols[4] || "").trim();
       const errors: string[] = [];
-      if (!discipline || !DISCIPLINES.includes(discipline as any)) errors.push("Invalid discipline");
+      if (!discipline || !projectDisciplines.includes(discipline)) errors.push("Invalid discipline");
       if (!date) errors.push("Missing date");
       if (!content) errors.push("Missing content");
       return { idx: idx + 1, discipline, location, date, content, remark, errors, valid: errors.length === 0 };
@@ -343,7 +349,7 @@ export function Observations() {
         )}
         <select value={filterDiscipline} onChange={e => setFilterDiscipline(e.target.value)} style={selectStyle}>
           <option value="">All Disciplines</option>
-          {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+          {projectDisciplines.map(d => <option key={d} value={d}>{d}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={selectStyle}>
           <option value="">All Status</option>
@@ -436,7 +442,7 @@ export function Observations() {
             </label>
             <label style={fieldLabelStyle}><span>Discipline</span>
               <select value={formDiscipline} onChange={e => setFormDiscipline(e.target.value)} style={inputStyle}>
-                {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+                {projectDisciplines.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </label>
             <label style={fieldLabelStyle}><span>Location</span>
@@ -546,7 +552,7 @@ export function Observations() {
               </label>
               <label style={fieldLabelStyle}><span>Discipline</span>
                 <select value={editDiscipline} onChange={e => setEditDiscipline(e.target.value)} style={inputStyle}>
-                  {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+                  {projectDisciplines.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </label>
             </div>

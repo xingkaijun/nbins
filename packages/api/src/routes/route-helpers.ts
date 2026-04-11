@@ -13,10 +13,11 @@ export function parseStringArray(value: unknown): string[] {
   }
 
   try {
-    const parsed = JSON.parse(value);
-    return Array.isArray(parsed)
-      ? parsed.filter((entry): entry is string => typeof entry === "string")
-      : [];
+    const parsed = typeof value === "string" ? JSON.parse(value) : value;
+    if (!Array.isArray(parsed)) return [];
+    return parsed
+      .filter((entry): entry is string => typeof entry === "string")
+      .map((entry) => (entry === "MACHINERY" ? "MACH" : entry));
   } catch {
     return [];
   }
@@ -53,6 +54,7 @@ export function mapProjectRecord(row: Record<string, unknown>): ProjectRecord {
     owner: typeof row.owner === "string" ? row.owner : null,
     shipyard: typeof row.shipyard === "string" ? row.shipyard : null,
     class: typeof row.class === "string" ? row.class : null,
+    disciplines: parseStringArray(row.disciplines),
     reportRecipients: parseStringArray(row.reportRecipients),
     ncrRecipients: parseStringArray(row.ncrRecipients),
     createdAt: String(row.createdAt),

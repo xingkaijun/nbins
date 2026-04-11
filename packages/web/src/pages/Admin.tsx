@@ -125,7 +125,7 @@ export function Admin() {
 
   /* ── modal state ── */
   const [modalMode, setModalMode] = useState<"closed" | "new" | "edit">("closed");
-  const [modalData, setModalData] = useState<Record<string, string>>({});
+  const [modalData, setModalData] = useState<Record<string, any>>({});
   const [inspModalTab, setInspModalTab] = useState<"item" | "round" | "comments">("item");
   const [editingCommentId, setEditingCommentId] = useState("");
   const [commentForm, setCommentForm] = useState({ content: "", status: "open" as "open" | "closed", closedBy: "", closedAt: "" });
@@ -261,7 +261,7 @@ export function Admin() {
     }
 
     const defaults: Record<TableKey, Record<string, string>> = {
-      projects: { code: "", name: "", status: "active", owner: "", shipyard: "", class: "", reportRecipients: "", ncrRecipients: "" },
+      projects: { code: "", name: "", status: "active", owner: "", shipyard: "", class: "", disciplines: "[]", reportRecipients: "", ncrRecipients: "" },
       ships: { projectId: shipProjFilter || projects[0]?.id || "", hullNumber: "", shipName: "", shipType: "", status: "building" },
       users: { username: "", displayName: "", password: "", role: "inspector", disciplines: "[]", accessibleProjectIds: "[]", isActive: "true" },
       obsTypes: { code: "", label: "", sortOrder: "0" },
@@ -280,11 +280,10 @@ export function Admin() {
       void loadInspDetail(id);
       return;
     }
-    const data: Record<string, string> = {};
+    const data: Record<string, any> = {};
     for (const [k, v] of Object.entries(row)) {
-      if (Array.isArray(v)) data[k] = JSON.stringify(v);
-      else if (k === "isActive" && (v === 1 || v === 0)) data[k] = v === 1 ? "true" : "false";
-      else data[k] = v == null ? "" : String(v);
+      if (k === "isActive" && (v === 1 || v === 0)) data[k] = v === 1 ? "true" : "false";
+      else data[k] = v == null ? "" : v;
     }
     setModalData(data);
     setModalMode("edit");
@@ -323,15 +322,23 @@ export function Admin() {
 
   async function saveProject() {
     const d = modalData;
+    const discs = Array.isArray(d.disciplines) ? d.disciplines : [];
     const payload = {
       name: d.name, code: d.code, status: d.status as "active" | "archived",
       owner: empty(d.owner ?? "") ?? undefined, shipyard: empty(d.shipyard ?? "") ?? undefined, class: empty(d.class ?? "") ?? undefined,
-      reportRecipients: (d.reportRecipients || "").split(",").map(x => x.trim()).filter(Boolean),
-      ncrRecipients: (d.ncrRecipients || "").split(",").map(x => x.trim()).filter(Boolean),
+      disciplines: discs,
+      reportRecipients: Array.isArray(d.reportRecipients) ? d.reportRecipients : (d.reportRecipients || "").split(",").map((x: string) => x.trim()).filter(Boolean),
+      ncrRecipients: Array.isArray(d.ncrRecipients) ? d.ncrRecipients : (d.ncrRecipients || "").split(",").map((x: string) => x.trim()).filter(Boolean),
     };
     if (modalMode === "edit" && d.id) await updateProject(d.id, payload);
     else await createProject(payload);
     setProjects(await fetchProjects());
+  }
+
+  /** Get effective disciplines for a given project (empty = all presets) */
+  function getProjectDisciplines(projectId: string): readonly string[] {
+    const proj = projects.find(p => p.id === projectId);
+    return proj && proj.disciplines && proj.disciplines.length > 0 ? proj.disciplines : DISCIPLINES;
   }
 
   async function saveShip() {
@@ -352,10 +359,8 @@ export function Admin() {
 
   async function saveUser() {
     const d = modalData;
-    let discs: Discipline[] = [];
-    let projIds: string[] = [];
-    try { discs = JSON.parse(d.disciplines || "[]"); } catch { /* ignore */ }
-    try { projIds = JSON.parse(d.accessibleProjectIds || "[]"); } catch { /* ignore */ }
+    const discs = Array.isArray(d.disciplines) ? (d.disciplines as Discipline[]) : [];
+    const projIds = Array.isArray(d.accessibleProjectIds) ? (d.accessibleProjectIds as string[]) : [];
     if (modalMode === "edit" && d.id) {
       await updateUser(d.id, { username: d.username, displayName: d.displayName, role: d.role as Role, disciplines: discs, accessibleProjectIds: projIds, isActive: d.isActive === "true" });
     } else {
@@ -569,10 +574,9 @@ export function Admin() {
   /* ── toggle for JSON arrays (disciplines, project ids) ── */
   function toggleJsonArray(key: string, val: string) {
     setModalData(prev => {
-      let arr: string[] = [];
-      try { arr = JSON.parse(prev[key] || "[]"); } catch { /* */ }
+      const arr = Array.isArray(prev[key]) ? prev[key] : [];
       const next = arr.includes(val) ? arr.filter(x => x !== val) : [...arr, val];
-      return { ...prev, [key]: JSON.stringify(next) };
+      return { ...prev, [key]: next };
     });
   }
 
@@ -718,7 +722,7 @@ export function Admin() {
             <option value="">All Ships</option>{inspShipChoices.map(s => <option key={s.id} value={s.id}>{s.hullNumber} / {s.shipName}</option>)}
           </select>
           <select value={inspDiscFilter} onChange={e => setInspDiscFilter(e.target.value)}>
-            <option value="">All Disciplines</option>{DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+            <option value="">All Disciplines</option>{(inspProjFilter ? getProjectDisciplines(inspProjFilter) : DISCIPLINES).map(d => <option key={d} value={d}>{d}</option>)}
           </select>
           <select value={inspStatusFilter} onChange={e => setInspStatusFilter(e.target.value)}>
             <option value="">All Status</option>{WORKFLOW_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}
@@ -737,7 +741,7 @@ export function Admin() {
             <option value="">All Types</option>{obsTypes.map(t => <option key={t.id} value={t.code}>{t.code}</option>)}
           </select>
           <select value={obsDiscFilter} onChange={e => setObsDiscFilter(e.target.value)}>
-            <option value="">All Disciplines</option>{DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+            <option value="">All Disciplines</option>{(() => { const s = ships.find(sh => sh.id === obsShipFilter); return s ? getProjectDisciplines(s.projectId) : DISCIPLINES; })().map(d => <option key={d} value={d}>{d}</option>)}
           </select>
           <select value={obsStatusFilter} onChange={e => setObsStatusFilter(e.target.value)}>
             <option value="">All Status</option><option value="open">Open</option><option value="closed">Closed</option>
@@ -753,7 +757,7 @@ export function Admin() {
   /* ───────── TABLE HEADERS ───────── */
   function renderTableHeaders(): React.ReactNode {
     const hdrs: Record<TableKey, string[]> = {
-      projects: ["Code", "Name", "Status", "Owner", "Shipyard", "Class"],
+      projects: ["Code", "Name", "Status", "Disciplines", "Owner", "Shipyard", "Class"],
       ships: ["Hull", "Ship Name", "Project", "Type", "Status"],
       users: ["Username", "Display Name", "Role", "Disciplines", "Projects", "Active"],
       obsTypes: ["Code", "Label", "Sort Order"],
@@ -779,7 +783,7 @@ export function Admin() {
     switch (activeTable) {
       case "projects": {
         const p = raw as ProjectRecord;
-        return <><td>{p.code}</td><td>{p.name}</td><td>{p.status}</td><td>{p.owner ?? "—"}</td><td>{p.shipyard ?? "—"}</td><td>{p.class ?? "—"}</td>{actionsCell(p.id)}</>;
+        return <><td>{p.code}</td><td>{p.name}</td><td>{p.status}</td><td>{p.disciplines && p.disciplines.length > 0 ? p.disciplines.join(", ") : <span style={{ color: "var(--nb-text-muted)", fontStyle: "italic" }}>ALL</span>}</td><td>{p.owner ?? "—"}</td><td>{p.shipyard ?? "—"}</td><td>{p.class ?? "—"}</td>{actionsCell(p.id)}</>;
       }
       case "ships": {
         const s = raw as ShipRecord;
@@ -844,18 +848,25 @@ export function Admin() {
 
   function renderModalFields(): React.ReactNode {
     switch (activeTable) {
-      case "projects": return (
-        <div className="admin-form-grid">
-          <div className="admin-field"><label>Code</label><input value={modalData.code || ""} onChange={e => setField("code", e.target.value)} disabled={modalMode === "edit"} /></div>
-          <div className="admin-field"><label>Name</label><input value={modalData.name || ""} onChange={e => setField("name", e.target.value)} /></div>
-          <div className="admin-field"><label>Status</label><select value={modalData.status || "active"} onChange={e => setField("status", e.target.value)}><option value="active">active</option><option value="archived">archived</option></select></div>
-          <div className="admin-field"><label>Owner</label><input value={modalData.owner || ""} onChange={e => setField("owner", e.target.value)} /></div>
-          <div className="admin-field"><label>Shipyard</label><input value={modalData.shipyard || ""} onChange={e => setField("shipyard", e.target.value)} /></div>
-          <div className="admin-field"><label>Class</label><input value={modalData.class || ""} onChange={e => setField("class", e.target.value)} /></div>
-          <div className="admin-field" style={{ gridColumn: "1 / -1" }}><label>Report Recipients (comma-separated)</label><textarea value={modalData.reportRecipients || ""} onChange={e => setField("reportRecipients", e.target.value)} /></div>
-          <div className="admin-field" style={{ gridColumn: "1 / -1" }}><label>NCR Recipients (comma-separated)</label><textarea value={modalData.ncrRecipients || ""} onChange={e => setField("ncrRecipients", e.target.value)} /></div>
-        </div>
-      );
+      case "projects": {
+        const projDiscs = Array.isArray(modalData.disciplines) ? modalData.disciplines : [];
+        return (
+          <div className="admin-form-grid">
+            <div className="admin-field"><label>Code</label><input value={modalData.code || ""} onChange={e => setField("code", e.target.value)} disabled={modalMode === "edit"} /></div>
+            <div className="admin-field"><label>Name</label><input value={modalData.name || ""} onChange={e => setField("name", e.target.value)} /></div>
+            <div className="admin-field"><label>Status</label><select value={modalData.status || "active"} onChange={e => setField("status", e.target.value)}><option value="active">active</option><option value="archived">archived</option></select></div>
+            <div className="admin-field"><label>Owner</label><input value={modalData.owner || ""} onChange={e => setField("owner", e.target.value)} /></div>
+            <div className="admin-field"><label>Shipyard</label><input value={modalData.shipyard || ""} onChange={e => setField("shipyard", e.target.value)} /></div>
+            <div className="admin-field"><label>Class</label><input value={modalData.class || ""} onChange={e => setField("class", e.target.value)} /></div>
+            <div className="admin-field" style={{ gridColumn: "1 / -1" }}>
+              <label>Disciplines <span style={{ fontSize: 10, color: 'var(--nb-text-muted)', fontWeight: 500 }}>(empty = all presets)</span></label>
+              <div className="admin-pills">{DISCIPLINES.map(d => <button key={d} type="button" className={`admin-pill-btn${projDiscs.includes(d) ? " selected" : ""}`} onClick={() => toggleJsonArray("disciplines", d)}>{d}</button>)}</div>
+            </div>
+            <div className="admin-field" style={{ gridColumn: "1 / -1" }}><label>Report Recipients (comma-separated)</label><textarea value={Array.isArray(modalData.reportRecipients) ? modalData.reportRecipients.join(", ") : (modalData.reportRecipients || "")} onChange={e => setField("reportRecipients", e.target.value)} /></div>
+            <div className="admin-field" style={{ gridColumn: "1 / -1" }}><label>NCR Recipients (comma-separated)</label><textarea value={Array.isArray(modalData.ncrRecipients) ? modalData.ncrRecipients.join(", ") : (modalData.ncrRecipients || "")} onChange={e => setField("ncrRecipients", e.target.value)} /></div>
+          </div>
+        );
+      }
 
       case "ships": {
         const shipChoices = shipProjFilter ? ships.filter(s => s.projectId === shipProjFilter) : ships;
@@ -871,10 +882,8 @@ export function Admin() {
       }
 
       case "users": {
-        let discs: string[] = [];
-        let projIds: string[] = [];
-        try { discs = JSON.parse(modalData.disciplines || "[]"); } catch { /* */ }
-        try { projIds = JSON.parse(modalData.accessibleProjectIds || "[]"); } catch { /* */ }
+        const discs = Array.isArray(modalData.disciplines) ? modalData.disciplines : [];
+        const projIds = Array.isArray(modalData.accessibleProjectIds) ? modalData.accessibleProjectIds : [];
         return (
           <div className="admin-form-grid">
             <div className="admin-field"><label>Username</label><input value={modalData.username || ""} onChange={e => setField("username", e.target.value)} /></div>
@@ -916,7 +925,7 @@ export function Admin() {
           <div className="admin-field"><label>Project</label><select value={modalData.projectId || ""} onChange={e => { setField("projectId", e.target.value); setField("shipId", ""); }}><option value="">Select…</option>{projects.map(p => <option key={p.id} value={p.id}>{p.code}</option>)}</select></div>
           <div className="admin-field"><label>Ship</label><select value={modalData.shipId || ""} onChange={e => setField("shipId", e.target.value)}><option value="">Select…</option>{ships.filter(s => !modalData.projectId || s.projectId === modalData.projectId).map(s => <option key={s.id} value={s.id}>{s.hullNumber} / {s.shipName}</option>)}</select></div>
           <div className="admin-field"><label>Item Name</label><input value={modalData.itemName || ""} onChange={e => setField("itemName", e.target.value)} /></div>
-          <div className="admin-field"><label>Discipline</label><select value={modalData.discipline || "HULL"} onChange={e => setField("discipline", e.target.value)}>{DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+          <div className="admin-field"><label>Discipline</label><select value={modalData.discipline || "HULL"} onChange={e => setField("discipline", e.target.value)}>{(modalData.projectId ? getProjectDisciplines(modalData.projectId) : DISCIPLINES).map(d => <option key={d} value={d}>{d}</option>)}</select></div>
           <div className="admin-field"><label>Planned Date</label><input type="date" value={modalData.plannedDate || ""} onChange={e => setField("plannedDate", e.target.value)} /></div>
           <div className="admin-field"><label>Yard QC</label><input value={modalData.yardQc || ""} onChange={e => setField("yardQc", e.target.value)} /></div>
           <div className="admin-field"><label>Is Reinspection</label><select value={modalData.isReinspection || "false"} onChange={e => setField("isReinspection", e.target.value)}><option value="false">No</option><option value="true">Yes</option></select></div>
@@ -927,7 +936,7 @@ export function Admin() {
         <div className="admin-form-grid">
           <div className="admin-field"><label>Ship</label><select value={modalData.shipId || ""} onChange={e => setField("shipId", e.target.value)}><option value="">Select…</option>{ships.map(s => <option key={s.id} value={s.id}>{s.hullNumber} / {s.shipName}</option>)}</select></div>
           <div className="admin-field"><label>Type</label><select value={modalData.type || ""} onChange={e => setField("type", e.target.value)}><option value="">Select…</option>{obsTypes.map(t => <option key={t.id} value={t.code}>{t.code}</option>)}</select></div>
-          <div className="admin-field"><label>Discipline</label><select value={modalData.discipline || "HULL"} onChange={e => setField("discipline", e.target.value)}>{DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}</select></div>
+          <div className="admin-field"><label>Discipline</label><select value={modalData.discipline || "HULL"} onChange={e => setField("discipline", e.target.value)}>{(() => { const s = ships.find(sh => sh.id === (modalData.shipId || obsShipFilter)); return s ? getProjectDisciplines(s.projectId) : DISCIPLINES; })().map(d => <option key={d} value={d}>{d}</option>)}</select></div>
           <div className="admin-field"><label>Author Id</label><input value={modalData.authorId || ""} onChange={e => setField("authorId", e.target.value)} /></div>
           <div className="admin-field"><label>Date</label><input type="date" value={modalData.date || ""} onChange={e => setField("date", e.target.value)} /></div>
           <div className="admin-field"><label>Status</label><select value={modalData.status || "open"} onChange={e => setField("status", e.target.value)}><option value="open">open</option><option value="closed">closed</option></select></div>
@@ -964,7 +973,7 @@ export function Admin() {
             <div className="admin-form-grid">
               <div className="admin-field"><label>Ship</label><select value={modalData.shipId || ""} onChange={e => setField("shipId", e.target.value)}><option value="">Select…</option>{ships.map(s => <option key={s.id} value={s.id}>{s.hullNumber} / {s.shipName}</option>)}</select></div>
               <div className="admin-field"><label>Item Name</label><input value={modalData.itemName || ""} onChange={e => setField("itemName", e.target.value)} /></div>
-              <div className="admin-field"><label>Discipline</label><select value={modalData.discipline || ""} onChange={e => setField("discipline", e.target.value)}>{DISCIPLINES.map(x => <option key={x} value={x}>{x}</option>)}</select></div>
+              <div className="admin-field"><label>Discipline</label><select value={modalData.discipline || ""} onChange={e => setField("discipline", e.target.value)}>{(() => { const s = ships.find(sh => sh.id === modalData.shipId); return s ? getProjectDisciplines(s.projectId) : DISCIPLINES; })().map(x => <option key={x} value={x}>{x}</option>)}</select></div>
               <div className="admin-field"><label>Workflow Status</label><select value={modalData.workflowStatus || ""} onChange={e => setField("workflowStatus", e.target.value)}>{WORKFLOW_STATUSES.map(s => <option key={s} value={s}>{s}</option>)}</select></div>
               <div className="admin-field"><label>Last Round Result</label><select value={modalData.lastRoundResult || ""} onChange={e => setField("lastRoundResult", e.target.value)}><option value="">—</option>{INSPECTION_RESULTS.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
               <div className="admin-field"><label>Resolved Result</label><select value={modalData.resolvedResult || ""} onChange={e => setField("resolvedResult", e.target.value)}><option value="">—</option>{INSPECTION_RESULTS.map(r => <option key={r} value={r}>{r}</option>)}</select></div>

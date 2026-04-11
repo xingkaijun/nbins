@@ -323,7 +323,7 @@ function createDemoItem(
     hullNumber: "H-2748",
     shipName: "NB2748",
     itemName: "Main Engine Alignment",
-    discipline: "MACHINERY",
+    discipline: "MACH",
     source: "manual",
     yardQc: "Zhang San",
     plannedDate: (new Date().toLocaleDateString("en-CA")),

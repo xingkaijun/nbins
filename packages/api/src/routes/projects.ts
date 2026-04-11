@@ -112,6 +112,7 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
       owner?: string;
       shipyard?: string;
       class?: string;
+      disciplines?: string[];
       reportRecipients?: string[];
       ncrRecipients?: string[];
     }>();
@@ -129,6 +130,7 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
       owner: body.owner ?? null,
       shipyard: body.shipyard ?? null,
       class: body.class ?? null,
+      disciplines: body.disciplines ?? [],
       reportRecipients: body.reportRecipients ?? [],
       ncrRecipients: body.ncrRecipients ?? [],
       createdAt: now,
@@ -139,8 +141,8 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
       await c.env.DB!
         .prepare(
           `INSERT INTO "projects"
-           ("id", "name", "code", "status", "owner", "shipyard", "class", "reportRecipients", "ncrRecipients", "createdAt", "updatedAt")
-           VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?)`
+           ("id", "name", "code", "status", "owner", "shipyard", "class", "disciplines", "reportRecipients", "ncrRecipients", "createdAt", "updatedAt")
+           VALUES (?, ?, ?, 'active', ?, ?, ?, ?, ?, ?, ?, ?)`
         )
         .bind(
           record.id,
@@ -149,6 +151,7 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
           record.owner,
           record.shipyard,
           record.class,
+          JSON.stringify(record.disciplines),
           JSON.stringify(record.reportRecipients),
           JSON.stringify(record.ncrRecipients),
           record.createdAt,
@@ -176,6 +179,7 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
         owner?: string;
         shipyard?: string;
         class?: string;
+        disciplines?: string[];
         reportRecipients?: string[];
         ncrRecipients?: string[];
       }>();
@@ -190,6 +194,10 @@ function createProjectRoutes(): Hono<ProjectRouteEnv> {
       if (body.owner !== undefined) sets.push('"owner" = ?'), params.push(body.owner);
       if (body.shipyard !== undefined) sets.push('"shipyard" = ?'), params.push(body.shipyard);
       if (body.class !== undefined) sets.push('"class" = ?'), params.push(body.class);
+      if (body.disciplines !== undefined) {
+        sets.push('"disciplines" = ?');
+        params.push(JSON.stringify(body.disciplines));
+      }
       if (body.reportRecipients !== undefined) {
         sets.push('"reportRecipients" = ?');
         params.push(JSON.stringify(body.reportRecipients));

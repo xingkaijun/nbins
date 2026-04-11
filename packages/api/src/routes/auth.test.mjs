@@ -88,14 +88,14 @@ test("POST /api/auth/login authenticates the default mock user", async () => {
     username: "li.si",
     displayName: "Li Si",
     role: "inspector",
-    disciplines: ["PAINT", "MACHINERY"]
+    disciplines: ["PAINT", "MACH"]
   });
 
   const claims = await verifyAccessToken(payload.data.token, {});
   assert.deepEqual(claims, {
     id: "user-inspector-li",
     role: "inspector",
-    disciplines: ["PAINT", "MACHINERY"]
+    disciplines: ["PAINT", "MACH"]
   });
 });
 
@@ -233,7 +233,7 @@ test("GET /api/auth/me returns the authenticated user profile", async () => {
         username: "li.si",
         displayName: "Li Si",
         role: "inspector",
-        disciplines: ["PAINT", "MACHINERY"]
+        disciplines: ["PAINT", "MACH"]
       }
     }
   });

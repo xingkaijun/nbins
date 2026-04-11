@@ -53,6 +53,12 @@ export function Import() {
     }
   }, [selectedProject]);
 
+  /** Get effective disciplines for the currently selected project (empty = all presets) */
+  const projectDisciplines: readonly string[] = (() => {
+    const proj = projects.find((p: any) => p.id === selectedProject);
+    return proj && proj.disciplines && proj.disciplines.length > 0 ? proj.disciplines : DISCIPLINES;
+  })();
+
   const handleParse = () => {
     if (!pastedData.trim()) return;
     const lines = pastedData.trim().split('\n');
@@ -172,7 +178,7 @@ export function Import() {
             <div className="field">
               <span>Discipline</span>
               <select className="filterSelect" value={selectedDiscipline} onChange={e => setSelectedDiscipline(e.target.value)}>
-                {DISCIPLINES.map(d => <option key={d} value={d}>{d}</option>)}
+                {projectDisciplines.map(d => <option key={d} value={d}>{d}</option>)}
               </select>
             </div>
           </div>

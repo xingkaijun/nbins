@@ -21,6 +21,7 @@ export interface ProjectRecord {
   owner: string | null;
   shipyard: string | null;
   class: string | null;
+  disciplines: string[];
   reportRecipients: string[];
   ncrRecipients: string[];
   createdAt: string;
