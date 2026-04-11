@@ -92,7 +92,21 @@ const configuredApiBaseUrl =
     : "";
 
 function getApiBaseUrl(): string {
-  return configuredApiBaseUrl || DEFAULT_API_BASE_URL;
+  let baseUrl = configuredApiBaseUrl.trim();
+  
+  if (!baseUrl) {
+    return DEFAULT_API_BASE_URL;
+  }
+
+  // 移除结尾的所有斜杠
+  baseUrl = baseUrl.replace(/\/+$/, "");
+
+  // 检查是否已经包含了 /api 后缀，如果没有则补上
+  if (!baseUrl.endsWith("/api")) {
+    baseUrl = `${baseUrl}/api`;
+  }
+
+  return baseUrl;
 }
 
 async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -183,8 +197,8 @@ export async function fetchInspectionDetail(
   return requestJson<InspectionItemDetailResponse>(`/inspections/${inspectionItemId}`);
 }
 
-export async function fetchInspectionList(): Promise<DashboardSnapshot> {
-  return requestJson<DashboardSnapshot>("/inspections");
+export async function fetchInspectionList(projectId?: string): Promise<DashboardSnapshot> {
+  return requestJson<DashboardSnapshot>(withQuery("/inspections", { projectId }));
 }
 
 export async function submitInspectionResult(
