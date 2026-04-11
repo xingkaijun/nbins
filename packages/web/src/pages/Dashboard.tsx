@@ -487,7 +487,7 @@ export function Dashboard() {
     try {
       const response = await fetchInspectionDetail(itemId);
       if (response) {
-        generateInspectionReport(response);
+        await generateInspectionReport(response);
       }
     } catch (err) {
       alert("Failed to fetch full detail for PDF report.");
@@ -945,9 +945,15 @@ export function Dashboard() {
                                     <div className="commentList">
                                       {selectedDetail.comments.length > 0 ? (
                                         selectedDetail.comments.map((comment) => (
-                                        <article className="commentCard" key={comment.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
-                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                                              <strong style={{ fontSize: '11px', lineHeight: '1.4' }}>{comment.message}</strong>
+                                        <article className="commentCard" key={comment.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '16px' }}>
+                                            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px', minWidth: 0 }}>
+                                              <strong style={{ 
+                                                fontSize: '11px', 
+                                                lineHeight: '1.4',
+                                                wordBreak: 'break-word',
+                                                overflowWrap: 'break-word',
+                                                whiteSpace: 'pre-wrap'
+                                              }}>{comment.message}</strong>
                                               {comment.resolveRemark && (
                                                 <div style={{ 
                                                   marginTop: '4px', 
@@ -957,7 +963,10 @@ export function Dashboard() {
                                                   borderRadius: '4px',
                                                   fontSize: '10px',
                                                   fontStyle: 'italic',
-                                                  color: '#92400e'
+                                                  color: '#92400e',
+                                                  wordBreak: 'break-word',
+                                                  overflowWrap: 'break-word',
+                                                  whiteSpace: 'pre-wrap'
                                                 }}>
                                                   <strong>Remark:</strong> {comment.resolveRemark}
                                                 </div>

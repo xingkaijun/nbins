@@ -139,7 +139,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
     const accessibleProjectIds = normalizeProjectIds(body.accessibleProjectIds);
     const record: UserRecord = {
       id: generateId(),
-      username: body.username,
+      username: body.username.trim().toLowerCase(),
       displayName: body.displayName,
       passwordHash: await hashPassword(body.password),
       role: body.role as UserRecord["role"],
@@ -204,7 +204,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
       const sets: string[] = ['"updatedAt" = ?'];
       const params: unknown[] = [now];
 
-      if (body.username !== undefined) sets.push('"username" = ?'), params.push(body.username);
+      if (body.username !== undefined) sets.push('"username" = ?'), params.push(body.username.trim().toLowerCase());
       if (body.displayName !== undefined) sets.push('"displayName" = ?'), params.push(body.displayName);
       if (body.role !== undefined) sets.push('"role" = ?'), params.push(body.role);
       if (body.disciplines !== undefined) {

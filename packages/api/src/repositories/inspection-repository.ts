@@ -545,7 +545,7 @@ function createCommentRecord(input: {
   suffix: string;
 }): CommentRecord {
   return {
-    id: `${input.inspectionItemId}-comment-${input.roundId}-${input.suffix}`,
+    id: `${input.inspectionItemId}-comment-${input.roundId}-${input.localId}`,
     inspectionItemId: input.inspectionItemId,
     createdInRoundId: input.roundId,
     closedInRoundId: null,

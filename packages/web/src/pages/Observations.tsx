@@ -128,18 +128,38 @@ export function Observations() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formType || !formContent.trim() || !selectedShipId) return;
+    
+    // 按回车分割内容，每行创建一条 observation
+    const lines = formContent
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0);
+    
+    if (lines.length === 0) return;
+    
     setSubmitting(true);
     try {
-      await createObservation(selectedShipId, {
-        type: formType, discipline: formDiscipline,
-        location: formLocation || undefined,
-        date: formDate, content: formContent.trim(),
-        remark: formRemark || undefined,
-      });
-      setFormContent(""); setFormLocation(""); setFormRemark(""); setShowForm(false);
+      // 为每一行创建一条 observation
+      for (const content of lines) {
+        await createObservation(selectedShipId, {
+          type: formType, 
+          discipline: formDiscipline,
+          location: formLocation || undefined,
+          date: formDate, 
+          content: content,
+          remark: formRemark || undefined,
+        });
+      }
+      setFormContent(""); 
+      setFormLocation(""); 
+      setFormRemark(""); 
+      setShowForm(false);
       void loadData();
-    } catch (err: any) { alert("Submit failed: " + (err.message || "Unknown error")); }
-    finally { setSubmitting(false); }
+    } catch (err: any) { 
+      alert("Submit failed: " + (err.message || "Unknown error")); 
+    } finally { 
+      setSubmitting(false); 
+    }
   };
 
   // ---- 单条编辑触发 ----
@@ -179,12 +199,16 @@ export function Observations() {
 
   // ---- 导出相关 ----
   const handleExportPdf = () => {
-    exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab);
+    const selectedShip = ships.find(s => s.id === selectedShipId);
+    const shipInfo = selectedShip ? `${selectedShip.shipName} (${selectedShip.hullNumber})` : "All Ships";
+    exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab, shipInfo);
   };
 
   const handleExportExcel = async () => {
     try {
-      await exportObservationsExcel(items, comments, getProjectName() || "All Projects", activeTab);
+      const selectedShip = ships.find(s => s.id === selectedShipId);
+      const shipInfo = selectedShip ? `${selectedShip.shipName} (${selectedShip.hullNumber})` : "All Ships";
+      await exportObservationsExcel(items, comments, getProjectName() || "All Projects", activeTab, shipInfo);
     } catch (err: any) {
       alert("Export Excel failed: " + (err.message || String(err)));
       console.error(err);
@@ -410,8 +434,8 @@ export function Observations() {
               <input type="date" value={formDate} onChange={e => setFormDate(e.target.value)} style={inputStyle} required />
             </label>
           </div>
-          <label style={{ ...fieldLabelStyle, marginTop: 12, display: "block" }}><span>Content</span>
-            <textarea value={formContent} onChange={e => setFormContent(e.target.value)} placeholder="Describe the observation..." rows={3} style={{ ...inputStyle, resize: "vertical", width: "100%" }} required />
+          <label style={{ ...fieldLabelStyle, marginTop: 12, display: "block" }}><span>Content (one per line)</span>
+            <textarea value={formContent} onChange={e => setFormContent(e.target.value)} placeholder="Enter observations, one per line..." rows={3} style={{ ...inputStyle, resize: "vertical", width: "100%" }} required />
           </label>
           <label style={{ ...fieldLabelStyle, marginTop: 8, display: "block" }}><span>Remark</span>
             <input type="text" value={formRemark} onChange={e => setFormRemark(e.target.value)} placeholder="Optional remark" style={{ ...inputStyle, width: "100%" }} />
@@ -448,7 +472,7 @@ export function Observations() {
                     <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
                     <td style={tdStyle}>{item.location || "—"}</td>
                     <td style={tdStyle}>{item.date}</td>
-                    <td style={{ ...tdStyle, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{item.content}</td>
+                    <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{item.content}</td>
                     <td style={tdStyle}>{item.authorName ?? item.authorId}</td>
                     <td style={tdStyle}><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
                     <td style={tdStyle}>
@@ -485,7 +509,7 @@ export function Observations() {
                     <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
                     <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cm.inspectionItemName}</td>
                     <td style={tdStyle}>R{cm.roundNumber}</td>
-                    <td style={{ ...tdStyle, maxWidth: 280, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cm.content}</td>
+                    <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{cm.content}</td>
                     <td style={tdStyle}>{cm.authorName}</td>
                     <td style={tdStyle}><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
                     <td style={tdStyle}>{cm.closedAt ? cm.closedAt.slice(0, 10) : "—"}</td>

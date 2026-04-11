@@ -40,7 +40,7 @@ export function applyInspectionResultSubmission(
       comment,
       submittedAt,
       submittedBy: submission.submittedBy,
-      index
+      index: item.comments.length + index
     })
   );
 

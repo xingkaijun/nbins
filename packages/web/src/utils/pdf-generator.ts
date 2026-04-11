@@ -14,7 +14,7 @@ function drawPdfLogo(doc: jsPDF, x: number, y: number, targetHeight: number = 10
   return { width: targetWidth, height: targetHeight };
 }
 
-export function buildInspectionReportDoc(detail: InspectionItemDetailResponse): { doc: jsPDF, fileName: string } {
+export async function buildInspectionReportDoc(detail: InspectionItemDetailResponse): Promise<{ doc: jsPDF, fileName: string }> {
 
   // Create an A4 document
   const doc = new jsPDF({
@@ -194,6 +194,11 @@ export function buildInspectionReportDoc(detail: InspectionItemDetailResponse): 
 
   const sigWidth = 70;
   
+  // Finding last round for both signatures
+  const lastRound = detail.roundHistory.length > 0 
+    ? detail.roundHistory.reduce((prev, current) => (prev.roundNumber > current.roundNumber) ? prev : current, detail.roundHistory[0])
+    : null;
+  
   // Signature 1: Yard QC (Left)
   doc.line(margin, y, margin + sigWidth, y);
   doc.setFontSize(10);
@@ -201,10 +206,6 @@ export function buildInspectionReportDoc(detail: InspectionItemDetailResponse): 
   doc.text('YARD QC INSPECTOR', margin, y + 5);
   doc.setFont('helvetica', 'normal');
   
-  // Finding last inspector
-  const lastRound = detail.roundHistory.length > 0 
-    ? detail.roundHistory.reduce((prev, current) => (prev.roundNumber > current.roundNumber) ? prev : current, detail.roundHistory[0])
-    : null;
   const inspectorName = lastRound?.inspectorDisplayName || detail.yardQc || '';
   
   doc.text(`Name: ${inspectorName}`, margin, y + 12);
@@ -216,8 +217,29 @@ export function buildInspectionReportDoc(detail: InspectionItemDetailResponse): 
   doc.setFont('helvetica', 'bold');
   doc.text('OWNER REPRESENTATIVE', rightSigX, y + 5);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Name: ______________________`, rightSigX, y + 12);
-  doc.text(`Date: ______________________`, rightSigX, y + 18);
+  
+  const submitterName = lastRound?.inspectorDisplayName || lastRound?.submittedBy || '______________________';
+  const submitDate = lastRound?.submittedAt 
+    ? new Date(lastRound.submittedAt).toLocaleDateString() 
+    : '______________________';
+  
+  // Generate HASH CODE using SHA-256
+  let hashCode = '____________________';
+  if (lastRound?.submittedAt && submitterName !== '______________________') {
+    const text = `${submitterName}-${lastRound.submittedAt}`;
+    const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+    const hashArray = Array.from(new Uint8Array(hash));
+    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    hashCode = hashHex.substring(0, 20).toUpperCase();
+  }
+  
+  doc.text(`Name: ${submitterName}`, rightSigX, y + 12);
+  doc.text(`Date: ${submitDate}`, rightSigX, y + 18);
+  
+  // HASH CODE with smaller font
+  doc.setFontSize(8);
+  doc.text(`HASH CODE: ${hashCode}`, rightSigX, y + 24);
+  doc.setFontSize(10); // Reset to default size
 
   // Footer
   doc.setFontSize(8);
@@ -236,8 +258,8 @@ export function buildInspectionReportDoc(detail: InspectionItemDetailResponse): 
   return { doc, fileName };
 }
 
-export function generateInspectionReport(detail: InspectionItemDetailResponse) {
-  const { doc, fileName } = buildInspectionReportDoc(detail);
+export async function generateInspectionReport(detail: InspectionItemDetailResponse) {
+  const { doc, fileName } = await buildInspectionReportDoc(detail);
   // output the PDF down to client
   doc.save(fileName);
 }
@@ -245,7 +267,7 @@ export function generateInspectionReport(detail: InspectionItemDetailResponse) {
 export async function generateBatchZip(details: InspectionItemDetailResponse[], zipName: string = "Inspection_Reports.zip") {
   const zip = new JSZip();
   for (const detail of details) {
-    const { doc, fileName } = buildInspectionReportDoc(detail);
+    const { doc, fileName } = await buildInspectionReportDoc(detail);
     const pdfArrayBuffer = doc.output('arraybuffer');
     zip.file(fileName, pdfArrayBuffer);
   }
