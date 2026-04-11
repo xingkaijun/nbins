@@ -208,7 +208,13 @@ export function Observations() {
     try {
       const selectedShip = ships.find(s => s.id === selectedShipId);
       const shipInfo = selectedShip ? `${selectedShip.shipName} (${selectedShip.hullNumber})` : "All Ships";
-      await exportObservationsExcel(items, comments, getProjectName() || "All Projects", activeTab, shipInfo);
+      const selectedProject = projects.find(p => p.id === selectedProjectId);
+      const projectInfo = {
+        owner: selectedProject?.owner || undefined,
+        shipyard: selectedProject?.shipyard || undefined,
+        classification: selectedProject?.class || undefined
+      };
+      await exportObservationsExcel(items, comments, getProjectName() || "All Projects", activeTab, shipInfo, projectInfo);
     } catch (err: any) {
       alert("Export Excel failed: " + (err.message || String(err)));
       console.error(err);

@@ -251,13 +251,22 @@ export async function exportObservationsExcel(
   comments: InspectionCommentView[],
   projectName: string,
   mode: "observations" | "inspection-comments",
-  shipInfo?: string
+  shipInfo?: string,
+  ownerInfo?: { owner?: string; shipyard?: string; classification?: string }
 ): Promise<void> {
   const wb = new ExcelJS.Workbook();
   const ws = wb.addWorksheet(mode === "observations" ? "Observations" : "Inspection Comments");
 
-  // 设置页面
-  ws.views = [{ showGridLines: true }];
+  // ===== 页面设置 =====
+  ws.views = [{ showGridLines: false }];
+  wb.creator = "NBINS System";
+  wb.created = new Date();
+  
+  // 设置默认字体
+  ws.properties.defaultRowHeight = 15;
+  ws.properties.defaultColWidth = 10;
+
+  // 页面打印设置
   ws.pageSetup = {
     paperSize: 9,
     orientation: "landscape",
@@ -266,146 +275,272 @@ export async function exportObservationsExcel(
     fitToHeight: 0,
   };
 
-  let currentRow = 1;
-
-  // ===== 页眉部分 =====
-  // 第一行：标题 (居中)
-  ws.mergeCells(`C${currentRow}:H${currentRow}`);
-  const titleCell = ws.getCell(`C${currentRow}`);
-  titleCell.value = mode === "observations" ? "OBSERVATIONS EXPORT" : "INSPECTION COMMENTS EXPORT";
-  titleCell.font = { bold: true, size: 18, color: { argb: "FF1E3A8A" } };
-  titleCell.alignment = { vertical: "middle", horizontal: "center", wrapText: false };
-  ws.getRow(currentRow).height = 28;
-  currentRow++;
-
-  // 第二行：项目信息 (右侧)
-  ws.mergeCells(`D${currentRow}:H${currentRow}`);
-  const projectCell = ws.getCell(`D${currentRow}`);
-  projectCell.value = `Project: ${projectName}`;
-  projectCell.font = { bold: true, size: 12, color: { argb: "FF374151" } };
-  projectCell.alignment = { vertical: "middle", horizontal: "right", wrapText: false };
-  ws.getRow(currentRow).height = 22;
-  currentRow++;
-
-  // 第三行：船舶信息 (右侧)
-  const thirdRowNum = currentRow;
-  if (shipInfo) {
-    ws.mergeCells(`D${currentRow}:H${currentRow}`);
-    const shipCell = ws.getCell(`D${currentRow}`);
-    shipCell.value = `Ship: ${shipInfo}`;
-    shipCell.font = { bold: true, size: 12, color: { argb: "FF374151" } };
-    shipCell.alignment = { vertical: "middle", horizontal: "right", wrapText: false };
-    ws.getRow(currentRow).height = 22;
-    currentRow++;
-  } else {
-    ws.getRow(currentRow).height = 22;
-    currentRow++;
-  }
-
-  // Logo - 自动缩放使底部与第三行底部平齐
-  // 第1-3行总高度: 28 + 22 + 22 = 72 点
-  // 转换为像素 (1点 ≈ 1.33像素): 72 * 1.33 ≈ 96 像素
-  // Logo 原始比例约为 16:7.4，保持比例
-  const logoHeight = 96;
-  const logoWidth = logoHeight * (16 / 7.4); // 约 207 像素
+  // ===== Logo 插入 (A1:B3) =====
   const logoImageId = wb.addImage({
     base64: PG_LOGO_B64,
     extension: "jpeg",
   });
   ws.addImage(logoImageId, {
     tl: { col: 0, row: 0 },
-    ext: { width: logoWidth, height: logoHeight },
+    br: { col: 2, row: 3 },
     editAs: "absolute",
   });
 
-  // 统计信息行
+  // ===== 大标题 (Row 1-3, C1:G3) =====
+  ws.mergeCells("C1:G3");
+  const titleCell = ws.getCell("C1");
+  titleCell.value = "OBSERVATIONS REPORT";
+  titleCell.font = { 
+    name: "Calibri", 
+    size: 20, 
+    bold: true, 
+    color: { argb: "FF1F4E78" } 
+  };
+  titleCell.alignment = { 
+    vertical: "middle", 
+    horizontal: "center", 
+    wrapText: false 
+  };
+  ws.getRow(1).height = 20;
+  ws.getRow(2).height = 20;
+  ws.getRow(3).height = 20;
+
+  // ===== 信息盒 (Row 1-3, H1:J3) =====
+  // Owner (船东) - H1:J1
+  ws.mergeCells("H1:J1");
+  const ownerCell = ws.getCell("H1");
+  ownerCell.value = `Owner: ${ownerInfo?.owner || "N/A"}`;
+  ownerCell.font = { name: "Calibri", size: 9, bold: true };
+  ownerCell.alignment = { vertical: "middle", horizontal: "left", wrapText: false };
+  ownerCell.border = {
+    top: { style: "thin", color: { argb: "FF1F4E78" } },
+    left: { style: "thin", color: { argb: "FF1F4E78" } },
+    right: { style: "thin", color: { argb: "FF1F4E78" } },
+    bottom: { style: "thin", color: { argb: "FFD1D5DB" } }
+  };
+
+  // Shipyard (船厂) - H2:J2
+  ws.mergeCells("H2:J2");
+  const shipyardCell = ws.getCell("H2");
+  shipyardCell.value = `Shipyard: ${ownerInfo?.shipyard || "N/A"}`;
+  shipyardCell.font = { name: "Calibri", size: 9, bold: true };
+  shipyardCell.alignment = { vertical: "middle", horizontal: "left", wrapText: false };
+  shipyardCell.border = {
+    top: { style: "thin", color: { argb: "FFD1D5DB" } },
+    left: { style: "thin", color: { argb: "FF1F4E78" } },
+    right: { style: "thin", color: { argb: "FF1F4E78" } },
+    bottom: { style: "thin", color: { argb: "FFD1D5DB" } }
+  };
+
+  // Class (船级社) - H3:J3
+  ws.mergeCells("H3:J3");
+  const classCell = ws.getCell("H3");
+  classCell.value = `Class: ${ownerInfo?.classification || "N/A"}`;
+  classCell.font = { name: "Calibri", size: 9, bold: true };
+  classCell.alignment = { vertical: "middle", horizontal: "left", wrapText: false };
+  classCell.border = {
+    top: { style: "thin", color: { argb: "FFD1D5DB" } },
+    left: { style: "thin", color: { argb: "FF1F4E78" } },
+    right: { style: "thin", color: { argb: "FF1F4E78" } },
+    bottom: { style: "thin", color: { argb: "FF1F4E78" } }
+  };
+
+  // ===== 项目详情 (Row 4-5) =====
+  // Project (A4:E5)
+  ws.mergeCells("A4:E5");
+  const projectCell = ws.getCell("A4");
+  projectCell.value = `Project: ${projectName || "N/A"}`;
+  projectCell.font = { 
+    name: "Calibri", 
+    size: 11, 
+    bold: true 
+  };
+  projectCell.alignment = { 
+    vertical: "middle", 
+    horizontal: "left", 
+    wrapText: false 
+  };
+
+  // Ship (F4:J5)
+  ws.mergeCells("F4:J5");
+  const shipCell = ws.getCell("F4");
+  shipCell.value = `Ship: ${shipInfo || "All Ships"}`;
+  shipCell.font = { 
+    name: "Calibri", 
+    size: 11 
+  };
+  shipCell.alignment = { 
+    vertical: "middle", 
+    horizontal: "left", 
+    wrapText: false 
+  };
+  
+  ws.getRow(4).height = 18;
+  ws.getRow(5).height = 18;
+
+  // ===== 统计摘要 (Row 6, A6:J6) =====
   const totalCount = mode === "observations" ? items.length : comments.length;
   const openCount = mode === "observations" 
     ? items.filter(i => i.status === "open").length 
     : comments.filter(c => c.status === "open").length;
-  
-  ws.mergeCells(`A${currentRow}:D${currentRow}`);
-  const statsCell = ws.getCell(`A${currentRow}`);
-  statsCell.value = `Total: ${totalCount}  |  Open: ${openCount}  |  Closed: ${totalCount - openCount}`;
-  statsCell.font = { bold: true, size: 11, color: { argb: "FF059669" } };
-  statsCell.alignment = { vertical: "middle", horizontal: "left", wrapText: false };
-  
-  ws.mergeCells(`F${currentRow}:H${currentRow}`);
-  const dateCell = ws.getCell(`F${currentRow}`);
-  dateCell.value = `Export Date: ${new Date().toLocaleDateString()}`;
-  dateCell.font = { size: 10, color: { argb: "FF6B7280" } };
-  dateCell.alignment = { vertical: "middle", horizontal: "right", wrapText: false };
-  
-  ws.getRow(currentRow).height = 20;
-  currentRow++;
+  const closedCount = totalCount - openCount;
 
-  // 空行
-  currentRow++;
+  ws.mergeCells("A6:J6");
+  const summaryCell = ws.getCell("A6");
+  summaryCell.value = `Summary: Total ${totalCount} records | Open ${openCount} | Closed ${closedCount}`;
+  summaryCell.font = { 
+    name: "Calibri", 
+    size: 11, 
+    bold: true 
+  };
+  summaryCell.fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FFEBF1F8" }
+  };
+  summaryCell.alignment = { 
+    vertical: "middle", 
+    horizontal: "left", 
+    wrapText: false 
+  };
+  ws.getRow(6).height = 20;
 
-  // ===== 表格部分 =====
-  const headerRow = currentRow;
+  // ===== 导出元数据 (Row 7, J7) =====
+  const metaCell = ws.getCell("J7");
+  metaCell.value = `Export Date: ${new Date().toLocaleDateString()}`;
+  metaCell.font = { 
+    name: "Calibri", 
+    size: 9, 
+    color: { argb: "FF808080" } 
+  };
+  metaCell.alignment = { 
+    vertical: "middle", 
+    horizontal: "right", 
+    wrapText: false 
+  };
+  ws.getRow(7).height = 15;
+
+  // ===== 数据表格区 (Row 8 起) =====
+  const headerRow = 8;
   
   if (mode === "observations") {
     const headers = ["#", "Type", "Discipline", "Location", "Date", "Content", "Remark", "Author", "Status", "Closed At"];
     
-    // 表头
+    // 表头样式
     headers.forEach((header, idx) => {
       const cell = ws.getCell(headerRow, idx + 1);
       cell.value = header;
-      cell.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E4D6B" } };
-      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      cell.font = { 
+        name: "Calibri", 
+        size: 11, 
+        bold: true, 
+        color: { argb: "FFFFFFFF" } 
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF1F4E78" }
+      };
+      cell.alignment = { 
+        vertical: "middle", 
+        horizontal: "center", 
+        wrapText: true 
+      };
       cell.border = {
-        top: { style: "thin" },
-        bottom: { style: "thin" },
-        left: { style: "thin" },
-        right: { style: "thin" }
+        top: { style: "thin", color: { argb: "FFFFFFFF" } },
+        bottom: { style: "thin", color: { argb: "FFFFFFFF" } },
+        left: { style: "thin", color: { argb: "FFFFFFFF" } },
+        right: { style: "thin", color: { argb: "FFFFFFFF" } }
       };
     });
-    ws.getRow(headerRow).height = 20;
+    ws.getRow(headerRow).height = 25;
     
     // 数据行
     items.forEach((item, idx) => {
       const rowNum = headerRow + idx + 1;
       const rowData = [
-        item.serialNo,
-        item.type,
-        item.discipline,
-        item.location || "",
-        item.date,
-        item.content,
-        item.remark || "",
-        item.authorName || item.authorId,
-        item.status.toUpperCase(),
+        item.serialNo ?? "",
+        item.type ?? "",
+        item.discipline ?? "",
+        item.location ?? "",
+        item.date ?? "",
+        item.content ?? "",
+        item.remark ?? "",
+        item.authorName || item.authorId || "",
+        item.status ? item.status.toUpperCase() : "",
         item.closedAt ? new Date(item.closedAt).toLocaleDateString() : ""
       ];
       
       rowData.forEach((value, colIdx) => {
         const cell = ws.getCell(rowNum, colIdx + 1);
-        cell.value = value;
-        cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+        cell.value = String(value);
+        cell.font = { name: "Calibri", size: 10 };
+        
+        // Content 和 Remark 列启用自动换行
+        if (colIdx === 5 || colIdx === 6) {
+          cell.alignment = { 
+            vertical: "top", 
+            horizontal: "left", 
+            wrapText: true 
+          };
+        } else {
+          cell.alignment = { 
+            vertical: "middle", 
+            horizontal: "left", 
+            wrapText: false 
+          };
+        }
+        
         cell.border = {
           top: { style: "thin", color: { argb: "FFD1D5DB" } },
           bottom: { style: "thin", color: { argb: "FFD1D5DB" } },
           left: { style: "thin", color: { argb: "FFD1D5DB" } },
           right: { style: "thin", color: { argb: "FFD1D5DB" } }
         };
+        
+        // 条件格式化 - Status 列 (第9列, colIdx = 8)
+        if (colIdx === 8) {
+          const status = String(value).toUpperCase();
+          if (status === "OPEN") {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFFFC7CE" }
+            };
+            cell.font = { 
+              name: "Calibri", 
+              size: 10, 
+              color: { argb: "FF9C0006" } 
+            };
+          } else if (status === "CLOSED") {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFC6EFCE" }
+            };
+            cell.font = { 
+              name: "Calibri", 
+              size: 10, 
+              color: { argb: "FF006100" } 
+            };
+          }
+        }
       });
     });
     
-    // 设置列宽 - Content 列固定宽度，其他自适应
-    ws.getColumn(1).width = 6;   // #
+    // 设置列宽
+    ws.getColumn(1).width = 5;   // #
     ws.getColumn(2).width = 12;  // Type
-    ws.getColumn(3).width = 15;  // Discipline
-    ws.getColumn(4).width = 20;  // Location
-    ws.getColumn(5).width = 12;  // Date
-    ws.getColumn(6).width = 60;  // Content - 50个字符宽度
-    ws.getColumn(7).width = 25;  // Remark
-    ws.getColumn(8).width = 20;  // Author
-    ws.getColumn(9).width = 10;  // Status
-    ws.getColumn(10).width = 14; // Closed At
+    ws.getColumn(3).width = 12;  // Discipline
+    ws.getColumn(4).width = 15;  // Location
+    ws.getColumn(5).width = 15;  // Date
+    ws.getColumn(6).width = 55;  // Content
+    ws.getColumn(7).width = 20;  // Remark
+    ws.getColumn(8).width = 15;  // Author
+    ws.getColumn(9).width = 12;  // Status
+    ws.getColumn(10).width = 15; // Closed At
     
-    // 添加自动筛选 - Type, Discipline, Author, Status 列
+    // 添加自动筛选
     const lastRow = headerRow + items.length;
     ws.autoFilter = {
       from: { row: headerRow, column: 1 },
@@ -413,78 +548,138 @@ export async function exportObservationsExcel(
     };
     
   } else {
-    const headers = ["Ship", "Discipline", "Inspection Item", "Round", "Content", "Author", "Status", "Closed At"];
+    // Inspection Comments 模式
+    const headers = ["#", "Ship", "Discipline", "Inspection Item", "Round", "Content", "Author", "Status", "Closed At"];
     
-    // 表头
+    // 表头样式
     headers.forEach((header, idx) => {
       const cell = ws.getCell(headerRow, idx + 1);
       cell.value = header;
-      cell.font = { bold: true, size: 11, color: { argb: "FFFFFFFF" } };
-      cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF1E4D6B" } };
-      cell.alignment = { vertical: "middle", horizontal: "center", wrapText: true };
+      cell.font = { 
+        name: "Calibri", 
+        size: 11, 
+        bold: true, 
+        color: { argb: "FFFFFFFF" } 
+      };
+      cell.fill = {
+        type: "pattern",
+        pattern: "solid",
+        fgColor: { argb: "FF1F4E78" }
+      };
+      cell.alignment = { 
+        vertical: "middle", 
+        horizontal: "center", 
+        wrapText: true 
+      };
       cell.border = {
-        top: { style: "thin" },
-        bottom: { style: "thin" },
-        left: { style: "thin" },
-        right: { style: "thin" }
+        top: { style: "thin", color: { argb: "FFFFFFFF" } },
+        bottom: { style: "thin", color: { argb: "FFFFFFFF" } },
+        left: { style: "thin", color: { argb: "FFFFFFFF" } },
+        right: { style: "thin", color: { argb: "FFFFFFFF" } }
       };
     });
-    ws.getRow(headerRow).height = 20;
+    ws.getRow(headerRow).height = 25;
     
     // 数据行
     comments.forEach((comment, idx) => {
       const rowNum = headerRow + idx + 1;
       const rowData = [
-        comment.hullNumber,
-        comment.discipline,
-        comment.inspectionItemName,
-        `R${comment.roundNumber}`,
-        comment.content,
-        comment.authorName || "",
-        comment.status.toUpperCase(),
+        (idx + 1).toString(),
+        comment.hullNumber ?? "",
+        comment.discipline ?? "",
+        comment.inspectionItemName ?? "",
+        comment.roundNumber ? `R${comment.roundNumber}` : "",
+        comment.content ?? "",
+        comment.authorName ?? "",
+        comment.status ? comment.status.toUpperCase() : "",
         comment.closedAt ? new Date(comment.closedAt).toLocaleDateString() : ""
       ];
       
       rowData.forEach((value, colIdx) => {
         const cell = ws.getCell(rowNum, colIdx + 1);
-        cell.value = value;
-        cell.alignment = { vertical: "top", horizontal: "left", wrapText: true };
+        cell.value = String(value);
+        cell.font = { name: "Calibri", size: 10 };
+        
+        // Content 列启用自动换行
+        if (colIdx === 5) {
+          cell.alignment = { 
+            vertical: "top", 
+            horizontal: "left", 
+            wrapText: true 
+          };
+        } else {
+          cell.alignment = { 
+            vertical: "middle", 
+            horizontal: "left", 
+            wrapText: false 
+          };
+        }
+        
         cell.border = {
           top: { style: "thin", color: { argb: "FFD1D5DB" } },
           bottom: { style: "thin", color: { argb: "FFD1D5DB" } },
           left: { style: "thin", color: { argb: "FFD1D5DB" } },
           right: { style: "thin", color: { argb: "FFD1D5DB" } }
         };
+        
+        // 条件格式化 - Status 列 (第8列, colIdx = 7)
+        if (colIdx === 7) {
+          const status = String(value).toUpperCase();
+          if (status === "OPEN") {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFFFC7CE" }
+            };
+            cell.font = { 
+              name: "Calibri", 
+              size: 10, 
+              color: { argb: "FF9C0006" } 
+            };
+          } else if (status === "CLOSED") {
+            cell.fill = {
+              type: "pattern",
+              pattern: "solid",
+              fgColor: { argb: "FFC6EFCE" }
+            };
+            cell.font = { 
+              name: "Calibri", 
+              size: 10, 
+              color: { argb: "FF006100" } 
+            };
+          }
+        }
       });
     });
     
     // 设置列宽
-    ws.getColumn(1).width = 14;  // Ship
-    ws.getColumn(2).width = 16;  // Discipline
-    ws.getColumn(3).width = 35;  // Inspection Item
-    ws.getColumn(4).width = 8;   // Round
-    ws.getColumn(5).width = 60;  // Content - 50个字符宽度
-    ws.getColumn(6).width = 20;  // Author
-    ws.getColumn(7).width = 10;  // Status
-    ws.getColumn(8).width = 14;  // Closed At
+    ws.getColumn(1).width = 5;   // #
+    ws.getColumn(2).width = 12;  // Ship
+    ws.getColumn(3).width = 12;  // Discipline
+    ws.getColumn(4).width = 30;  // Inspection Item
+    ws.getColumn(5).width = 8;   // Round
+    ws.getColumn(6).width = 55;  // Content
+    ws.getColumn(7).width = 15;  // Author
+    ws.getColumn(8).width = 12;  // Status
+    ws.getColumn(9).width = 15;  // Closed At
     
-    // 添加自动筛选 - Discipline, Author, Status 列
+    // 添加自动筛选
     const lastRow = headerRow + comments.length;
     ws.autoFilter = {
       from: { row: headerRow, column: 1 },
-      to: { row: lastRow, column: 8 }
+      to: { row: lastRow, column: 9 }
     };
   }
 
-  // 自动调整行高
-  const totalRows = mode === "observations" ? items.length : comments.length;
-  for (let i = 1; i <= totalRows; i++) {
-    const row = ws.getRow(headerRow + i);
-    // 根据内容自动调整行高，最小18，最大150
-    row.height = undefined; // 让 Excel 自动计算
-  }
+  // ===== 冻结前 8 行 =====
+  ws.views = [{ 
+    state: 'frozen',
+    xSplit: 0,
+    ySplit: 8,
+    showGridLines: false
+  }];
 
-  // 导出文件
+  // ===== 导出文件 =====
   const buffer = await wb.xlsx.writeBuffer();
   const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const url = URL.createObjectURL(blob);
