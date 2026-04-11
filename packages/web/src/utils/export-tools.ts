@@ -181,7 +181,7 @@ export function exportObservationsPdf(
       
       // Alternating row colors
       const locationText = doc.splitTextToSize(item.location || '-', 23);
-      const contentText = doc.splitTextToSize(item.content || '-', 110);
+      const contentText = doc.splitTextToSize(item.content || '-', 90); // 减少宽度从110到90
       const maxLines = Math.max(locationText.length, contentText.length);
       const rowHeight = maxLines * 4 + 2;
       
@@ -287,7 +287,7 @@ export function exportObservationsPdf(
       
       // Alternating row colors
       const itemText = doc.splitTextToSize(cm.inspectionItemName || '-', 38);
-      const contentText = doc.splitTextToSize(cm.content || '-', 90);
+      const contentText = doc.splitTextToSize(cm.content || '-', 70); // 减少宽度从90到70
       const maxLines = Math.max(itemText.length, contentText.length);
       const rowHeight = maxLines * 4 + 2;
       
