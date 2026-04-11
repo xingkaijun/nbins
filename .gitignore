@@ -8,6 +8,5 @@ coverage/
 .wrangler/
 *.tsbuildinfo
 .DS_Store
-pnpm-lock.yaml
 
 .codex
