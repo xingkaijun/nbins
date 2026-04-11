@@ -2,7 +2,7 @@
   "name": "nbins",
   "version": "0.1.0",
   "private": true,
-  "packageManager": "pnpm@10.8.1",
+  "packageManager": "pnpm@9.1.0",
   "engines": {
     "node": ">=20.0.0"
   },
