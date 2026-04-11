@@ -119,8 +119,10 @@ export interface ObservationItem {
 /** Inspection Comments 聚合视图（只读） */
 export interface InspectionCommentView {
   id: string;
+  inspectionItemId: string;
   shipId: string;
   hullNumber: string;
+  projectCode?: string;
   discipline: Discipline;
   inspectionItemName: string;
   roundNumber: number;

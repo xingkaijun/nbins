@@ -163,8 +163,10 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
       let sql = `
         SELECT
           cm."id",
+          ii."id" AS "inspectionItemId",
           ii."shipId",
           sh."hullNumber",
+          p."code" AS "projectCode",
           ii."discipline",
           ii."itemName" AS "inspectionItemName",
           ir."roundNumber",
@@ -181,6 +183,7 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
         INNER JOIN "inspection_items" ii ON ii."id" = cm."inspectionItemId"
         INNER JOIN "inspection_rounds" ir ON ir."id" = cm."createdInRoundId"
         INNER JOIN "ships" sh ON sh."id" = ii."shipId"
+        INNER JOIN "projects" p ON p."id" = sh."projectId"
         LEFT JOIN "users" u ON u."id" = cm."authorId"
         WHERE 1=1
       `;

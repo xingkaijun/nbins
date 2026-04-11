@@ -174,14 +174,17 @@ export function Admin() {
     if (!obsShipFilter) { setToast({ type: "err", text: "Please select a ship first" }); return; }
     setWorking(true);
     try {
-      const data = await fetchObservations(obsShipFilter, {
+      const data = await fetchObservations({
+        shipId: obsShipFilter,
         type: obsTypeFilter || undefined,
         discipline: obsDiscFilter || undefined,
         status: obsStatusFilter || undefined,
-        date_from: obsDateFrom || undefined,
-        date_to: obsDateTo || undefined,
       });
-      setObservations(data);
+      const filteredByDate = data.filter((item) =>
+        (!obsDateFrom || item.date >= obsDateFrom) &&
+        (!obsDateTo || item.date <= obsDateTo)
+      );
+      setObservations(filteredByDate);
       setObsLoaded(true);
       setPage(1);
     } catch (e) { setToast({ type: "err", text: errMsg(e, "Failed to load observations") }); }
@@ -387,9 +390,9 @@ export function Admin() {
   async function saveObservation() {
     const d = modalData;
     if (modalMode === "edit" && d.id) {
-      await updateObservation(d.id, { shipId: d.shipId, type: d.type, discipline: d.discipline as Discipline, authorId: d.authorId, date: d.date, content: d.content, status: d.status as "open" | "closed", closedBy: empty(d.closedBy ?? ""), closedAt: empty(d.closedAt ?? "") });
+      await updateObservation(d.id, { shipId: d.shipId, type: d.type, discipline: d.discipline as Discipline, date: d.date, content: d.content, status: d.status as "open" | "closed", closedBy: empty(d.closedBy ?? ""), closedAt: empty(d.closedAt ?? "") });
     } else {
-      await createObservation(d.shipId || obsShipFilter, { type: d.type, discipline: d.discipline, authorId: d.authorId || session?.user.id || "", date: d.date, content: d.content });
+      await createObservation(d.shipId || obsShipFilter, { type: d.type, discipline: d.discipline, date: d.date, content: d.content });
     }
 
     if (obsLoaded && obsShipFilter) await doSearchObservations();
@@ -514,7 +517,7 @@ export function Admin() {
     if (!session?.user.id) return;
     setWorking(true);
     try {
-      await closeObservation(id, session.user.id);
+      await closeObservation(id);
 
       if (obsLoaded && obsShipFilter) await doSearchObservations();
       setToast({ type: "ok", text: "Observation closed" });

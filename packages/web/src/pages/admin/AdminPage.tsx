@@ -7,13 +7,17 @@ import {
   fetchShips,
   fetchUsers,
   fetchObservationTypes,
+  fetchInspectionComments,
   fetchInspectionList,
   fetchObservations,
   fetchInspectionDetail,
   updateInspectionItemAdmin,
   createObservation,
   updateObservation,
+  createObservationType,
   updateObservationType,
+  updateInspectionCommentAdmin,
+  deleteInspectionCommentAdmin,
   createProject,
   updateProject,
   createShip,
@@ -26,7 +30,7 @@ import {
   type ShipRecord,
   type UserRecord
 } from "../../api";
-import { DISCIPLINES, ROLES, type Discipline, type ObservationItem, type ObservationType, type Role } from "@nbins/shared";
+import { DISCIPLINES, ROLES, type Discipline, type InspectionCommentView, type ObservationItem, type ObservationType, type Role } from "@nbins/shared";
 import { AdminLayout } from "./AdminLayout";
 import { DataTable } from "./DataTable";
 import { RecordEditor } from "./RecordEditor";
@@ -35,6 +39,7 @@ import type { AdminTableConfig } from "./table-configs";
 
 type ObservationAdminRecord = ObservationItem & { shipLabel: string; projectCode: string };
 type InspectionAdminRecord = InspectionListItem & { shipLabel: string; projectId?: string; date?: string; };
+type AdminCommentRecord = InspectionCommentView & { itemName: string };
 type TableKey =
   | "users"
   | "projects"
@@ -380,7 +385,7 @@ export function AdminPage() {
         owner: record?.owner ?? "",
         shipyard: record?.shipyard ?? "",
         class: record?.class ?? "",
-        recipientsText: record?.recipients?.join(", ") ?? ""
+        recipientsText: record?.reportRecipients?.join(", ") ?? ""
       };
     }
     if (tableKey === "ships") {
@@ -520,14 +525,17 @@ export function AdminPage() {
       })));
 
       const [commentData, ...observationLists] = await Promise.all([
-        fetchAdminComments(),
+        fetchInspectionComments(),
         ...shipData.map(async (ship) => {
-          const result = await fetchObservations(ship.id);
+          const result = await fetchObservations({ shipId: ship.id });
           const projectCode = projectData.find((project) => project.id === ship.projectId)?.code ?? "";
           return result.map((record) => ({ ...record, shipLabel: `${ship.hullNumber} / ${ship.shipName}`, projectCode }));
         })
       ]);
-      setAdminComments(commentData);
+      setAdminComments(commentData.map((record) => ({
+        ...record,
+        itemName: record.inspectionItemName
+      })));
       setObservations(observationLists.flat());
     } catch (error) {
       setErrorMessage(messageOf(error, "Failed to load admin data."));
@@ -549,7 +557,7 @@ export function AdminPage() {
           owner: String(currentForm.owner ?? "").trim() || undefined,
           shipyard: String(currentForm.shipyard ?? "").trim() || undefined,
           class: String(currentForm.class ?? "").trim() || undefined,
-          recipients: String(currentForm.recipientsText ?? "").split(",").map((item) => item.trim()).filter(Boolean)
+          reportRecipients: String(currentForm.recipientsText ?? "").split(",").map((item) => item.trim()).filter(Boolean)
         };
         if (isCreating.projects) await createProject(payload);
         else await updateProject(String(currentForm.id), { ...payload, status: currentForm.status as ProjectRecord["status"] });
@@ -600,7 +608,6 @@ export function AdminPage() {
           await createObservation(String(currentForm.shipId ?? ""), {
             type: String(currentForm.type ?? ""),
             discipline: String(currentForm.discipline ?? ""),
-            authorId: String(currentForm.authorId ?? "sys-user"),
             date: String(currentForm.date ?? ""),
             content: String(currentForm.content ?? "")
           });
@@ -609,7 +616,6 @@ export function AdminPage() {
             shipId: String(currentForm.shipId ?? ""),
             type: String(currentForm.type ?? ""),
             discipline: String(currentForm.discipline ?? ""),
-            authorId: String(currentForm.authorId ?? ""),
             date: String(currentForm.date ?? ""),
             content: String(currentForm.content ?? ""),
             status: currentForm.status as "open" | "closed"
@@ -632,7 +638,7 @@ export function AdminPage() {
       }
 
       if (activeTable === "comments") {
-        await updateCommentAdmin(String(currentForm.inspectionItemId ?? ""), String(currentForm.id ?? ""), {
+        await updateInspectionCommentAdmin(String(currentForm.inspectionItemId ?? ""), String(currentForm.id ?? ""), {
           authorId: String(currentForm.authorId ?? ""),
           content: String(currentForm.content ?? ""),
           status: currentForm.status as "open" | "closed",
@@ -657,7 +663,7 @@ export function AdminPage() {
       setWorking(true);
       setErrorMessage(null);
       try {
-        await deleteCommentAdmin(String(selectedRecord.inspectionItemId ?? ""), String(selectedRecord.id ?? ""));
+        await deleteInspectionCommentAdmin(String(selectedRecord.inspectionItemId ?? ""), String(selectedRecord.id ?? ""));
         await refreshAll();
         cancelEditor();
         setStatusMessage("Record deleted.");
