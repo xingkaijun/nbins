@@ -135,6 +135,23 @@ export function AdminPage() {
     [users]
   );
 
+  /** Get effective disciplines for a given project (empty = all presets) */
+  function getProjectDisciplines(projectId: string): readonly string[] {
+    const proj = projects.find(p => p.id === projectId);
+    return proj && proj.disciplines && proj.disciplines.length > 0 ? proj.disciplines : DISCIPLINES;
+  }
+
+  /** Get discipline options for a given project */
+  function getProjectDisciplineOptions(projectId: string) {
+    return getProjectDisciplines(projectId).map(d => ({ value: d, label: d }));
+  }
+
+  /** Discipline options based on the current inspection_items project filter */
+  const inspDisciplineOptions = useMemo(() => {
+    const projId = currentInspFilters.projectId;
+    return projId ? getProjectDisciplineOptions(projId) : DISCIPLINES.map(d => ({ value: d, label: d }));
+  }, [currentInspFilters.projectId, projects]);
+
   const tableConfigs = useMemo<Record<TableKey, AdminTableConfig<any>>>(() => ({
     users: {
       key: "users",
@@ -171,6 +188,7 @@ export function AdminPage() {
         { key: "code", label: "Code", sortable: true },
         { key: "name", label: "Name", sortable: true },
         { key: "status", label: "Status", sortable: true },
+        { key: "disciplines", label: "Disciplines", render: (record: ProjectRecord) => record.disciplines && record.disciplines.length > 0 ? record.disciplines.join(", ") : "ALL" },
         { key: "owner", label: "Owner", sortable: true },
         { key: "shipyard", label: "Shipyard", sortable: true }
       ],
@@ -182,7 +200,9 @@ export function AdminPage() {
         { key: "owner", label: "Owner", type: "text" },
         { key: "shipyard", label: "Shipyard", type: "text" },
         { key: "class", label: "Class", type: "text" },
-        { key: "recipientsText", label: "Recipients", type: "textarea", placeholder: "Comma-separated emails" }
+        { key: "disciplines", label: "Disciplines (empty = all)", type: "tags", options: DISCIPLINES.map(d => ({ value: d, label: d })) },
+        { key: "recipientsText", label: "Report Recipients", type: "textarea", placeholder: "Comma-separated emails" },
+        { key: "ncrRecipientsText", label: "NCR Recipients", type: "textarea", placeholder: "Comma-separated emails" }
       ]
     },
     ships: {
@@ -235,7 +255,7 @@ export function AdminPage() {
       filters: [
         { key: "projectId", label: "Project", type: "select", options: projectOptions },
         { key: "shipId", label: "Ship", type: "select", options: filteredShipOptions },
-        { key: "discipline", label: "Discipline", type: "select", options: DISCIPLINES.map((item) => ({ value: item, label: item })) },
+        { key: "discipline", label: "Discipline", type: "select", options: inspDisciplineOptions },
         { key: "yardQc", label: "Yard QC", type: "select", options: Array.from(new Set(inspectionItems.map(i => i.yardQc).filter(Boolean))).map(name => ({ value: name, label: name })) },
         { key: "date", label: "Date", type: "date" },
         { key: "workflowStatus", label: "Status", type: "select", options: [{ value: "pending", label: "pending" }, { value: "open", label: "open" }, { value: "closed", label: "closed" }] }
@@ -243,7 +263,7 @@ export function AdminPage() {
       formFields: [
         { key: "shipId", label: "Ship", type: "select", required: true, options: shipOptions },
         { key: "itemName", label: "Item Name", type: "text", required: true },
-        { key: "discipline", label: "Discipline", type: "select", required: true, options: DISCIPLINES.map((item) => ({ value: item, label: item })) },
+        { key: "discipline", label: "Discipline", type: "select", required: true, options: inspDisciplineOptions },
         { key: "workflowStatus", label: "Workflow Status", type: "text" },
         { key: "lastRoundResult", label: "Last Round Result", type: "text" },
         { key: "resolvedResult", label: "Resolved Result", type: "text" },
@@ -270,7 +290,7 @@ export function AdminPage() {
       filters: [
         { key: "projectId", label: "Project", type: "select", options: projectOptions },
         { key: "shipId", label: "Ship", type: "select", options: filteredShipOptions },
-        { key: "discipline", label: "Discipline", type: "select", options: DISCIPLINES.map((item) => ({ value: item, label: item })) },
+        { key: "discipline", label: "Discipline", type: "select", options: inspDisciplineOptions },
         { key: "createdAt", label: "Date", type: "date" },
         { key: "inspectionItemId", label: "Item", type: "select", options: inspectionItems.map((i) => ({ value: (i as any).id ?? "", label: i.itemName })) },
         { key: "authorId", label: "Author", type: "select", options: userOptions },
@@ -380,7 +400,9 @@ export function AdminPage() {
         owner: record?.owner ?? "",
         shipyard: record?.shipyard ?? "",
         class: record?.class ?? "",
-        recipientsText: record?.recipients?.join(", ") ?? ""
+        disciplines: record?.disciplines ?? [],
+        recipientsText: record?.reportRecipients?.join(", ") ?? "",
+        ncrRecipientsText: record?.ncrRecipients?.join(", ") ?? ""
       };
     }
     if (tableKey === "ships") {
@@ -522,7 +544,7 @@ export function AdminPage() {
       const [commentData, ...observationLists] = await Promise.all([
         fetchAdminComments(),
         ...shipData.map(async (ship) => {
-          const result = await fetchObservations(ship.id);
+          const result = await fetchObservations({ shipId: ship.id });
           const projectCode = projectData.find((project) => project.id === ship.projectId)?.code ?? "";
           return result.map((record) => ({ ...record, shipLabel: `${ship.hullNumber} / ${ship.shipName}`, projectCode }));
         })
@@ -549,7 +571,9 @@ export function AdminPage() {
           owner: String(currentForm.owner ?? "").trim() || undefined,
           shipyard: String(currentForm.shipyard ?? "").trim() || undefined,
           class: String(currentForm.class ?? "").trim() || undefined,
-          recipients: String(currentForm.recipientsText ?? "").split(",").map((item) => item.trim()).filter(Boolean)
+          disciplines: (currentForm.disciplines ?? []) as string[],
+          reportRecipients: String(currentForm.recipientsText ?? "").split(",").map((item) => item.trim()).filter(Boolean),
+          ncrRecipients: String(currentForm.ncrRecipientsText ?? "").split(",").map((item) => item.trim()).filter(Boolean)
         };
         if (isCreating.projects) await createProject(payload);
         else await updateProject(String(currentForm.id), { ...payload, status: currentForm.status as ProjectRecord["status"] });
