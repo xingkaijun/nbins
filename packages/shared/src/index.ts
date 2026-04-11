@@ -99,6 +99,7 @@ export interface ObservationType {
 export interface ObservationItem {
   id: string;
   shipId: string;
+  hullNumber?: string; // 船号
   type: string;
   discipline: Discipline;
   authorId: string;

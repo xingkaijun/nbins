@@ -201,7 +201,13 @@ export function Observations() {
   const handleExportPdf = () => {
     const selectedShip = ships.find(s => s.id === selectedShipId);
     const shipInfo = selectedShip ? `${selectedShip.shipName} (${selectedShip.hullNumber})` : "All Ships";
-    exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab, shipInfo);
+    const selectedProject = projects.find(p => p.id === selectedProjectId);
+    const projectInfo = {
+      owner: selectedProject?.owner || undefined,
+      shipyard: selectedProject?.shipyard || undefined,
+      classification: selectedProject?.class || undefined
+    };
+    exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab, shipInfo, projectInfo);
   };
 
   const handleExportExcel = async () => {
@@ -393,7 +399,7 @@ export function Observations() {
               <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid var(--nb-border)", borderRadius: 6 }}>
                 <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
                   <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "1px solid var(--nb-border)" }}>
-                    <th style={thStyle}>#</th><th style={thStyle}>Disc</th><th style={thStyle}>Location</th><th style={thStyle}>Date</th><th style={thStyle}>Content</th><th style={thStyle}>Remark</th><th style={thStyle}>Status</th>
+                    <th style={thStyle}>S/N</th><th style={thStyle}>Disc</th><th style={thStyle}>Location</th><th style={thStyle}>Date</th><th style={thStyle}>Content</th><th style={thStyle}>Remark</th><th style={thStyle}>Status</th>
                   </tr></thead>
                   <tbody>
                     {parsedRows.map(r => (
@@ -466,14 +472,14 @@ export function Observations() {
           <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
-                <th style={thStyle}>#</th><th style={thStyle}>Type</th><th style={thStyle}>Discipline</th>
+                <th style={thStyle}>S/N</th><th style={thStyle}>Type</th><th style={thStyle}>Discipline</th>
                 <th style={thStyle}>Location</th><th style={thStyle}>Date</th><th style={thStyle}>Content</th>
                 <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Action</th>
               </tr></thead>
               <tbody>
                 {items.map(item => (
                   <tr key={item.id} style={{ borderBottom: "1px solid var(--nb-border)" }}>
-                    <td style={tdStyle}>{item.serialNo}</td>
+                    <td style={tdStyle}>{item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : item.serialNo}</td>
                     <td style={tdStyle}><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
                     <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
                     <td style={tdStyle}>{item.location || "—"}</td>
@@ -503,7 +509,7 @@ export function Observations() {
           <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
             <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
-                <th style={thStyle}>#</th><th style={thStyle}>Ship</th><th style={thStyle}>Discipline</th>
+                <th style={thStyle}>S/N</th><th style={thStyle}>Ship</th><th style={thStyle}>Discipline</th>
                 <th style={thStyle}>Inspection Item</th><th style={thStyle}>Round</th><th style={thStyle}>Content</th>
                 <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Closed At</th>
               </tr></thead>
@@ -531,7 +537,7 @@ export function Observations() {
       {editingItem && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", zIndex: 9999 }}>
           <form style={{ ...formBoxStyle, width: "90%", maxWidth: 500, margin: 0, boxShadow: "0 24px 64px rgba(15, 23, 42, 0.18)" }} onSubmit={handleEditSubmit}>
-            <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800 }}>Edit Observation #{editingItem.serialNo}</h3>
+            <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800 }}>Edit Observation #{editingItem.discipline ? `${editingItem.discipline.substring(0, 3).toUpperCase()}-${editingItem.serialNo}` : editingItem.serialNo}</h3>
             <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
               <label style={fieldLabelStyle}><span>Type</span>
                 <select value={editType} onChange={e => setEditType(e.target.value)} style={inputStyle} required>

@@ -87,7 +87,7 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
       }
 
       let sql = `
-        SELECT o.*, u."displayName" AS "authorName"
+        SELECT o.*, u."displayName" AS "authorName", s."hullNumber"
         FROM "observations" o
         LEFT JOIN "users" u ON u."id" = o."authorId"
         INNER JOIN "ships" s ON s."id" = o."shipId"
@@ -122,7 +122,7 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
         params.push(status);
       }
 
-      sql += ` ORDER BY o."serialNo" ASC, o."date" DESC, o."createdAt" DESC`;
+      sql += ` ORDER BY s."hullNumber" ASC, o."discipline" ASC, o."createdAt" ASC`;
 
       const result = await c.env.DB!.prepare(sql).bind(...params).all();
       return c.json({ ok: true, data: result.results ?? [] });
@@ -260,7 +260,7 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
         params.push(status);
       }
 
-      sql += ` ORDER BY o."serialNo" ASC, o."date" DESC, o."createdAt" DESC`;
+      sql += ` ORDER BY o."discipline" ASC, o."createdAt" ASC`;
 
       const result = await c.env.DB!.prepare(sql).bind(...params).all();
       return c.json({ ok: true, data: result.results ?? [] });
@@ -299,10 +299,10 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
         return c.json({ ok: false, error: "无权访问该船舶所在项目" }, 403);
       }
 
-      // 计算序号：同船+同类型下的最大序号+1
+      // 计算序号：同船+同专业下的最大序号+1（不再按type分组）
       const maxRow = await c.env.DB!
-        .prepare(`SELECT MAX("serialNo") as "maxNo" FROM "observations" WHERE "shipId" = ? AND "type" = ?`)
-        .bind(shipId, body.type)
+        .prepare(`SELECT MAX("serialNo") as "maxNo" FROM "observations" WHERE "shipId" = ? AND "discipline" = ?`)
+        .bind(shipId, body.discipline)
         .first<{ maxNo: number | null }>();
       const serialNo = (maxRow?.maxNo ?? 0) + 1;
 
@@ -364,19 +364,34 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
         return c.json({ ok: false, error: "无权访问该船舶所在项目" }, 403);
       }
 
-      // 获取当前最大序号
+      // 获取当前最大序号（按船号+专业分组）
       const maxRow = await c.env.DB!
-        .prepare(`SELECT MAX("serialNo") as "maxNo" FROM "observations" WHERE "shipId" = ? AND "type" = ?`)
-        .bind(shipId, body.type)
+        .prepare(`SELECT MAX("serialNo") as "maxNo" FROM "observations" WHERE "shipId" = ? AND "discipline" = ?`)
+        .bind(shipId, body.items[0]?.discipline || "HULL")
         .first<{ maxNo: number | null }>();
       let nextSerial = (maxRow?.maxNo ?? 0) + 1;
 
       const now = new Date().toISOString();
       const authorId = authUser.id;
 
+      // 按专业分组计算序号
+      const disciplineSerials = new Map<string, number>();
+      
+      // 预先获取每个专业的最大序号
+      const disciplines = [...new Set(body.items.map(item => item.discipline))];
+      for (const disc of disciplines) {
+        const maxRow = await c.env.DB!
+          .prepare(`SELECT MAX("serialNo") as "maxNo" FROM "observations" WHERE "shipId" = ? AND "discipline" = ?`)
+          .bind(shipId, disc)
+          .first<{ maxNo: number | null }>();
+        disciplineSerials.set(disc, (maxRow?.maxNo ?? 0) + 1);
+      }
+
       const stmts = body.items.map((item) => {
         const id = generateId();
-        const serial = nextSerial++;
+        const currentSerial = disciplineSerials.get(item.discipline) || 1;
+        disciplineSerials.set(item.discipline, currentSerial + 1);
+        
         return c.env.DB!
           .prepare(
             `INSERT INTO "observations"
@@ -385,7 +400,7 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
           )
           .bind(
             id, shipId, body.type, item.discipline,
-            authorId, serial,
+            authorId, currentSerial,
             item.location ?? null,
             item.date, item.content,
             item.remark ?? null,

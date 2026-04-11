@@ -16,125 +16,321 @@ export function exportObservationsPdf(
   comments: InspectionCommentView[],
   projectName: string,
   mode: "observations" | "inspection-comments",
-  shipInfo?: string
+  shipInfo?: string,
+  ownerInfo?: { owner?: string; shipyard?: string; classification?: string }
 ) {
-  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  // A4 Portrait, 15mm margins
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
-  let y = margin;
-
-  drawPdfLogo(doc, margin, y);
-  doc.setFontSize(16);
-  doc.setTextColor(30, 41, 59);
-  doc.text(mode === "observations" ? 'OBSERVATIONS EXPORT' : 'INSPECTION COMMENTS EXPORT', pageWidth / 2, y + 5, { align: 'center' });
-
-  doc.setFontSize(10);
-  doc.text(`Project: ${projectName}`, pageWidth - margin, y + 5, { align: 'right' });
-  if (shipInfo) {
-    doc.text(`Ship: ${shipInfo}`, pageWidth - margin, y + 10, { align: 'right' });
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - margin, y + 15, { align: 'right' });
-    y += 3; // 增加额外的垂直空间
-  } else {
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, pageWidth - margin, y + 10, { align: 'right' });
-  }
-
-  y += 18;
-  doc.setDrawColor(15, 118, 110);
-  doc.setLineWidth(0.5);
-  doc.line(margin, y, pageWidth - margin, y);
-  y += 10;
-
+  
+  // Color scheme
+  const PRIMARY_BLUE = [31, 78, 120] as [number, number, number];
+  const MEDIUM_GRAY = [102, 102, 102] as [number, number, number];
+  const LIGHT_GRAY = [249, 249, 249] as [number, number, number];
+  
+  // Helper function to add page with header and footer
+  const addPageWithHeaderFooter = (isFirstPage: boolean) => {
+    if (!isFirstPage) {
+      doc.addPage();
+    }
+    
+    let y = margin;
+    
+    // Logo on left
+    const logoHeight = 12;
+    drawPdfLogo(doc, margin, y, logoHeight);
+    
+    // Title on right - "SITE OBSERVATION REPORT"
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(...PRIMARY_BLUE);
+    doc.text('SITE OBSERVATION REPORT', pageWidth - margin, y + 8, { align: 'right' });
+    
+    y += logoHeight + 3;
+    
+    // 2pt thick blue horizontal line
+    doc.setDrawColor(...PRIMARY_BLUE);
+    doc.setLineWidth(0.75);
+    doc.line(margin, y, pageWidth - margin, y);
+    
+    y += 5;
+    
+    // Info matrix (3 columns)
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(...MEDIUM_GRAY);
+    
+    const col1X = margin;
+    const col2X = margin + 60;
+    const col3X = margin + 120;
+    
+    // Column 1: Project & Hull No
+    doc.text(`Project: ${projectName || '-'}`, col1X, y);
+    doc.text(`Hull No: ${shipInfo ? shipInfo.split('(')[1]?.replace(')', '') || '-' : '-'}`, col1X, y + 5);
+    
+    // Column 2: Ship & Shipyard
+    doc.text(`Ship: ${shipInfo ? shipInfo.split('(')[0].trim() || '-' : '-'}`, col2X, y);
+    doc.text(`Shipyard: ${ownerInfo?.shipyard || '-'}`, col2X, y + 5);
+    
+    // Column 3: Owner & Date
+    doc.text(`Owner: ${ownerInfo?.owner || '-'}`, col3X, y);
+    doc.text(`Date: ${new Date().toLocaleDateString()}`, col3X, y + 5);
+    
+    y += 10;
+    
+    // Summary bar (light gray background)
+    const totalCount = mode === "observations" ? items.length : comments.length;
+    const openCount = mode === "observations" 
+      ? items.filter(i => i.status === "open").length 
+      : comments.filter(c => c.status === "open").length;
+    const closedCount = totalCount - openCount;
+    
+    doc.setFillColor(...LIGHT_GRAY);
+    doc.rect(margin, y, pageWidth - 2 * margin, 7, 'F');
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(9);
+    doc.setTextColor(0, 0, 0);
+    doc.text(`Summary: Total ${totalCount} | Open ${openCount} | Closed ${closedCount}`, margin + 2, y + 5);
+    
+    y += 12;
+    
+    return y;
+  };
+  
+  // Start first page
+  let y = addPageWithHeaderFooter(true);
+  
+  // Table header
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.setTextColor(255, 255, 255);
+  doc.setFillColor(...PRIMARY_BLUE);
+  
+  const headerY = y;
+  const headerHeight = 8;
+  
   if (mode === "observations") {
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('OBSERVATIONS', margin, y);
-    y += 8;
-
+    // Column positions for observations
+    const colX = {
+      num: margin,
+      type: margin + 8,
+      disc: margin + 23,
+      location: margin + 43,
+      content: margin + 68,
+      status: pageWidth - margin - 18
+    };
+    
+    // Draw header background
+    doc.rect(margin, headerY, pageWidth - 2 * margin, headerHeight, 'F');
+    
+    // Header text
+    doc.text('S/N', colX.num + 1, headerY + 5.5);
+    doc.text('Type', colX.type + 1, headerY + 5.5);
+    doc.text('Discipline', colX.disc + 1, headerY + 5.5);
+    doc.text('Location', colX.location + 1, headerY + 5.5);
+    doc.text('Content', colX.content + 1, headerY + 5.5);
+    doc.text('Status', colX.status + 1, headerY + 5.5);
+    
+    y += headerHeight + 2;
+    
+    // Data rows
+    doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
-    if (items.length === 0) {
-      doc.setFont('helvetica', 'normal');
-      doc.text('No observations found.', margin, y);
-      y += 10;
-    } else {
-      doc.setFont('helvetica', 'bold');
-      doc.text('#', margin, y);
-      doc.text('TYPE', margin + 10, y);
-      doc.text('DISC', margin + 28, y);
-      doc.text('LOCATION', margin + 48, y);
-      doc.text('DATE', margin + 71, y);
-      doc.text('CONTENT', margin + 96, y);
-      doc.text('AUTHOR', 229, y); // 从 235 移到 229，靠近 content 6mm
-      doc.text('STATUS', 268, y);
-      y += 5;
-
-      doc.setFont('helvetica', 'normal');
-      for (const item of items) {
-        if (y > pageHeight - 20) { doc.addPage(); y = margin; }
-
-        const locationWidth = 20;
-        const contentWidth = 111; // content 列宽从 105 增加到 111 (增加 6mm)
-        const locationText = doc.splitTextToSize(item.location || '-', locationWidth);
-        const contentLines = doc.splitTextToSize(item.content, contentWidth);
-        const authorText = doc.splitTextToSize(item.authorName || item.authorId || '-', 40);
-
-        doc.text(String(item.serialNo), margin, y);
-        doc.text(item.type, margin + 10, y);
-        doc.text(item.discipline, margin + 28, y);
-        doc.text(locationText, margin + 48, y);
-        doc.text(item.date, margin + 71, y);
-        doc.text(contentLines, margin + 96, y);
-        doc.text(authorText, 229, y); // 从 235 移到 229
-        doc.text(item.status.toUpperCase(), 268, y);
-
-        const rowHeight = Math.max(contentLines.length, locationText.length, authorText.length) * 4 + 3;
-        y += rowHeight;
+    
+    let rowIndex = 0;
+    for (const item of items) {
+      // Check if we need a new page
+      if (y > pageHeight - 30) {
+        // Footer for current page
+        const pageNum = doc.getCurrentPageInfo().pageNumber;
+        doc.setDrawColor(...MEDIUM_GRAY);
+        doc.setLineWidth(0.2);
+        doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(...MEDIUM_GRAY);
+        doc.text('Confidential - Sinonavtek Digital Management System', margin, pageHeight - 10);
+        doc.text(`Page ${pageNum}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+        
+        // New page
+        y = addPageWithHeaderFooter(false);
+        
+        // Redraw table header
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(255, 255, 255);
+        doc.setFillColor(...PRIMARY_BLUE);
+        doc.rect(margin, y, pageWidth - 2 * margin, headerHeight, 'F');
+        doc.text('S/N', colX.num + 1, y + 5.5);
+        doc.text('Type', colX.type + 1, y + 5.5);
+        doc.text('Discipline', colX.disc + 1, y + 5.5);
+        doc.text('Location', colX.location + 1, y + 5.5);
+        doc.text('Content', colX.content + 1, y + 5.5);
+        doc.text('Status', colX.status + 1, y + 5.5);
+        
+        y += headerHeight + 2;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        rowIndex = 0;
       }
+      
+      // Alternating row colors
+      if (rowIndex % 2 === 1) {
+        doc.setFillColor(...LIGHT_GRAY);
+        doc.rect(margin, y - 2, pageWidth - 2 * margin, 10, 'F');
+      }
+      
+      // Prepare content
+      const locationText = doc.splitTextToSize(item.location || '-', 23);
+      const contentText = doc.splitTextToSize(item.content || '-', 110);
+      const maxLines = Math.max(locationText.length, contentText.length);
+      
+      // Draw cell content
+      doc.setTextColor(0, 0, 0);
+      doc.text(item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : String(item.serialNo || '-'), colX.num + 1, y + 3);
+      doc.text(item.type || '-', colX.type + 1, y + 3);
+      doc.text(item.discipline || '-', colX.disc + 1, y + 3);
+      doc.text(locationText, colX.location + 1, y + 3);
+      doc.text(contentText, colX.content + 1, y + 3);
+      
+      // Status with conditional formatting
+      const status = (item.status || 'open').toUpperCase();
+      if (status === 'OPEN') {
+        doc.setFillColor(255, 199, 206); // #FFC7CE
+        doc.rect(colX.status, y - 2, 18, maxLines * 4 + 2, 'F');
+        doc.setTextColor(156, 0, 6); // #9C0006
+      } else if (status === 'CLOSED') {
+        doc.setFillColor(198, 239, 206); // #C6EFCE
+        doc.rect(colX.status, y - 2, 18, maxLines * 4 + 2, 'F');
+        doc.setTextColor(0, 97, 0); // #006100
+      }
+      doc.text(status, colX.status + 1, y + 3);
+      
+      y += maxLines * 4 + 2;
+      rowIndex++;
+    }
+  } else {
+    // Inspection comments mode
+    const colX = {
+      num: margin,
+      ship: margin + 8,
+      disc: margin + 28,
+      item: margin + 48,
+      content: margin + 88,
+      status: pageWidth - margin - 18
+    };
+    
+    // Draw header background
+    doc.rect(margin, headerY, pageWidth - 2 * margin, headerHeight, 'F');
+    
+    // Header text
+    doc.text('S/N', colX.num + 1, headerY + 5.5);
+    doc.text('Ship', colX.ship + 1, headerY + 5.5);
+    doc.text('Discipline', colX.disc + 1, headerY + 5.5);
+    doc.text('Item', colX.item + 1, headerY + 5.5);
+    doc.text('Content', colX.content + 1, headerY + 5.5);
+    doc.text('Status', colX.status + 1, headerY + 5.5);
+    
+    y += headerHeight + 2;
+    
+    // Data rows
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    
+    let rowIndex = 0;
+    for (const cm of comments) {
+      // Check if we need a new page
+      if (y > pageHeight - 30) {
+        // Footer for current page
+        const pageNum = doc.getCurrentPageInfo().pageNumber;
+        doc.setDrawColor(...MEDIUM_GRAY);
+        doc.setLineWidth(0.2);
+        doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(8);
+        doc.setTextColor(...MEDIUM_GRAY);
+        doc.text('Confidential - Sinonavtek Digital Management System', margin, pageHeight - 10);
+        doc.text(`Page ${pageNum}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+        
+        // New page
+        y = addPageWithHeaderFooter(false);
+        
+        // Redraw table header
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(11);
+        doc.setTextColor(255, 255, 255);
+        doc.setFillColor(...PRIMARY_BLUE);
+        doc.rect(margin, y, pageWidth - 2 * margin, headerHeight, 'F');
+        doc.text('S/N', colX.num + 1, y + 5.5);
+        doc.text('Ship', colX.ship + 1, y + 5.5);
+        doc.text('Discipline', colX.disc + 1, y + 5.5);
+        doc.text('Item', colX.item + 1, y + 5.5);
+        doc.text('Content', colX.content + 1, y + 5.5);
+        doc.text('Status', colX.status + 1, y + 5.5);
+        
+        y += headerHeight + 2;
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        rowIndex = 0;
+      }
+      
+      // Alternating row colors
+      if (rowIndex % 2 === 1) {
+        doc.setFillColor(...LIGHT_GRAY);
+        doc.rect(margin, y - 2, pageWidth - 2 * margin, 10, 'F');
+      }
+      
+      // Prepare content
+      const itemText = doc.splitTextToSize(cm.inspectionItemName || '-', 38);
+      const contentText = doc.splitTextToSize(cm.content || '-', 90);
+      const maxLines = Math.max(itemText.length, contentText.length);
+      
+      // Draw cell content
+      doc.setTextColor(0, 0, 0);
+      doc.text(String(cm.localId || '-'), colX.num + 1, y + 3);
+      doc.text(cm.hullNumber || '-', colX.ship + 1, y + 3);
+      doc.text(cm.discipline || '-', colX.disc + 1, y + 3);
+      doc.text(itemText, colX.item + 1, y + 3);
+      doc.text(contentText, colX.content + 1, y + 3);
+      
+      // Status with conditional formatting
+      const status = (cm.status || 'open').toUpperCase();
+      if (status === 'OPEN') {
+        doc.setFillColor(255, 199, 206); // #FFC7CE
+        doc.rect(colX.status, y - 2, 18, maxLines * 4 + 2, 'F');
+        doc.setTextColor(156, 0, 6); // #9C0006
+      } else if (status === 'CLOSED') {
+        doc.setFillColor(198, 239, 206); // #C6EFCE
+        doc.rect(colX.status, y - 2, 18, maxLines * 4 + 2, 'F');
+        doc.setTextColor(0, 97, 0); // #006100
+      }
+      doc.text(status, colX.status + 1, y + 3);
+      
+      y += maxLines * 4 + 2;
+      rowIndex++;
     }
   }
-
-  if (mode === "inspection-comments") {
-    doc.setFontSize(12);
-    doc.setFont('helvetica', 'bold');
-    doc.text('INSPECTION COMMENTS', margin, y);
-    y += 8;
-
-    doc.setFontSize(9);
-    if (comments.length === 0) {
-      doc.setFont('helvetica', 'normal');
-      doc.text('No inspection comments found.', margin, y);
-    } else {
-      doc.setFont('helvetica', 'bold');
-      doc.text('SHIP', margin, y);
-      doc.text('DISC', margin + 25, y);
-      doc.text('ITEM', margin + 55, y);
-      doc.text('CONTENT', margin + 110, y);
-      doc.text('AUTHOR', 250, y);
-      doc.text('STATUS', 268, y);
-      y += 5;
-
-      doc.setFont('helvetica', 'normal');
-      for (const cm of comments) {
-        if (y > pageHeight - 20) { doc.addPage(); y = margin; }
-
-        const itemWidth = 50;
-        const contentWidth = pageWidth - margin - 20;
-        const itemLines = doc.splitTextToSize(cm.inspectionItemName, itemWidth);
-        const contentLines = doc.splitTextToSize(cm.content, contentWidth - 110);
-
-        doc.text(cm.hullNumber, margin, y);
-        doc.text(cm.discipline, margin + 25, y);
-        doc.text(itemLines, margin + 55, y);
-        doc.text(contentLines, margin + 110, y);
-        doc.text(cm.authorName, 250, y);
-        doc.text(cm.status.toUpperCase(), 268, y);
-
-        const rowHeight = Math.max(itemLines.length, contentLines.length) * 4 + 3;
-        y += rowHeight;
-      }
-    }
+  
+  // Final page footer
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setDrawColor(...MEDIUM_GRAY);
+    doc.setLineWidth(0.2);
+    doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.setTextColor(...MEDIUM_GRAY);
+    doc.text('Confidential - Sinonavtek Digital Management System', margin, pageHeight - 10);
+    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
   }
-
+  
   const prefix = mode === "observations" ? "Observations" : "InspectionComments";
   doc.save(`NBINS_${prefix}_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
@@ -281,10 +477,10 @@ export async function exportObservationsExcel(
     extension: "jpeg",
   });
   ws.addImage(logoImageId, {
-    tl: { col: 0, row: 0 },
-    br: { col: 2, row: 3 },
+    tl: { col: 0, row: 0 } as any,
+    br: { col: 2, row: 3 } as any,
     editAs: "absolute",
-  });
+  } as any);
 
   // ===== 大标题 (Row 1-3, C1:G3) =====
   ws.mergeCells("C1:G3");
@@ -424,7 +620,7 @@ export async function exportObservationsExcel(
   const headerRow = 8;
   
   if (mode === "observations") {
-    const headers = ["#", "Type", "Discipline", "Location", "Date", "Content", "Remark", "Author", "Status", "Closed At"];
+    const headers = ["S/N", "Type", "Discipline", "Location", "Date", "Content", "Remark", "Author", "Status", "Closed At"];
     
     // 表头样式
     headers.forEach((header, idx) => {
@@ -459,7 +655,7 @@ export async function exportObservationsExcel(
     items.forEach((item, idx) => {
       const rowNum = headerRow + idx + 1;
       const rowData = [
-        item.serialNo ?? "",
+        item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : (item.serialNo ?? ""),
         item.type ?? "",
         item.discipline ?? "",
         item.location ?? "",
@@ -529,7 +725,7 @@ export async function exportObservationsExcel(
     });
     
     // 设置列宽
-    ws.getColumn(1).width = 5;   // #
+    ws.getColumn(1).width = 5;   // S/N
     ws.getColumn(2).width = 12;  // Type
     ws.getColumn(3).width = 12;  // Discipline
     ws.getColumn(4).width = 15;  // Location
@@ -549,7 +745,7 @@ export async function exportObservationsExcel(
     
   } else {
     // Inspection Comments 模式
-    const headers = ["#", "Ship", "Discipline", "Inspection Item", "Round", "Content", "Author", "Status", "Closed At"];
+    const headers = ["S/N", "Ship", "Discipline", "Inspection Item", "Round", "Content", "Author", "Status", "Closed At"];
     
     // 表头样式
     headers.forEach((header, idx) => {
@@ -653,7 +849,7 @@ export async function exportObservationsExcel(
     });
     
     // 设置列宽
-    ws.getColumn(1).width = 5;   // #
+    ws.getColumn(1).width = 5;   // S/N
     ws.getColumn(2).width = 12;  // Ship
     ws.getColumn(3).width = 12;  // Discipline
     ws.getColumn(4).width = 30;  // Inspection Item
