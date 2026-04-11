@@ -40,7 +40,13 @@ function createInspectionRoutes(
         storage,
         c.get("authUser")
       );
-      const snapshot = await inspectionService.listInspections(allowedProjectIds);
+      const projectId = c.req.query("projectId")?.trim() || undefined;
+
+      if (projectId && !allowedProjectIds.includes(projectId)) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
+
+      const snapshot = await inspectionService.listInspections(allowedProjectIds, projectId);
 
       return c.json({
         ok: true,

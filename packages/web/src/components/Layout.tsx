@@ -7,6 +7,9 @@ export function Layout() {
     <div className="shell">
       <TopBar />
       <Outlet />
+      <footer className="bottomStatusBar" aria-label="Application status bar">
+        <span className="bottomStatusTag">PG NEWBUILDING</span>
+      </footer>
     </div>
   );
 }

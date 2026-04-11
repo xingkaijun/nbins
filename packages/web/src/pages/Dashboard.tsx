@@ -11,6 +11,7 @@ import {
   syncListItemWithDetail
 } from "@nbins/shared";
 import { ApiError, fetchInspectionList, fetchInspectionDetail, fetchProjects, type ProjectRecord } from "../api";
+import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 import { type DetailTransportMode, useInspectionDetail } from "../useInspectionDetail";
 import { generateInspectionChecklistPdf, generateInspectionReport } from "../utils/pdf-generator";
 import { useAuth } from "../auth-context";
@@ -315,6 +316,7 @@ function syncDashboardItem(
 }
 
 export function Dashboard() {
+  const { selectedProjectId, setSelectedProjectId } = useProjectContext();
   const [listItems, setListItems] = useState<InspectionListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
   const [listMode, setListMode] = useState<DetailTransportMode>("api");
@@ -328,26 +330,52 @@ export function Dashboard() {
 
   // Load projects
   useEffect(() => {
-    fetchProjects().then(setProjects).catch(() => {});
-  }, []);
+    let active = true;
+
+    fetchProjects()
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+
+        setProjects(data);
+        const nextProjectId = resolveAvailableProjectId(data, selectedProjectId);
+        if (nextProjectId !== selectedProjectId) {
+          setSelectedProjectId(nextProjectId);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [selectedProjectId, setSelectedProjectId]);
 
   useEffect(() => {
     let active = true;
     async function loadList() {
+      if (!selectedProjectId) {
+        setListItems([]);
+        setExpandedRowId(null);
+        setSelectedIds(new Set());
+        setDataGeneratedAt(new Date().toISOString());
+        setListLoading(false);
+        return;
+      }
+
       setListLoading(true);
       try {
-        const response = await fetchInspectionList();
+        const response = await fetchInspectionList(selectedProjectId);
         if (!active) return;
         setListItems(response.items);
         setDataGeneratedAt(response.generatedAt);
         setListMode("api");
-        if (response.items.length > 0) {
-           setExpandedRowId(response.items[0]?.id ?? null);
-        }
       } catch (err) {
         if (!active) return;
         setListMode("api");
         setListItems([]);
+        setExpandedRowId(null);
+        setSelectedIds(new Set());
         setDataGeneratedAt(new Date().toISOString());
       } finally {
         if (active) setListLoading(false);
@@ -355,7 +383,7 @@ export function Dashboard() {
     }
     void loadList();
     return () => { active = false; };
-  }, []);
+  }, [selectedProjectId]);
   const [selectedResult, setSelectedResult] = useState<InspectionResult>("QCC");
   const [commentText, setCommentText] = useState("");
   const [clientNotice, setClientNotice] = useState<string | null>(null);
@@ -407,34 +435,22 @@ export function Dashboard() {
     }
   }, [selectedDetail?.id, selectedDetail?.lastRoundResult]);
 
+  const currentProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
+  );
+
   // Derived filter options
   const hullOptions = useMemo(() => Array.from(new Set(listItems.map(i => i.hullNumber))).sort(), [listItems]);
   
-  // Get effective disciplines from projects configuration
+  // Get effective disciplines from the current project configuration first
   const disciplineOptions = useMemo(() => {
-    // Get unique project codes from list items
-    const projectCodes = Array.from(new Set(listItems.map(i => i.projectCode).filter(Boolean)));
-    
-    // If we have projects loaded, use their disciplines configuration
-    if (projects.length > 0 && projectCodes.length > 0) {
-      const allDisciplines = new Set<string>();
-      
-      for (const projectCode of projectCodes) {
-        const project = projects.find(p => p.code === projectCode);
-        if (project) {
-          const projectDisciplines = project.disciplines && project.disciplines.length > 0 
-            ? project.disciplines 
-            : DISCIPLINES;
-          projectDisciplines.forEach(d => allDisciplines.add(d));
-        }
-      }
-      
-      return Array.from(allDisciplines).sort();
+    if (currentProject?.disciplines && currentProject.disciplines.length > 0) {
+      return [...currentProject.disciplines].sort();
     }
-    
-    // Fallback: extract from actual data
+
     return Array.from(new Set(listItems.map(i => i.discipline))).sort();
-  }, [listItems, projects]);
+  }, [currentProject, listItems]);
 
   const displayedItems = listItems.filter(item => {
     if (filterDate && item.plannedDate !== filterDate) return false;

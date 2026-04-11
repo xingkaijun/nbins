@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { fetchInspectionList } from '../api';
+import { fetchInspectionList, fetchProjects, type ProjectRecord } from '../api';
 import type { InspectionListItem } from '@nbins/shared';
 import { format, subDays, startOfDay, endOfDay, differenceInDays, isWithinInterval, parseISO } from 'date-fns';
 import {
@@ -7,6 +7,7 @@ import {
   PieChart, Pie, Cell, AreaChart, Area, Legend
 } from 'recharts';
 import { Calendar as CalendarIcon, Printer, CheckCircle, Search, Hash, TrendingUp, AlertTriangle } from 'lucide-react';
+import { resolveAvailableProjectId, useProjectContext } from '../project-context';
 
 // --- A4 Components ---
 const PageHeader: React.FC<{ projectName: string }> = ({ projectName }) => (
@@ -92,6 +93,8 @@ const LegendItem: React.FC<{ color: string; label: string; count?: number; total
 };
 
 export function Reports() {
+  const { selectedProjectId, setSelectedProjectId } = useProjectContext();
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [items, setItems] = useState<InspectionListItem[]>([]);
   const [loading, setLoading] = useState(true);
   
@@ -103,10 +106,36 @@ export function Reports() {
 
   useEffect(() => {
     let active = true;
+
+    fetchProjects()
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+
+        setProjects(data);
+        const nextProjectId = resolveAvailableProjectId(data, selectedProjectId);
+        if (nextProjectId !== selectedProjectId) {
+          setSelectedProjectId(nextProjectId);
+        }
+      })
+      .catch(() => {});
+
+    return () => { active = false; };
+  }, [selectedProjectId, setSelectedProjectId]);
+
+  useEffect(() => {
+    let active = true;
     async function load() {
+      if (!selectedProjectId) {
+        setItems([]);
+        setLoading(false);
+        return;
+      }
+
       try {
         setLoading(true);
-        const res = await fetchInspectionList();
+        const res = await fetchInspectionList(selectedProjectId);
         if (active) setItems(res.items);
       } catch (e) {
         console.error(e);
@@ -116,7 +145,13 @@ export function Reports() {
     }
     void load();
     return () => { active = false; };
-  }, []);
+  }, [selectedProjectId]);
+
+  const currentProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
+  );
+  const currentProjectName = currentProject?.name ?? items[0]?.projectName ?? 'NBINS MASTER';
 
   // Filter Options
   const hullOptions = useMemo(() => Array.from(new Set(items.map(i => i.hullNumber))).sort(), [items]);
@@ -272,7 +307,7 @@ export function Reports() {
       <div style={{ flex: 1, overflowY: 'auto', background: '#f4f7f9', padding: '32px 0' }} className="print-only" id="a4-pages-container">
         
         {/* PAGE 1: Quality Executive Summary */}
-        <ReportPage pageNumber={1} totalPages={2} projectName={items[0]?.projectName || 'NBINS MASTER'}>
+        <ReportPage pageNumber={1} totalPages={2} projectName={currentProjectName}>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '24px' }}>
             
             <div style={{ borderLeft: '4px solid #0d9488', paddingLeft: '12px' }}>

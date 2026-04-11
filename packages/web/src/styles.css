@@ -43,6 +43,29 @@ a {
   flex-direction: column;
 }
 
+.bottomStatusBar {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 10px 4px 2px;
+}
+
+.bottomStatusTag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(148, 163, 184, 0.18);
+  background: rgba(255, 255, 255, 0.6);
+  color: rgba(71, 85, 105, 0.82);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  backdrop-filter: blur(12px);
+}
+
 /* D1 Style Header */
 .topbar {
   display: flex;

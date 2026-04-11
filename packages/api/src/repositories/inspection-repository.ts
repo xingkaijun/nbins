@@ -27,11 +27,11 @@ export class InspectionRepository {
     this.db = db;
   }
 
-  async listInspections(allowedProjectIds?: string[]): Promise<DashboardSnapshot> {
+  async listInspections(allowedProjectIds?: string[], projectId?: string): Promise<DashboardSnapshot> {
     if (this.db.readInspectionList) {
       const selected = await this.db.readInspectionList();
       const items = selected.items
-        .filter((record) => isProjectAllowed(record.project.id, allowedProjectIds))
+        .filter((record) => isProjectVisible(record.project.id, allowedProjectIds, projectId))
         .map(mapInspectionListItemRecord);
 
       return {
@@ -533,6 +533,22 @@ function isProjectAllowed(projectId: string, allowedProjectIds?: string[]): bool
   }
 
   return allowedProjectIds.includes(projectId);
+}
+
+function isProjectVisible(
+  projectId: string,
+  allowedProjectIds?: string[],
+  scopedProjectId?: string
+): boolean {
+  if (!isProjectAllowed(projectId, allowedProjectIds)) {
+    return false;
+  }
+
+  if (scopedProjectId && projectId !== scopedProjectId) {
+    return false;
+  }
+
+  return true;
 }
 
 function createCommentRecord(input: {

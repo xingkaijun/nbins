@@ -572,7 +572,7 @@ export async function batchImportInspections(payload: {
     discipline: string;
     plannedDate: string;
     yardQc: string;
-    isReinspection: boolean;
+    startAtRound: number;
   }>;
 }): Promise<{ imported: number }> {
   return requestJson<{ imported: number }>("/inspections/batch", {

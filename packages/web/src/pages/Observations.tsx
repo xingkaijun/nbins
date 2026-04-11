@@ -15,14 +15,16 @@ import {
 } from "../api";
 import type { ProjectRecord, ShipRecord } from "../api";
 import { exportObservationsPdf, exportObservationsExcel } from "../utils/export-tools";
+import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 
 type ActiveTab = "observations" | "inspection-comments";
 
 export function Observations() {
+  const { selectedProjectId, setSelectedProjectId } = useProjectContext();
+
   // 项目与船号级联
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [ships, setShips] = useState<ShipRecord[]>([]);
-  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [selectedShipId, setSelectedShipId] = useState("");
 
   // Tab
@@ -79,20 +81,57 @@ export function Observations() {
 
   // ---- 加载项目列表 ----
   useEffect(() => {
+    let active = true;
+
     fetchProjects().then((p) => {
+      if (!active) {
+        return;
+      }
+
       setProjects(p);
-      if (p.length > 0) setSelectedProjectId(p[0].id);
+      const nextProjectId = resolveAvailableProjectId(p, selectedProjectId);
+      if (nextProjectId !== selectedProjectId) {
+        setSelectedProjectId(nextProjectId);
+      }
     }).catch(() => {});
-  }, []);
+
+    return () => {
+      active = false;
+    };
+  }, [selectedProjectId, setSelectedProjectId]);
 
   // ---- 项目变更 → 加载船列表 ----
   useEffect(() => {
-    if (!selectedProjectId) { setShips([]); return; }
+    let active = true;
+
+    if (!selectedProjectId) {
+      setShips([]);
+      setSelectedShipId("");
+      return () => {
+        active = false;
+      };
+    }
+
+    setSelectedShipId("");
     fetchShips(selectedProjectId).then((s) => {
+      if (!active) {
+        return;
+      }
+
       setShips(s);
-      if (s.length > 0) setSelectedShipId(s[0].id);
-      else setSelectedShipId("");
-    }).catch(() => {});
+      setSelectedShipId(s[0]?.id ?? "");
+    }).catch(() => {
+      if (!active) {
+        return;
+      }
+
+      setShips([]);
+      setSelectedShipId("");
+    });
+
+    return () => {
+      active = false;
+    };
   }, [selectedProjectId]);
 
   // ---- 加载意见类型 ----

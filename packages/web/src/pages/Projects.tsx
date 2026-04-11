@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { fetchProjects, fetchShips } from '../api';
+import { useProjectContext } from '../project-context';
 
 export function Projects() {
   const navigate = useNavigate();
+  const { setSelectedProjectId } = useProjectContext();
   const [projects, setProjects] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -49,6 +51,7 @@ export function Projects() {
             key={project.id}
             onClick={() => {
                 if(project.active) {
+                    setSelectedProjectId(project.id);
                     navigate('/dashboard');
                 }
             }}

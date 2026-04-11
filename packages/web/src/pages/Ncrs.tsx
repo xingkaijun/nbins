@@ -1,25 +1,109 @@
-import React, { useEffect, useState, useCallback } from "react";
-import type { NcrItemResponse, CreateNcrRequest, ApproveNcrRequest } from "@nbins/shared";
-import { fetchNcrs, createNcr, approveNcr } from "../api";
-
-const DEMO_SHIP_ID = "ship-h2748";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import type { NcrItemResponse } from "@nbins/shared";
+import {
+  approveNcr,
+  createNcr,
+  fetchNcrs,
+  fetchProjects,
+  fetchShips,
+  type ProjectRecord,
+  type ShipRecord
+} from "../api";
+import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 
 export function Ncrs() {
+  const { selectedProjectId, setSelectedProjectId } = useProjectContext();
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
+  const [ships, setShips] = useState<ShipRecord[]>([]);
+  const [selectedShipId, setSelectedShipId] = useState("");
   const [items, setItems] = useState<NcrItemResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // New NCR form
   const [showForm, setShowForm] = useState(false);
   const [formTitle, setFormTitle] = useState("");
   const [formContent, setFormContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
 
+  const selectedProject = useMemo(
+    () => projects.find((project) => project.id === selectedProjectId) ?? null,
+    [projects, selectedProjectId]
+  );
+  const selectedShip = useMemo(
+    () => ships.find((ship) => ship.id === selectedShipId) ?? null,
+    [ships, selectedShipId]
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    fetchProjects()
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+
+        setProjects(data);
+        const nextProjectId = resolveAvailableProjectId(data, selectedProjectId);
+        if (nextProjectId !== selectedProjectId) {
+          setSelectedProjectId(nextProjectId);
+        }
+      })
+      .catch(() => {});
+
+    return () => {
+      active = false;
+    };
+  }, [selectedProjectId, setSelectedProjectId]);
+
+  useEffect(() => {
+    let active = true;
+
+    if (!selectedProjectId) {
+      setShips([]);
+      setSelectedShipId("");
+      return () => {
+        active = false;
+      };
+    }
+
+    setSelectedShipId("");
+    fetchShips(selectedProjectId)
+      .then((data) => {
+        if (!active) {
+          return;
+        }
+
+        setShips(data);
+        setSelectedShipId(data[0]?.id ?? "");
+      })
+      .catch(() => {
+        if (!active) {
+          return;
+        }
+
+        setShips([]);
+        setSelectedShipId("");
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [selectedProjectId]);
+
   const loadNcrs = useCallback(async () => {
+    if (!selectedShipId) {
+      setItems([]);
+      setError(null);
+      setLoading(false);
+      return;
+    }
+
     setLoading(true);
     setError(null);
+
     try {
-      const data = await fetchNcrs(DEMO_SHIP_ID);
+      const data = await fetchNcrs(selectedShipId);
       setItems(data);
     } catch (e: any) {
       setError(e.message || "Failed to load NCRs");
@@ -27,7 +111,7 @@ export function Ncrs() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [selectedShipId]);
 
   useEffect(() => {
     void loadNcrs();
@@ -35,11 +119,14 @@ export function Ncrs() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!formTitle.trim() || !formContent.trim()) return;
+    if (!selectedShipId || !formTitle.trim() || !formContent.trim()) {
+      return;
+    }
+
     setSubmitting(true);
     try {
-      await createNcr(DEMO_SHIP_ID, {
-        shipId: DEMO_SHIP_ID,
+      await createNcr(selectedShipId, {
+        shipId: selectedShipId,
         title: formTitle.trim(),
         content: formContent.trim()
       });
@@ -65,13 +152,14 @@ export function Ncrs() {
 
   return (
     <main className="ncrs-page" style={{ padding: "24px 32px", maxWidth: 1200, margin: "0 auto" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "var(--nb-text)" }}>
             Non-Conformance Reports
           </h1>
           <p style={{ fontSize: 13, color: "var(--nb-text-muted)", margin: "4px 0 0" }}>
-            NCR MANAGEMENT · Ship: {DEMO_SHIP_ID}
+            NCR MANAGEMENT · {selectedProject ? `${selectedProject.name} (${selectedProject.code})` : "NO PROJECT SELECTED"}
+            {selectedShip ? ` · Ship: ${selectedShip.shipName} (${selectedShip.hullNumber})` : ""}
           </p>
         </div>
         <div style={{ display: "flex", gap: 8 }}>
@@ -79,10 +167,47 @@ export function Ncrs() {
             className="nb-btn nb-btn-primary"
             onClick={() => setShowForm(!showForm)}
             style={btnStyle("primary")}
+            disabled={!selectedShipId}
           >
             + Create NCR
           </button>
         </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+        <label style={labelInlineStyle}>
+          <span>Project</span>
+          <select
+            value={selectedProjectId}
+            onChange={(e) => setSelectedProjectId(e.target.value)}
+            style={inputStyle}
+          >
+            {projects.map((project) => (
+              <option key={project.id} value={project.id}>
+                {project.name} ({project.code})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label style={labelInlineStyle}>
+          <span>Ship</span>
+          <select
+            value={selectedShipId}
+            onChange={(e) => setSelectedShipId(e.target.value)}
+            style={inputStyle}
+            disabled={ships.length === 0}
+          >
+            {ships.length === 0 ? (
+              <option value="">No ships in current project</option>
+            ) : (
+              ships.map((ship) => (
+                <option key={ship.id} value={ship.id}>
+                  {ship.shipName} ({ship.hullNumber})
+                </option>
+              ))
+            )}
+          </select>
+        </label>
       </div>
 
       {showForm && (
@@ -111,7 +236,7 @@ export function Ncrs() {
             />
           </label>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button type="submit" disabled={submitting} style={btnStyle("primary")}>
+            <button type="submit" disabled={submitting || !selectedShipId} style={btnStyle("primary")}>
               {submitting ? "Submitting..." : "Submit NCR"}
             </button>
             <button type="button" onClick={() => setShowForm(false)} style={btnStyle("secondary")}>Cancel</button>
@@ -119,14 +244,22 @@ export function Ncrs() {
         </form>
       )}
 
-      {loading ? (
+      {!selectedProjectId ? (
+        <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
+          <p style={{ fontSize: 15 }}>Please select a project in Hall first.</p>
+        </div>
+      ) : loading ? (
         <p style={{ color: "var(--nb-text-muted)", textAlign: "center", padding: 40 }}>Loading NCRs...</p>
       ) : error ? (
         <p style={{ color: "#ef4444", textAlign: "center", padding: 40 }}>{error}</p>
+      ) : !selectedShipId ? (
+        <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
+          <p style={{ fontSize: 15 }}>No ships found in the current project.</p>
+        </div>
       ) : items.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
           <p style={{ fontSize: 15 }}>No NCRs found.</p>
-          <p style={{ fontSize: 13 }}>Click "+ Create NCR" to add a new record.</p>
+          <p style={{ fontSize: 13 }}>Click "+ Create NCR" to add a new record for the current ship.</p>
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -190,7 +323,6 @@ export function Ncrs() {
   );
 }
 
-// Helpers
 function btnStyle(variant: "primary" | "secondary"): React.CSSProperties {
   const base: React.CSSProperties = {
     border: "none",
@@ -229,6 +361,15 @@ const labelStyle: React.CSSProperties = {
   fontWeight: 500
 };
 
+const labelInlineStyle: React.CSSProperties = {
+  display: "flex",
+  alignItems: "center",
+  gap: 6,
+  fontSize: 12,
+  color: "var(--nb-text-muted)",
+  fontWeight: 600
+};
+
 const inputStyle: React.CSSProperties = {
   padding: "6px 10px",
   borderRadius: 6,
@@ -245,7 +386,7 @@ function tagStyle(color: string): React.CSSProperties {
     padding: "2px 8px",
     borderRadius: 4,
     background: `${color}18`,
-    color: color,
+    color,
     letterSpacing: 0.5,
     textTransform: "uppercase" as const
   };

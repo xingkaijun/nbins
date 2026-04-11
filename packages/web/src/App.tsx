@@ -2,6 +2,7 @@ import React from "react";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider, ProtectedRoute, useAuth } from "./auth-context";
 import { Layout } from "./components/Layout";
+import { ProjectProvider } from "./project-context";
 import { Dashboard } from "./pages/Dashboard";
 import { Projects } from "./pages/Projects";
 import { Reports } from "./pages/Reports";
@@ -23,20 +24,22 @@ export function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route path="/login" element={<Login />} />
-          <Route element={<ProtectedRoute />}>
-            <Route path="/" element={<Layout />}>
-              <Route index element={<Projects />} />
-              <Route path="dashboard" element={<Dashboard />} />
-              <Route path="reports" element={<Reports />} />
-              <Route path="import" element={<Import />} />
-              <Route path="observations" element={<Observations />} />
-              <Route path="ncrs" element={<Ncrs />} />
-              <Route path="admin" element={<AdminGuard />} />
+        <ProjectProvider>
+          <Routes>
+            <Route path="/login" element={<Login />} />
+            <Route element={<ProtectedRoute />}>
+              <Route path="/" element={<Layout />}>
+                <Route index element={<Projects />} />
+                <Route path="dashboard" element={<Dashboard />} />
+                <Route path="reports" element={<Reports />} />
+                <Route path="import" element={<Import />} />
+                <Route path="observations" element={<Observations />} />
+                <Route path="ncrs" element={<Ncrs />} />
+                <Route path="admin" element={<AdminGuard />} />
+              </Route>
             </Route>
-          </Route>
-        </Routes>
+          </Routes>
+        </ProjectProvider>
       </AuthProvider>
     </BrowserRouter>
   );

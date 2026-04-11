@@ -8,7 +8,7 @@ interface ParsedRow {
   discipline: string;
   date: string;
   qc: string;
-  reinspect: string;
+  startAtRound: number;
   error?: string;
 }
 
@@ -75,22 +75,22 @@ export function Import() {
       }
       const item = cols[0] || '';
       const qc = cols[1] || '';
-      const reinspect = cols[2] || 'N';
-      
+      const reinspectVal = parseInt(cols[2] || "1", 10);
+      const startAtRound = isNaN(reinspectVal) ? 1 : Math.min(Math.max(reinspectVal, 1), 3);
+
       let error = undefined;
-      // Date 和 Discipline 取自全局下拉选择，因此只校验 Item
       if (!item) {
         error = "Missing Inspection Item";
       }
 
-      result.push({ 
-        id: i + 1, 
-        item: item || '(empty)', 
-        discipline: selectedDiscipline, 
-        date: selectedDate, 
-        qc: qc || '-', 
-        reinspect: reinspect || 'N', 
-        error 
+      result.push({
+        id: i + 1,
+        item: item || '(empty)',
+        discipline: selectedDiscipline,
+        date: selectedDate,
+        qc: qc || '-',
+        startAtRound,
+        error
       });
     });
     setParsedRows(result);
@@ -113,7 +113,7 @@ export function Import() {
           discipline: r.discipline,
           plannedDate: r.date,
           yardQc: r.qc,
-          isReinspection: ['Y', 'y', '1', 'Yes', '是'].includes(r.reinspect)
+          startAtRound: r.startAtRound
         }))
       });
       setImportResult({ success: resp.imported, errors: 0, skipped: 0 });
@@ -196,7 +196,7 @@ export function Import() {
           <div className="field">
             <textarea 
               rows={8} 
-              placeholder="Example format:&#10;Main Engine Alignment    Zhang San    N&#10;Pipe System Test         Li Si        Y" 
+              placeholder="Example format:&#10;Main Engine Alignment    Zhang San    1&#10;Pipe System Test         Li Si        2&#10;&#10;Column 3: 1 = Round 1 (new), 2 = Round 2 (reinspection), 3 = Round 3" 
               value={pastedData}
               onChange={e => setPastedData(e.target.value)}
               style={{ fontFamily: 'monospace', whiteSpace: 'pre', fontSize: '11px' }}
@@ -224,7 +224,7 @@ export function Import() {
                     <th style={{ width: '100px' }}>Discipline</th>
                     <th style={{ width: '90px' }}>Date</th>
                     <th style={{ width: '100px' }}>QC Inspector</th>
-                    <th style={{ width: '70px', textAlign: 'center' }}>Re-Insp</th>
+                    <th style={{ width: '70px', textAlign: 'center' }}>Start Round</th>
                     <th>Status</th>
                   </tr>
                 </thead>
@@ -246,7 +246,9 @@ export function Import() {
                       <td>{r.date}</td>
                       <td>{r.qc}</td>
                       <td style={{ textAlign: 'center' }}>
-                         {['Y', 'y', '1', 'Yes', '是'].includes(r.reinspect) ? <span style={{ color: '#0f766e', fontWeight: 'bold' }}>✓</span> : <span style={{ color: 'var(--nb-border)' }}>-</span>}
+                        {r.startAtRound === 1 ? <span style={{ color: 'var(--nb-border)' }}>1</span>
+                         : r.startAtRound === 2 ? <span style={{ color: '#0f766e', fontWeight: 'bold' }}>R2</span>
+                         : <span style={{ color: '#b45309', fontWeight: 'bold' }}>R3</span>}
                       </td>
                       <td>
                         {r.error ? (
