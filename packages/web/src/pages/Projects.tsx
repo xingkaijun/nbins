@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { fetchProjects } from '../api';
+import { fetchProjects, fetchShips } from '../api';
 
 export function Projects() {
   const navigate = useNavigate();
@@ -8,14 +8,20 @@ export function Projects() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchProjects()
-      .then(data => {
-        if (data) {
-          setProjects(data.map((p: any) => ({
+    Promise.all([fetchProjects(), fetchShips()])
+      .then(([projectsData, shipsData]) => {
+        if (projectsData) {
+          // 统计每个项目的船只数量
+          const shipCountByProject = shipsData.reduce((acc: Record<string, number>, ship: any) => {
+            acc[ship.projectId] = (acc[ship.projectId] || 0) + 1;
+            return acc;
+          }, {});
+
+          setProjects(projectsData.map((p: any) => ({
              id: p.id,
              name: p.name,
              code: p.code,
-             hulls: 10, // Default or fetch hull count if API provides it
+             hulls: shipCountByProject[p.id] || 0,
              active: p.status === 'active'
           })));
         }

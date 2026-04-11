@@ -111,6 +111,12 @@ export function Import() {
         }))
       });
       setImportResult({ success: resp.imported, errors: 0, skipped: 0 });
+      // 导入成功后延迟重置，让用户看到成功消息
+      setTimeout(() => {
+        setPastedData('');
+        setParsedRows(null);
+        setImportResult(null);
+      }, 2000);
     } catch (e: any) {
       alert("Import Failed: " + String(e));
     } finally {

@@ -927,7 +927,7 @@ export function Dashboard() {
                                             <div className="timelineMarker">R{entry.roundNumber}</div>
                                             <div className="timelineContent">
                                               <strong>{entry.submittedResult ? INSPECTION_RESULT_LABELS[entry.submittedResult] || entry.submittedResult : "PENDING"}</strong>
-                                              <span>{formatStamp(entry.submittedAt)} by {entry.submittedBy}</span>
+                                              <span>{formatStamp(entry.submittedAt)} by {entry.inspectorDisplayName || entry.submittedBy}</span>
                                               <small>{entry.commentIds.length} comments raised in this round</small>
                                             </div>
                                           </div>
@@ -948,15 +948,26 @@ export function Dashboard() {
                                         <article className="commentCard" key={comment.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: '16px' }}>
                                             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '4px' }}>
                                               <strong style={{ fontSize: '11px', lineHeight: '1.4' }}>{comment.message}</strong>
+                                              {comment.resolveRemark && (
+                                                <div style={{ 
+                                                  marginTop: '4px', 
+                                                  padding: '6px 8px', 
+                                                  background: '#fef3c7', 
+                                                  border: '1px solid #fde68a', 
+                                                  borderRadius: '4px',
+                                                  fontSize: '10px',
+                                                  fontStyle: 'italic',
+                                                  color: '#92400e'
+                                                }}>
+                                                  <strong>Remark:</strong> {comment.resolveRemark}
+                                                </div>
+                                              )}
                                               <div style={{ color: 'var(--nb-text-muted)', fontSize: '10px', display: 'flex', flexWrap: 'wrap', gap: '4px', alignItems: 'center' }}>
                                                 <span>Raised by {comment.createdBy} at {formatStamp(comment.createdAt)}</span>
                                                 {comment.resolvedAt && (
                                                   <>
                                                     <span>•</span>
                                                     <span>Closed by {comment.resolvedBy} at {formatStamp(comment.resolvedAt)}</span>
-                                                    {comment.resolveRemark && (
-                                                      <span style={{ fontStyle: 'italic' }}>(Remark: {comment.resolveRemark})</span>
-                                                    )}
                                                   </>
                                                 )}
                                               </div>
@@ -979,11 +990,19 @@ export function Dashboard() {
                                                   <button
                                                     type="button"
                                                     className="commentCheckboxLabel"
-                                                    style={{ background: 'var(--nb-bg)', color: 'var(--nb-text-muted)' }}
+                                                    style={comment.resolveRemark ? { 
+                                                      background: '#fee2e2', 
+                                                      color: '#b91c1c', 
+                                                      border: '1px solid #fecaca',
+                                                      fontWeight: 700
+                                                    } : { 
+                                                      background: 'var(--nb-bg)', 
+                                                      color: 'var(--nb-text-muted)' 
+                                                    }}
                                                     onClick={() => { setRemarkModalCommentId(comment.id); setRemarkText(comment.resolveRemark || ""); }}
                                                     disabled={submitting || resolvingCommentId === comment.id}
                                                   >
-                                                    Remark
+                                                    {comment.resolveRemark ? '⚠ Remark' : 'Remark'}
                                                   </button>
                                                 </div>
                                               ) : (
