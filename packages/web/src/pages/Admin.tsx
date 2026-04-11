@@ -253,7 +253,8 @@ export function Admin() {
   function openNew() {
     if (activeTable === "inspections") {
       // For inspections, use batch import approach - open a simple form
-      setModalData({ projectId: inspProjFilter || projects[0]?.id || "", shipId: "", itemName: "", discipline: "HULL", plannedDate: new Date().toISOString().slice(0, 10), yardQc: "", isReinspection: "false" });
+      setModalData({ projectId: inspProjFilter || projects[0]?.id || "", shipId: "", itemName: "", discipline: "HULL", plannedDate: new Date().toISOString().slice(0, 10), yardQc: "", startAtRound: "1" });
+
       setModalMode("new");
       return;
     }
@@ -387,7 +388,8 @@ export function Admin() {
     await batchImportInspections({
       projectId: d.projectId,
       shipId: d.shipId,
-      items: [{ itemName: d.itemName, discipline: d.discipline, plannedDate: d.plannedDate, yardQc: d.yardQc || "", isReinspection: d.isReinspection === "true" }],
+      items: [{ itemName: d.itemName, discipline: d.discipline, plannedDate: d.plannedDate, yardQc: d.yardQc || "", startAtRound: [1, 2, 3].includes(Number(d.startAtRound)) ? Number(d.startAtRound) : 1 }],
+
     });
     if (inspLoaded) await doSearchInspections();
   }
@@ -931,7 +933,8 @@ export function Admin() {
           <div className="admin-field"><label>Discipline</label><select value={modalData.discipline || "HULL"} onChange={e => setField("discipline", e.target.value)}>{(modalData.projectId ? getProjectDisciplines(modalData.projectId) : DISCIPLINES).map(d => <option key={d} value={d}>{d}</option>)}</select></div>
           <div className="admin-field"><label>Planned Date</label><input type="date" value={modalData.plannedDate || ""} onChange={e => setField("plannedDate", e.target.value)} /></div>
           <div className="admin-field"><label>Yard QC</label><input value={modalData.yardQc || ""} onChange={e => setField("yardQc", e.target.value)} /></div>
-          <div className="admin-field"><label>Is Reinspection</label><select value={modalData.isReinspection || "false"} onChange={e => setField("isReinspection", e.target.value)}><option value="false">No</option><option value="true">Yes</option></select></div>
+          <div className="admin-field"><label>Start Round</label><select value={modalData.startAtRound || "1"} onChange={e => setField("startAtRound", e.target.value)}><option value="1">1 / R1</option><option value="2">2 / R2</option><option value="3">3 / R3</option></select></div>
+
         </div>
       );
 

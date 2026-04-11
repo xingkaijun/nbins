@@ -65,7 +65,8 @@ export function Import() {
     const result: ParsedRow[] = [];
     
     lines.forEach((line, i) => {
-      // 当前要求只有3列：Item | QC | Re-insp
+      // 当前要求只有3列：Item | QC | Start Round
+
       // 支持 Tab、半角逗号、全角逗号分隔
       let cols: string[];
       if (line.includes('\t')) {
@@ -191,12 +192,14 @@ export function Import() {
               <span style={{ background: 'var(--nb-accent)', color: '#fff', width: '20px', height: '20px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold' }}>2</span>
               <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 800 }}>Paste Spreadsheet Data</h3>
             </div>
-            <span style={{ fontSize: '11px', color: 'var(--nb-text-muted)' }}>支持 Tab 或逗号（全角/半角）分隔: Item | QC | Re-insp</span>
+            <span style={{ fontSize: '11px', color: 'var(--nb-text-muted)' }}>支持 Tab 或逗号（全角/半角）分隔: Item | QC | Start Round</span>
+
           </div>
           <div className="field">
             <textarea 
               rows={8} 
-              placeholder="Example format:&#10;Main Engine Alignment    Zhang San    1&#10;Pipe System Test         Li Si        2&#10;&#10;Column 3: 1 = Round 1 (new), 2 = Round 2 (reinspection), 3 = Round 3" 
+              placeholder="Example format:&#10;Main Engine Alignment    Zhang San    1&#10;Pipe System Test         Li Si        2&#10;&#10;Column 3: 1 = Start at Round 1, 2 = Start at Round 2, 3 = Start at Round 3" 
+
               value={pastedData}
               onChange={e => setPastedData(e.target.value)}
               style={{ fontFamily: 'monospace', whiteSpace: 'pre', fontSize: '11px' }}
