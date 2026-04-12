@@ -49,11 +49,12 @@ import {
 
 /* ───────── constants ───────── */
 
-type TableKey = "projects" | "ships" | "users" | "obsTypes" | "inspections" | "observations";
+type TableKey = "projects" | "ships" | "disciplines" | "users" | "obsTypes" | "inspections" | "observations";
 
 const SIDEBAR_ITEMS: { key: TableKey; label: string; group: "base" | "data" }[] = [
   { key: "projects", label: "Projects", group: "base" },
   { key: "ships", label: "Ships", group: "base" },
+  { key: "disciplines", label: "Disciplines", group: "base" },
   { key: "users", label: "Users", group: "base" },
   { key: "obsTypes", label: "Observation Types", group: "base" },
   { key: "inspections", label: "Inspections", group: "data" },
@@ -225,6 +226,7 @@ export function Admin() {
     switch (activeTable) {
       case "projects": return filteredProjects;
       case "ships": return filteredShips;
+      case "disciplines": return DISCIPLINES.map(d => ({ discipline: d }));
       case "users": return filteredUsers;
       case "obsTypes": return obsTypes;
       case "inspections": return filteredInspections;
@@ -242,6 +244,7 @@ export function Admin() {
     switch (key) {
       case "projects": return filteredProjects.length;
       case "ships": return filteredShips.length;
+      case "disciplines": return DISCIPLINES.length;
       case "users": return filteredUsers.length;
       case "obsTypes": return obsTypes.length;
       case "inspections": return inspLoaded ? filteredInspections.length : 0;
@@ -630,7 +633,7 @@ export function Admin() {
         <div className="admin-content-header">
           <h2>{SIDEBAR_ITEMS.find(i => i.key === activeTable)?.label ?? activeTable}</h2>
           <div className="admin-content-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-            <button className="admin-btn primary" onClick={openNew}>+ New</button>
+            {activeTable !== "disciplines" && <button className="admin-btn primary" onClick={openNew}>+ New</button>}
             <button className="admin-btn primary" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }} onClick={() => window.location.href = '/admin/sql'}>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"></path></svg>
               SQL Console
@@ -640,6 +643,15 @@ export function Admin() {
 
         {/* Filter Bar */}
         {renderFilterBar()}
+
+        {/* Disciplines Info Banner */}
+        {activeTable === "disciplines" && (
+          <div style={{ padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, marginBottom: 16, fontSize: 11, color: '#1e40af' }}>
+            <strong>ℹ️ Disciplines Overview:</strong> This view shows all available disciplines in the system. 
+            You can see which projects use each discipline and which users are assigned to them. 
+            To modify disciplines for a project, edit the project settings. To assign disciplines to users, edit the user settings.
+          </div>
+        )}
 
         {/* Table or Empty Prompt */}
         {LAZY_TABLES.includes(activeTable) && !isLazyLoaded() ? (
@@ -768,6 +780,7 @@ export function Admin() {
     const hdrs: Record<TableKey, string[]> = {
       projects: ["Code", "Name", "Status", "Disciplines", "Owner", "Shipyard", "Class"],
       ships: ["Hull", "Ship Name", "Project", "Type", "Status"],
+      disciplines: ["Discipline", "Projects Using", "Assigned Users", "User Names"],
       users: ["Username", "Display Name", "Role", "Disciplines", "Projects", "Active"],
       obsTypes: ["Code", "Label", "Sort Order"],
       inspections: ["Item", "Ship", "Discipline", "Round", "Result", "Status", "Comments"],
@@ -808,6 +821,48 @@ export function Admin() {
         const s = raw as ShipRecord;
         const proj = projects.find(p => p.id === s.projectId);
         return <><td>{s.hullNumber}</td><td>{s.shipName}</td><td>{proj?.code ?? s.projectId}</td><td>{s.shipType ?? "—"}</td><td>{s.status}</td>{actionsCell(s.id)}</>;
+      }
+      case "disciplines": {
+        const d = (raw as { discipline: string }).discipline;
+        // Find projects using this discipline
+        const projectsUsing = projects.filter(p => 
+          !p.disciplines || p.disciplines.length === 0 || p.disciplines.includes(d)
+        );
+        // Find users assigned to this discipline
+        const usersAssigned = users.filter(u => 
+          u.disciplines.includes(d as Discipline)
+        );
+        return (
+          <>
+            <td style={{ fontWeight: 600 }}>{d}</td>
+            <td>
+              {projectsUsing.length === 0 ? (
+                <span style={{ color: "var(--nb-text-muted)" }}>—</span>
+              ) : (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                  {projectsUsing.map(p => (
+                    <span key={p.id} style={{ padding: '2px 6px', background: '#e0f2fe', color: '#0369a1', borderRadius: 4, fontSize: 10 }}>
+                      {p.code}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </td>
+            <td style={{ textAlign: 'center' }}>{usersAssigned.length}</td>
+            <td>
+              {usersAssigned.length === 0 ? (
+                <span style={{ color: "var(--nb-text-muted)" }}>—</span>
+              ) : (
+                <div style={{ fontSize: 11 }}>
+                  {usersAssigned.map(u => u.displayName || u.username).join(', ')}
+                </div>
+              )}
+            </td>
+            <td>
+              <span style={{ color: "var(--nb-text-muted)", fontSize: 10 }}>View Only</span>
+            </td>
+          </>
+        );
       }
       case "users": {
         const u = raw as UserRecord;
