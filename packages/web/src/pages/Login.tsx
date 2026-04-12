@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { ApiError, login } from '../api';
 import { useAuth } from '../auth-context';
+import { PG_LOGO_B64 } from '../utils/pg-logo-b64';
 
 export function Login() {
   const [username, setUsername] = useState('');
@@ -82,7 +83,7 @@ export function Login() {
           border: '1px solid rgba(148, 163, 184, 0.2)', 
           boxShadow: '0 4px 12px rgba(0,0,0,0.03)' 
         }}>
-          <img src="https://i.postimg.cc/7LVr6n5m/PG-Logo.jpg" alt="PG Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+          <img src={PG_LOGO_B64} alt="PG Logo" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />
         </div>
         
         <h1 style={{ margin: '0 0 4px 0', fontSize: '22px', fontWeight: 800, color: 'var(--nb-text)', letterSpacing: '-0.02em', textAlign: 'center' }}>

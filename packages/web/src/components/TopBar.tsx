@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth-context';
 import { useProjectContext } from '../project-context';
+import { PG_LOGO_B64 } from '../utils/pg-logo-b64';
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard" },
@@ -27,7 +28,7 @@ export function TopBar() {
       <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
         <div style={{ background: '#fff', padding: '6px 8px', borderRadius: '10px', border: '1px solid rgba(148, 163, 184, 0.2)' }}>
           <img
-            src="https://i.postimg.cc/7LVr6n5m/PG-Logo.jpg"
+            src={PG_LOGO_B64}
             alt="PG Logo"
             style={{ height: '40px', width: 'auto', objectFit: 'contain', display: 'block' }}
           />

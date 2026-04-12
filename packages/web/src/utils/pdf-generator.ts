@@ -287,8 +287,6 @@ export function generateInspectionChecklistPdf(
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 12;
-  const rowHeight = 6;
-  const bottomMargin = 12;
 
   const normalizedFilters = {
     date: filters.date?.trim() || 'ALL',
@@ -297,49 +295,54 @@ export function generateInspectionChecklistPdf(
   };
 
   const drawHeader = (pageNumber: number) => {
-    doc.setTextColor(30, 41, 59);
-    drawPdfLogo(doc, margin, 8);
+    // Title
     doc.setFont('helvetica', 'bold');
-
-    doc.setFontSize(16);
-    doc.text('INSPECTION CHECKLIST EXPORT', pageWidth / 2, 14, { align: 'center' });
-
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth - margin, 11, { align: 'right' });
-    doc.text(`Records: ${items.length}`, pageWidth - margin, 16, { align: 'right' });
-
-    doc.setDrawColor(15, 118, 110);
+    doc.setFontSize(22);
+    doc.setTextColor(70, 96, 125); // #46607d
+    doc.text('INSPECTION CHECKLIST EXPORT', margin, 20);
+    
+    // Date & Records
+    doc.setFontSize(8);
+    doc.setTextColor(94, 95, 97); // #5e5f61
+    doc.text(`DATE: ${normalizedFilters.date !== 'ALL' ? normalizedFilters.date : new Date().toISOString().slice(0, 10)}    RECORDS: ${items.length}`, margin, 26);
+    
+    // Top border line
+    doc.setDrawColor(227, 226, 228); // #e3e2e4
     doc.setLineWidth(0.5);
-    doc.line(margin, 22, pageWidth - margin, 22);
-
-    doc.setFontSize(9);
-    doc.setTextColor(100, 116, 139);
-    doc.text(
-      `Filters  Date: ${normalizedFilters.date}   Hull: ${normalizedFilters.hull}   Discipline: ${normalizedFilters.discipline}`,
-      margin,
-      28
-    );
-
-    doc.setTextColor(30, 41, 59);
+    doc.line(margin, 30, pageWidth - margin, 30);
+    
+    // Table Header Background
+    doc.setFillColor(227, 226, 228); // surface-container-highest
+    doc.rect(margin, 34, pageWidth - margin * 2, 10, 'F');
+    
+    // First column # has primary background
+    doc.setFillColor(70, 96, 125); // primary #46607d
+    doc.rect(margin, 34, 12, 10, 'F');
+    
     doc.setFont('helvetica', 'bold');
-    doc.setFillColor(241, 245, 249);
-    doc.rect(margin, 32, pageWidth - margin * 2, 8, 'F');
-    doc.text('#', margin + 2, 37);
-    doc.text('PROJECT', margin + 10, 37);
-    doc.text('HULL / SHIP', margin + 34, 37);
-    doc.text('DISC', margin + 76, 37);
-    doc.text('PLAN DATE', margin + 94, 37);
-    doc.text('RND', margin + 118, 37);
-    doc.text('RESULT', margin + 130, 37);
-    doc.text('STATUS', margin + 150, 37);
-    doc.text('COMMENTS', margin + 172, 37);
-    doc.text('ITEM', margin + 194, 37);
+    doc.setFontSize(8);
+    
+    // # column
+    doc.setTextColor(245, 248, 255); // on-primary
+    doc.text('#', margin + 6, 40, { align: 'center' });
+    
+    doc.setTextColor(70, 96, 125); // primary text
+    doc.text('PROJECT', margin + 14, 40);
+    doc.text('HULL / SHIP', margin + 34, 40);
+    doc.text('DISC', margin + 74, 40);
+    doc.text('PLAN DATE', margin + 92, 40);
+    doc.text('RND', margin + 116, 40);
+    doc.text('ITEM / DESCRIPTION', margin + 128, 40);
+    doc.text('RESULT', margin + 219, 40);
+    doc.text('STATUS', margin + 243, 40);
+    doc.text('C', margin + 268.5, 40, { align: 'center' });
 
+    // Footer
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(8);
-    doc.setTextColor(148, 163, 184);
-    doc.text(`Page ${pageNumber}`, pageWidth - margin, pageHeight - 6, { align: 'right' });
+    doc.setTextColor(94, 95, 97); // #5e5f61
+    doc.text(`Confidential Industrial Report - Page ${pageNumber}`, margin, pageHeight - 10);
+    doc.text(`Generated Date: ${new Date().toISOString().replace('T', ' ').slice(0, 16)} GMT`, pageWidth - margin, pageHeight - 10, { align: 'right' });
   };
 
   if (items.length === 0) {
@@ -353,41 +356,103 @@ export function generateInspectionChecklistPdf(
   }
 
   let pageNumber = 1;
-  let y = 46;
+  let y = 44;
   drawHeader(pageNumber);
 
   items.forEach((item, index) => {
-    const itemLines = doc.splitTextToSize(item.itemName || '-', 66);
+    const itemLines = doc.splitTextToSize(item.itemName || '-', 85);
     const shipLines = doc.splitTextToSize(`${item.hullNumber} / ${item.shipName}`, 38);
     const resultText = item.currentResult || 'PENDING';
     const statusText = item.workflowStatus.toUpperCase();
-    const dynamicHeight = Math.max(itemLines.length, shipLines.length) * 3.6 + 2;
-    const currentRowHeight = Math.max(rowHeight, dynamicHeight);
+    const dynamicHeight = Math.max(itemLines.length, shipLines.length) * 4 + 6;
+    const currentRowHeight = Math.max(10, dynamicHeight);
 
-    if (y + currentRowHeight > pageHeight - bottomMargin) {
+    if (y + currentRowHeight > pageHeight - 18) {
       doc.addPage();
       pageNumber += 1;
       drawHeader(pageNumber);
-      y = 46;
+      y = 44;
     }
 
     if (index % 2 === 0) {
-      doc.setFillColor(248, 250, 252);
-      doc.rect(margin, y - 4.5, pageWidth - margin * 2, currentRowHeight, 'F');
+      doc.setFillColor(245, 243, 244); // surface-container-low
+    } else {
+      doc.setFillColor(255, 255, 255); // white
+    }
+    doc.rect(margin, y, pageWidth - margin * 2, currentRowHeight, 'F');
+    
+    // Ghost border
+    doc.setDrawColor(178, 177, 180);
+    doc.setLineWidth(0.2);
+    doc.line(margin, y + currentRowHeight, pageWidth - margin, y + currentRowHeight);
+
+    const textY = y + 6;
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(158, 156, 157); // inverse-on-surface
+    doc.text(String(index + 1).padStart(2, '0'), margin + 6, textY, { align: 'center' });
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(49, 50, 52); // on-surface
+    doc.text(item.projectCode || '-', margin + 14, textY);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.text(shipLines, margin + 34, textY);
+    doc.text(item.discipline, margin + 74, textY);
+    doc.text(item.plannedDate || '-', margin + 92, textY);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.text(`R${item.currentRound}`, margin + 116, textY);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7.5);
+    doc.text(itemLines, margin + 128, textY); 
+    doc.setFontSize(8);
+    
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    if (resultText === 'AA') {
+        doc.setFillColor(209, 250, 229); // emerald-100
+        doc.rect(margin + 219, y + 2.5, 18, 5, 'F');
+        doc.setTextColor(6, 95, 70); // emerald-800
+        doc.text('PASSED', margin + 228, textY - 0.2, { align: 'center' });
+    } else if (resultText === 'RJ') {
+        doc.setFillColor(255, 228, 230); // rose-100
+        doc.rect(margin + 219, y + 2.5, 18, 5, 'F');
+        doc.setTextColor(159, 18, 57); // rose-800
+        doc.text('FAILED', margin + 228, textY - 0.2, { align: 'center' });
+    } else if (resultText === 'OWC') {
+        doc.setFillColor(254, 243, 199); // amber-100
+        doc.rect(margin + 219, y + 2.5, 18, 5, 'F');
+        doc.setTextColor(146, 64, 14); // amber-800
+        doc.text('REINSP', margin + 228, textY - 0.2, { align: 'center' });
+    } else if (resultText === 'QCC') {
+        doc.setFillColor(186, 230, 253); 
+        doc.rect(margin + 219, y + 2.5, 18, 5, 'F');
+        doc.setTextColor(12, 74, 110); 
+        doc.text('QCC', margin + 228, textY - 0.2, { align: 'center' });
+    } else {
+        doc.setFillColor(241, 245, 249); 
+        doc.rect(margin + 219, y + 2.5, 18, 5, 'F');
+        doc.setTextColor(71, 85, 105); 
+        doc.text('PENDING', margin + 228, textY - 0.2, { align: 'center' });
     }
 
-    doc.setFontSize(8.5);
-    doc.setTextColor(30, 41, 59);
-    doc.text(String(index + 1), margin + 2, y);
-    doc.text(item.projectCode || '-', margin + 10, y);
-    doc.text(shipLines, margin + 34, y);
-    doc.text(item.discipline, margin + 76, y);
-    doc.text(item.plannedDate || '-', margin + 94, y);
-    doc.text(`R${item.currentRound}`, margin + 118, y);
-    doc.text(resultText, margin + 130, y);
-    doc.text(statusText, margin + 150, y);
-    doc.text(String(item.openComments ?? 0), margin + 176, y);
-    doc.text(itemLines, margin + 194, y);
+    if (statusText === 'CLOSED') {
+      doc.setFillColor(70, 96, 125); 
+      doc.rect(margin + 243, y + 2.5, 18, 5, 'F');
+      doc.setTextColor(245, 248, 255); 
+    } else {
+      doc.setFillColor(213, 227, 252); 
+      doc.rect(margin + 243, y + 2.5, 18, 5, 'F');
+      doc.setTextColor(69, 83, 103); 
+    }
+    doc.text(statusText, margin + 252, textY - 0.2, { align: 'center' });
+
+    const commentCount = item.openComments ?? 0;
+    doc.setFontSize(8);
+    doc.setTextColor(commentCount > 0 ? 159 : 158, commentCount > 0 ? 24 : 156, commentCount > 0 ? 55 : 157); // red if > 0 else gray
+    doc.text(String(commentCount), margin + 268.5, textY, { align: 'center' });
 
     y += currentRowHeight;
   });
