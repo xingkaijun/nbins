@@ -11,6 +11,176 @@ function drawPdfLogo(doc: jsPDF, x: number, y: number, targetHeight: number = 10
   return { width: targetWidth, height: targetHeight };
 }
 
+export function splitTextToLength(text: string, maxLength: number): string[] {
+  if (!text) return [""];
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let currentLine = "";
+  for (const word of words) {
+    if (currentLine.length + word.length + (currentLine ? 1 : 0) <= maxLength) {
+      if (currentLine) currentLine += " ";
+      currentLine += word;
+    } else {
+      if (currentLine) lines.push(currentLine);
+      if (word.length > maxLength) {
+         let w = word;
+         while(w.length > maxLength) {
+           lines.push(w.slice(0, maxLength));
+           w = w.slice(maxLength);
+         }
+         currentLine = w;
+      } else {
+         currentLine = word;
+      }
+    }
+  }
+  if (currentLine) lines.push(currentLine);
+  if (lines.length === 0) return [""];
+  return lines;
+}
+
+export function padRight(text: string, length: number) {
+  return (text || "").substring(0, length).padEnd(length, " ");
+}
+
+export function buildAsciiRow(cells: {text: string, width: number}[]): string[] {
+   const columnLines = cells.map(c => splitTextToLength(c.text, c.width - 2)); 
+   let maxLines = 1;
+   for (const c of columnLines) {
+     if (c.length > maxLines) maxLines = c.length;
+   }
+   const outLines: string[] = [];
+   for (let i = 0; i < maxLines; i++) {
+     let line = "|";
+     for (let j = 0; j < cells.length; j++) {
+       const textPart = columnLines[j][i] || "";
+       line += " " + padRight(textPart, cells[j].width - 2) + " |";
+     }
+     outLines.push(line);
+   }
+   return outLines;
+}
+
+export function exportObservationsAsciiPdf(
+  items: ObservationItem[],
+  comments: InspectionCommentView[],
+  projectName: string,
+  mode: "observations" | "inspection-comments",
+  shipInfo?: string,
+  ownerInfo?: { owner?: string; shipyard?: string; classification?: string }
+) {
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const margin = 15;
+  
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8);
+
+  const linesPerPage = 82; 
+  let currentLineIdx = 0;
+  let pageNum = 1;
+  const lineHeight = 3.2; 
+  
+  const addPageHeader = () => {
+    if (currentLineIdx > 0) {
+      doc.addPage();
+      pageNum++;
+    }
+    currentLineIdx = 0;
+    const title = mode === "observations" ? 'SITE OBSERVATION REPORT' : 'SITE INSPECTION REPORT';
+    const topBorder = "=".repeat(103);
+    doc.text(topBorder, margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text(title.padStart(51 + title.length/2, " "), margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text(topBorder, margin, margin + (currentLineIdx++ * lineHeight));
+    
+    doc.text(`Project : ${padRight(projectName || '-', 30)} Ship : ${padRight(shipInfo ? shipInfo.split('(')[0].trim() : '-', 30)}`, margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text(`Hull No : ${padRight(shipInfo ? shipInfo.split('(')[1]?.replace(')', '') || '-' : '-', 30)} Date : ${padRight(new Date().toLocaleDateString(), 30)}`, margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text("-".repeat(103), margin, margin + (currentLineIdx++ * lineHeight));
+    
+    const totalCount = mode === "observations" ? items.length : comments.length;
+    const openCount = mode === "observations" ? items.filter(i => i.status === "open").length : comments.filter(c => c.status === "open").length;
+    const closedCount = totalCount - openCount;
+    doc.text(`Summary: Total ${totalCount} | Open ${openCount} | Closed ${closedCount}`, margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text(topBorder, margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text("", margin, margin + (currentLineIdx++ * lineHeight)); 
+  };
+
+  const printLine = (text: string) => {
+    if (currentLineIdx >= linesPerPage) {
+      addPageHeader();
+    }
+    doc.text(text, margin, margin + (currentLineIdx * lineHeight));
+    currentLineIdx++;
+  };
+
+  addPageHeader();
+
+  if (mode === "observations") {
+    const headBorder = "+-----+------+------------+------------+-----------------------------------------------------+--------+";
+    printLine(headBorder);
+    printLine(buildAsciiRow([ {text: "S/N", width: 5}, {text: "Type", width: 6}, {text: "Discipline", width: 12}, {text: "Location", width: 12}, {text: "Content", width: 53}, {text: "Status", width: 8} ])[0]);
+    printLine(headBorder);
+
+    for (let idx = 0; idx < items.length; idx++) {
+      const item = items[idx];
+      const serialText = item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : String(item.serialNo || '-');
+      const cells = [
+        {text: serialText, width: 5},
+        {text: item.type || '-', width: 6},
+        {text: item.discipline || '-', width: 12},
+        {text: item.location || '-', width: 12},
+        {text: item.content || '-', width: 53},
+        {text: (item.status || 'open').toUpperCase(), width: 8}
+      ];
+      
+      const lines = buildAsciiRow(cells);
+      if (currentLineIdx + lines.length > linesPerPage) {
+        addPageHeader();
+        printLine(headBorder);
+        printLine(buildAsciiRow([ {text: "S/N", width: 5}, {text: "Type", width: 6}, {text: "Discipline", width: 12}, {text: "Location", width: 12}, {text: "Content", width: 53}, {text: "Status", width: 8} ])[0]);
+        printLine(headBorder);
+      }
+      for (const line of lines) { printLine(line); }
+      printLine(headBorder);
+    }
+  } else {
+    const headBorder = "+-----+------------+--------------+----------------------------------------------------------+--------+";
+    printLine(headBorder);
+    printLine(buildAsciiRow([ {text: "S/N", width: 5}, {text: "Ship", width: 12}, {text: "Discipline", width: 14}, {text: "Content", width: 58}, {text: "Status", width: 8} ])[0]);
+    printLine(headBorder);
+
+    for (let idx = 0; idx < comments.length; idx++) {
+      const cm = comments[idx];
+      const cells = [
+        {text: String(cm.localId || '-'), width: 5},
+        {text: cm.hullNumber || '-', width: 12},
+        {text: cm.discipline || '-', width: 14},
+        {text: `${cm.inspectionItemName ? '['+cm.inspectionItemName+'] ' : ''}${cm.content || '-'}`, width: 58},
+        {text: (cm.status || 'open').toUpperCase(), width: 8}
+      ];
+      
+      const lines = buildAsciiRow(cells);
+      if (currentLineIdx + lines.length > linesPerPage) {
+        addPageHeader();
+        printLine(headBorder);
+        printLine(buildAsciiRow([ {text: "S/N", width: 5}, {text: "Ship", width: 12}, {text: "Discipline", width: 14}, {text: "Content", width: 58}, {text: "Status", width: 8} ])[0]);
+        printLine(headBorder);
+      }
+      for (const line of lines) { printLine(line); }
+      printLine(headBorder);
+    }
+  }
+
+  // Draw footer page numbers
+  const totalPages = pageNum;
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.text(`Page ${i} of ${totalPages}`, doc.internal.pageSize.getWidth() - margin - 20, doc.internal.pageSize.getHeight() - margin);
+  }
+  
+  const prefix = mode === "observations" ? "Observations" : "InspectionComments";
+  doc.save(`NBINS_${prefix}_ASCII_${new Date().toISOString().slice(0, 10)}.pdf`);
+}
+
 export function exportObservationsPdf(
   items: ObservationItem[],
   comments: InspectionCommentView[],

@@ -13,7 +13,7 @@ import {
 import { ApiError, fetchInspectionList, fetchInspectionDetail, fetchProjects, type ProjectRecord } from "../api";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 import { type DetailTransportMode, useInspectionDetail } from "../useInspectionDetail";
-import { generateInspectionChecklistPdf, generateInspectionReport } from "../utils/pdf-generator";
+import { generateInspectionChecklistPdf, generateInspectionReport, generateInspectionChecklistAsciiPdf } from "../utils/pdf-generator";
 import { useAuth } from "../auth-context";
 
 const resultOptions = INSPECTION_RESULTS;
@@ -542,6 +542,14 @@ export function Dashboard() {
     });
   }
 
+  function handleExportAsciiChecklist() {
+    generateInspectionChecklistAsciiPdf(displayedItems, {
+      date: filterDate || 'ALL',
+      hull: filterHull === 'ALL' ? 'ALL' : filterHull,
+      discipline: filterDiscipline === 'ALL' ? 'ALL' : filterDiscipline
+    });
+  }
+
   async function handleDownloadPdf(e: React.MouseEvent, itemId: string) {
     e.stopPropagation();
     alert("Generating report...");
@@ -898,6 +906,25 @@ export function Dashboard() {
                   }}
                 >
                   EXPORT CHECKLIST ({displayedItems.length})
+                </button>
+                <button
+                  type="button"
+                  className="admin-btn"
+                  onClick={handleExportAsciiChecklist}
+                  disabled={displayedItems.length === 0}
+                  style={{
+                    background: displayedItems.length > 0 ? '#475569' : '#ffffff',
+                    color: displayedItems.length > 0 ? '#ffffff' : 'var(--nb-text-muted)',
+                    border: `1px solid ${displayedItems.length > 0 ? '#475569' : 'var(--nb-border)'}`,
+                    boxShadow: displayedItems.length > 0 ? '0 4px 12px rgba(71, 85, 105, 0.12)' : 'none',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    padding: '6px 12px',
+                    borderRadius: '999px',
+                    marginLeft: '8px'
+                  }}
+                >
+                  ASCII CHECKLIST
                 </button>
              </div>
           </div>

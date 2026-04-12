@@ -3,6 +3,8 @@ import JSZip from 'jszip';
 import { saveAs } from 'file-saver';
 import type { InspectionItemDetailResponse, InspectionListItem } from '@nbins/shared';
 import { PG_LOGO_B64 } from './pg-logo-b64';
+import { buildAsciiRow, padRight } from './export-tools';
+
 // For simplicity, we just use text or a placeholder graphic right now, and refine later.
 // We'll create a clean text-based report, using a generic graphic if possible, or leave it textual.
 
@@ -461,5 +463,119 @@ export function generateInspectionChecklistPdf(
   const safeHull = normalizedFilters.hull.replace(/[^a-zA-Z0-9_-]/g, '_');
   const safeDiscipline = normalizedFilters.discipline.replace(/[^a-zA-Z0-9_-]/g, '_');
   doc.save(`NBINS_Checklist_${safeDate}_${safeHull}_${safeDiscipline}.pdf`);
+}
+
+export function generateInspectionChecklistAsciiPdf(
+  items: InspectionListItem[],
+  filters: {
+    date?: string;
+    hull?: string;
+    discipline?: string;
+  }
+) {
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+  const margin = 12;
+  
+  doc.setFont('courier', 'normal');
+  doc.setFontSize(8);
+
+  const linesPerPage = 56; 
+  let currentLineIdx = 0;
+  let pageNum = 1;
+  const lineHeight = 3.2; 
+  
+  const normalizedFilters = {
+    date: filters.date?.trim() || 'ALL',
+    hull: filters.hull?.trim() || 'ALL',
+    discipline: filters.discipline?.trim() || 'ALL'
+  };
+
+  const addPageHeader = () => {
+    if (currentLineIdx > 0) {
+      doc.addPage();
+      pageNum++;
+    }
+    currentLineIdx = 0;
+    const title = 'SITE INSPECTION CHECKLIST (ASCII)';
+    const topBorder = "=".repeat(151);
+    doc.text(topBorder, margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text(title.padStart(75 + title.length/2, " "), margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text(topBorder, margin, margin + (currentLineIdx++ * lineHeight));
+    
+    doc.text(`Project : ${padRight('ALL', 20)} Date : ${padRight(normalizedFilters.date, 20)} Hull : ${padRight(normalizedFilters.hull, 20)} Disc : ${padRight(normalizedFilters.discipline, 20)}`, margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text("-".repeat(151), margin, margin + (currentLineIdx++ * lineHeight));
+    
+    doc.text(`Total Records: ${items.length}`, margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text(topBorder, margin, margin + (currentLineIdx++ * lineHeight));
+    doc.text("", margin, margin + (currentLineIdx++ * lineHeight)); 
+  };
+
+  const printLine = (text: string) => {
+    if (currentLineIdx >= linesPerPage) {
+      addPageHeader();
+    }
+    doc.text(text, margin, margin + (currentLineIdx * lineHeight));
+    currentLineIdx++;
+  };
+
+  addPageHeader();
+
+  const colWidths = [
+    {text: "#", width: 4},
+    {text: "PRJ", width: 10},
+    {text: "HULL", width: 12},
+    {text: "DISC", width: 7},
+    {text: "DATE", width: 12},
+    {text: "R", width: 3},
+    {text: "ITEM / DESCRIPTION", width: 62},
+    {text: "QC", width: 10},
+    {text: "RES", width: 5},
+    {text: "ST", width: 8},
+    {text: "C", width: 3}
+  ];
+
+  const headBorder = "+----+----------+------------+-------+------------+---+--------------------------------------------------------------+----------+-----+--------+---+";
+  printLine(headBorder);
+  printLine(buildAsciiRow(colWidths.map(c => ({text: c.text, width: c.width})))[0]);
+  printLine(headBorder);
+
+  for (let idx = 0; idx < items.length; idx++) {
+    const item = items[idx];
+    const cells = [
+      {text: String(idx + 1), width: 4},
+      {text: item.projectCode || '-', width: 10},
+      {text: item.hullNumber || '-', width: 12},
+      {text: item.discipline || '-', width: 7},
+      {text: item.plannedDate || '-', width: 12},
+      {text: String(item.currentRound || 1), width: 3},
+      {text: item.itemName || '-', width: 62},
+      {text: item.yardQc || '-', width: 10},
+      {text: item.currentResult || '-', width: 5},
+      {text: (item.workflowStatus || '-').substring(0, 8), width: 8},
+      {text: String(item.openComments || 0), width: 3}
+    ];
+    
+    const lines = buildAsciiRow(cells);
+    if (currentLineIdx + lines.length > linesPerPage) {
+      addPageHeader();
+      printLine(headBorder);
+      printLine(buildAsciiRow(colWidths.map(c => ({text: c.text, width: c.width})))[0]);
+      printLine(headBorder);
+    }
+    for (const line of lines) { printLine(line); }
+    printLine(headBorder);
+  }
+
+  // Draw footer page numbers
+  const totalPages = pageNum;
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.text(`Page ${i} of ${totalPages}`, doc.internal.pageSize.getWidth() - margin - 30, doc.internal.pageSize.getHeight() - margin + 5);
+  }
+  
+  const safeDate = normalizedFilters.date.replace(/\//g, '-');
+  const safeHull = normalizedFilters.hull.replace(/[\s\/]/g, '_');
+  const safeDiscipline = normalizedFilters.discipline;
+  doc.save(`NBINS_Checklist_ASCII_${safeDate}_${safeHull}_${safeDiscipline}.pdf`);
 }
 

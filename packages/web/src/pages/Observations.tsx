@@ -14,7 +14,7 @@ import {
   fetchShips,
 } from "../api";
 import type { ProjectRecord, ShipRecord } from "../api";
-import { exportObservationsPdf, exportObservationsExcel } from "../utils/export-tools";
+import { exportObservationsPdf, exportObservationsExcel, exportObservationsAsciiPdf } from "../utils/export-tools";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 
 type ActiveTab = "observations" | "inspection-comments";
@@ -259,6 +259,18 @@ export function Observations() {
     exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab, shipInfo, projectInfo);
   };
 
+  const handleExportAsciiPdf = () => {
+    const selectedShip = ships.find(s => s.id === selectedShipId);
+    const shipInfo = selectedShip ? `${selectedShip.shipName} (${selectedShip.hullNumber})` : "All Ships";
+    const selectedProject = projects.find(p => p.id === selectedProjectId);
+    const projectInfo = {
+      owner: selectedProject?.owner || undefined,
+      shipyard: selectedProject?.shipyard || undefined,
+      classification: selectedProject?.class || undefined
+    };
+    exportObservationsAsciiPdf(items, comments, getProjectName() || "All Projects", activeTab, shipInfo, projectInfo);
+  };
+
   const handleExportExcel = async () => {
     try {
       const selectedShip = ships.find(s => s.id === selectedShipId);
@@ -348,6 +360,7 @@ export function Observations() {
         </div>
         <div className="heroMeta" style={{ gap: 8 }}>
           <button type="button" onClick={handleExportPdf}>EXPORT PDF</button>
+          <button type="button" onClick={handleExportAsciiPdf} style={{ background: '#475569', color: '#fff' }}>ASCII REPORT</button>
           <button type="button" onClick={handleExportExcel}>EXPORT EXCEL</button>
           {activeTab === "observations" && (
             <>
