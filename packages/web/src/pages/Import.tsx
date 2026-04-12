@@ -9,7 +9,6 @@ interface StagingRow {
   item: string;
   discipline: string;
   date: string;
-  date: string;
   qc: string;
   startAtRound: number;
   shipId?: string;
