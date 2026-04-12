@@ -13,5 +13,8 @@
       "database_name": "nbins-local",
       "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
     }
-  ]
+  ],
+  "vars": {
+    "SQL_CONSOLE_SECRET": "nbins-sql-dev-2026"
+  }
 }

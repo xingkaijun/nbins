@@ -6,4 +6,5 @@ export interface Bindings {
   DB?: D1Database;
   JWT_SECRET?: string;
   N8N_WEBHOOK_URL?: string;
+  SQL_CONSOLE_SECRET?: string;
 }

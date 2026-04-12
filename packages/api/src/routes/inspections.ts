@@ -69,7 +69,7 @@ function createInspectionRoutes(
           discipline: string;
           plannedDate: string;
           yardQc: string;
-          isReinspection: boolean;
+          startAtRound?: number;
         }>;
       }>();
 
@@ -132,7 +132,7 @@ function createInspectionRoutes(
       let importedCount = 0;
 
       for (const item of body.items) {
-        const initialRound = item.isReinspection ? 2 : 1;
+        const initialRound = [1, 2, 3].includes(item.startAtRound ?? 1) ? (item.startAtRound ?? 1) : 1;
         const itemId = crypto.randomUUID();
         const roundId = crypto.randomUUID();
 

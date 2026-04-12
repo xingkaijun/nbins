@@ -399,6 +399,7 @@ export function Dashboard() {
   const [resolvingCommentId, setResolvingCommentId] = useState<string | null>(null);
   const [remarkModalCommentId, setRemarkModalCommentId] = useState<string | null>(null);
   const [remarkText, setRemarkText] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
 
   const fallbackDetail = undefined;
   const {
@@ -453,14 +454,26 @@ export function Dashboard() {
   }, [currentProject, listItems]);
 
   const displayedItems = listItems.filter(item => {
-    if (filterDate && item.plannedDate !== filterDate) return false;
+    // 搜索时忽略日期筛选，否则按日期过滤
+    if (!searchKeyword && filterDate && item.plannedDate !== filterDate) return false;
     if (filterHull !== "ALL" && item.hullNumber !== filterHull) return false;
     if (filterDiscipline !== "ALL" && item.discipline !== filterDiscipline) return false;
+    if (searchKeyword) {
+      const kw = searchKeyword.toLowerCase();
+      const matched = item.itemName.toLowerCase().includes(kw)
+        || item.hullNumber.toLowerCase().includes(kw)
+        || item.discipline.toLowerCase().includes(kw)
+        || (item.currentResult || "").toLowerCase().includes(kw)
+        || item.yardQc?.toLowerCase().includes(kw);
+      if (!matched) return false;
+    }
     return true;
   });
 
-  const acceptCount = displayedItems.filter(item => item.currentResult === "AA" || item.currentResult === "QCC").length;
-  const rejectCount = displayedItems.filter(item => item.currentResult === "RJ" || item.currentResult === "OWC").length;
+  const acceptedCount = displayedItems.filter(item => item.currentResult === "AA").length;
+  const qcRecheckCount = displayedItems.filter(item => item.currentResult === "QCC").length;
+  const reinspectionCount = displayedItems.filter(item => item.currentResult === "OWC").length;
+  const rejectedCount = displayedItems.filter(item => item.currentResult === "RJ").length;
   const todayQueueCount = displayedItems.filter(item => item.workflowStatus === "pending").length;
 
   const disciplineCounts = displayedItems.reduce((acc, item) => {
@@ -761,33 +774,6 @@ export function Dashboard() {
           <div className="heroMeta">
             <span>UPDATED {new Date(dataGeneratedAt).toLocaleDateString("en-US")}</span>
             <span className={`badge ${listMode === "api" ? "" : "muted"}`}>{listTransportLabel}</span>
-            <button 
-              type="button" 
-              onClick={() => void handleBatchExport()} 
-              disabled={isExporting || selectedIds.size === 0}
-              style={{
-                marginLeft: '12px',
-                background: selectedIds.size > 0 ? 'var(--nb-accent)' : '#ffffff',
-                color: selectedIds.size > 0 ? '#ffffff' : 'var(--nb-text-muted)',
-                border: `1px solid ${selectedIds.size > 0 ? 'var(--nb-accent)' : 'var(--nb-border)'}`,
-                boxShadow: selectedIds.size > 0 ? '0 4px 12px rgba(13, 148, 136, 0.18)' : 'none'
-              }}
-            >
-              {isExporting ? `EXPORTING ${exportProgress.current}/${exportProgress.total}...` : `BATCH EXPORT (${selectedIds.size})`}
-            </button>
-            <button
-              type="button"
-              onClick={handleExportChecklist}
-              disabled={displayedItems.length === 0}
-              style={{
-                background: displayedItems.length > 0 ? '#0f172a' : '#ffffff',
-                color: displayedItems.length > 0 ? '#ffffff' : 'var(--nb-text-muted)',
-                border: `1px solid ${displayedItems.length > 0 ? '#0f172a' : 'var(--nb-border)'}`,
-                boxShadow: displayedItems.length > 0 ? '0 4px 12px rgba(15, 23, 42, 0.12)' : 'none'
-              }}
-            >
-              EXPORT CHECKLIST ({displayedItems.length})
-            </button>
           </div>
         </section>
 
@@ -809,20 +795,30 @@ export function Dashboard() {
           </article>
 
           <article className="summaryCard" style={{ borderColor: '#dcfce3', backgroundColor: '#f0fdf4' }}>
-            <p style={{ color: '#166534' }}>ACCEPTED (AA & QCC)</p>
-            <strong style={{ color: '#15803d' }}>{acceptCount.toString().padStart(2, "0")}</strong>
+            <p style={{ color: '#166534' }}>ACCEPTED</p>
+            <strong style={{ color: '#15803d' }}>{acceptedCount.toString().padStart(2, "0")}</strong>
           </article>
 
-          <article className="summaryCard" style={{ borderColor: '#fee2e2', backgroundColor: '#fef2f2' }}>
-            <p style={{ color: '#991b1b' }}>REJECTED (RJ & OWC)</p>
-            <strong style={{ color: '#b91c1c' }}>{rejectCount.toString().padStart(2, "0")}</strong>
+          <article className="summaryCard" style={{ borderColor: '#fef3c7', backgroundColor: '#fffbeb' }}>
+            <p style={{ color: '#92400e' }}>QC RECHECK</p>
+            <strong style={{ color: '#b45309' }}>{qcRecheckCount.toString().padStart(2, "0")}</strong>
+          </article>
+
+          <article className="summaryCard" style={{ borderColor: '#ffedd5', backgroundColor: '#fff7ed' }}>
+            <p style={{ color: '#9a3412' }}>REINSPECTION</p>
+            <strong style={{ color: '#c2410c' }}>{reinspectionCount.toString().padStart(2, "0")}</strong>
+          </article>
+
+          <article className="summaryCard" style={{ borderColor: '#ffe4e6', backgroundColor: '#fff1f2' }}>
+            <p style={{ color: '#9f1239' }}>REJECTED</p>
+            <strong style={{ color: '#e11d48' }}>{rejectedCount.toString().padStart(2, "0")}</strong>
           </article>
         </section>
 
         <section className="fullWidthTable">
-          <div className="tableTools">
+          <div className="tableTools" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
              <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <p className="eyebrow" style={{ margin: 0 }}>ACTIVE INSPECTIONS ({displayedItems.length})</p>
+                <p className="eyebrow" style={{ margin: 0 }}>ACTIVE INSPECTIONS ({displayedItems.length}){searchKeyword && <span style={{ color: 'var(--nb-accent)', fontWeight: 600 }}> — search across all dates</span>}</p>
                 <select 
                   className="filterSelect" 
                   value={filterHull} 
@@ -839,6 +835,70 @@ export function Dashboard() {
                   <option value="ALL">ALL DISCIPLINES</option>
                   {disciplineOptions.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
+                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+                  <svg style={{ position: 'absolute', left: 8, pointerEvents: 'none', color: 'var(--nb-text-muted)' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                  <input
+                    type="text"
+                    placeholder="Search name, hull, or result..."
+                    value={searchKeyword}
+                    onChange={(e) => setSearchKeyword(e.target.value)}
+                    style={{
+                      padding: '4px 8px 4px 26px',
+                      border: '1px solid var(--nb-border)',
+                      borderRadius: '6px',
+                      fontSize: '10px',
+                      fontWeight: 700,
+                      background: '#fff',
+                      color: 'var(--nb-text)',
+                      width: '240px',
+                      outline: 'none',
+                    }}
+                  />
+                  {searchKeyword && (
+                    <button
+                      onClick={() => setSearchKeyword('')}
+                      style={{ position: 'absolute', right: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--nb-text-muted)', fontSize: 12, padding: 2, lineHeight: 1 }}
+                    >✕</button>
+                  )}
+                </div>
+             </div>
+             <div style={{ display: 'flex', gap: '8px' }}>
+                <button 
+                  type="button" 
+                  className="admin-btn"
+                  onClick={() => void handleBatchExport()} 
+                  disabled={isExporting || selectedIds.size === 0}
+                  style={{
+                    background: selectedIds.size > 0 ? 'var(--nb-accent)' : '#ffffff',
+                    color: selectedIds.size > 0 ? '#ffffff' : 'var(--nb-text-muted)',
+                    border: `1px solid ${selectedIds.size > 0 ? 'var(--nb-accent)' : 'var(--nb-border)'}`,
+                    boxShadow: selectedIds.size > 0 ? '0 4px 12px rgba(13, 148, 136, 0.18)' : 'none',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    padding: '6px 12px',
+                    borderRadius: '999px'
+                  }}
+                >
+                  {isExporting ? `EXPORTING ${exportProgress.current}/${exportProgress.total}...` : `BATCH EXPORT (${selectedIds.size})`}
+                </button>
+                <button
+                  type="button"
+                  className="admin-btn"
+                  onClick={handleExportChecklist}
+                  disabled={displayedItems.length === 0}
+                  style={{
+                    background: displayedItems.length > 0 ? '#0f172a' : '#ffffff',
+                    color: displayedItems.length > 0 ? '#ffffff' : 'var(--nb-text-muted)',
+                    border: `1px solid ${displayedItems.length > 0 ? '#0f172a' : 'var(--nb-border)'}`,
+                    boxShadow: displayedItems.length > 0 ? '0 4px 12px rgba(15, 23, 42, 0.12)' : 'none',
+                    fontSize: '9px',
+                    fontWeight: 800,
+                    padding: '6px 12px',
+                    borderRadius: '999px'
+                  }}
+                >
+                  EXPORT CHECKLIST ({displayedItems.length})
+                </button>
              </div>
           </div>
           <div className="tableWrap">

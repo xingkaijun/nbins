@@ -5,7 +5,7 @@ export async function createPasswordHash(
   password: string,
   options?: { iterations?: number; saltHex?: string }
 ): Promise<string> {
-  const iterations = options?.iterations ?? 120000;
+  const iterations = options?.iterations ?? 90000;
   const saltHex = options?.saltHex ?? createSaltHex(16);
   const derivedKeyHex = await derivePbkdf2Sha256(password, saltHex, iterations);
 

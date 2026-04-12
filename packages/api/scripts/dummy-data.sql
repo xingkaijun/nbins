@@ -10,8 +10,8 @@ INSERT INTO ships (id, projectId, hullNumber, shipName, shipType, status, create
 
 -- Additional Users for Demo
 INSERT INTO users (id, username, displayName, passwordHash, role, disciplines, accessibleProjectIds, isActive, createdAt, updatedAt) VALUES
-('user-demo-qc', 'demo.qc', 'Demo QC', 'pbkdf2_sha256$120000$736565642d7379732d73616c742d3031$e2b18d69b836e060955d3fb4a1044218fd45f64a8b21f52dff8b093d5e5d1ca1', 'inspector', '["HULL", "OUTFIT"]', '["proj-demo-1", "proj-demo-2"]', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
-('user-demo-owner', 'demo.owner', 'Owner Rep', 'pbkdf2_sha256$120000$736565642d7379732d73616c742d3031$e2b18d69b836e060955d3fb4a1044218fd45f64a8b21f52dff8b093d5e5d1ca1', 'reviewer', '[]', '["proj-demo-1", "proj-demo-2"]', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
+('user-demo-qc', 'demo.qc', 'Demo QC', 'pbkdf2_sha256$90000$736565642d7379732d73616c742d3031$1e79dc790dc7d87ffaa25aacf6b8b25fa805d339bed4523b9808cd27727b53b1', 'inspector', '["HULL", "OUTFIT"]', '["proj-demo-1", "proj-demo-2"]', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP),
+('user-demo-owner', 'demo.owner', 'Owner Rep', 'pbkdf2_sha256$90000$736565642d7379732d73616c742d3031$1e79dc790dc7d87ffaa25aacf6b8b25fa805d339bed4523b9808cd27727b53b1', 'reviewer', '[]', '["proj-demo-1", "proj-demo-2"]', 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP);
 
 -- Assign Admin and Demo Users to new Projects
 INSERT INTO project_members (id, projectId, userId, createdAt, updatedAt) VALUES

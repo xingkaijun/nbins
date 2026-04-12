@@ -40,11 +40,11 @@ export const INSPECTION_RESULTS = ["CX", "AA", "QCC", "OWC", "RJ"] as const;
 export type InspectionResult = (typeof INSPECTION_RESULTS)[number];
 
 export const INSPECTION_RESULT_LABELS: Record<InspectionResult, string> = {
-  CX: "CX",
-  AA: "AA",
-  QCC: "QCC",
-  OWC: "OWC",
-  RJ: "RJ"
+  CX: "CANCELLED",
+  AA: "ACCEPTED",
+  QCC: "QC RECHECK",
+  OWC: "REINSPECTION",
+  RJ: "REJECTED"
 };
 
 export const WORKFLOW_STATUSES = [

@@ -12,6 +12,7 @@ import { createProjectRoutes } from "./routes/projects.ts";
 import { createShipRoutes } from "./routes/ships.ts";
 import { createUserRoutes } from "./routes/users.ts";
 import { createNcrRoutes } from "./routes/ncrs.ts";
+import { createSqlConsoleRoutes } from "./routes/sql-console.ts";
 
 function createApp(): Hono<{ Bindings: Bindings }> {
   const app = new Hono<{ Bindings: Bindings }>();
@@ -97,6 +98,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
   app.route("/api/users", createUserRoutes());
   app.route("/api", createObservationRoutes());
   app.route("/api/ncrs", createNcrRoutes());
+  app.route("/api/sql", createSqlConsoleRoutes());
 
   return app;
 }

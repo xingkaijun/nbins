@@ -44,8 +44,8 @@ export function TopBar() {
       
       {!isGlobalHall ? (
         <nav className="navPills" aria-label="Primary">
-          <NavLink to="/" className="pill" style={{ display: 'flex', alignItems: 'center', gap: '6px', color: 'var(--nb-text-muted)' }}>
-             <span style={{ fontSize: '10px' }}>◀</span> HALL
+          <NavLink to="/" className="pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', color: 'var(--nb-text-muted)' }}>
+             <span style={{ fontSize: '10px', marginTop: '-1px' }}>◀</span> HALL
           </NavLink>
           {navItems.map((item) => (
             <NavLink

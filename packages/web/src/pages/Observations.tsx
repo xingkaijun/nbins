@@ -40,6 +40,7 @@ export function Observations() {
   const [filterType, setFilterType] = useState("");
   const [filterDiscipline, setFilterDiscipline] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [searchKeyword, setSearchKeyword] = useState("");
 
   // 新增表单
   const [showForm, setShowForm] = useState(false);
@@ -349,7 +350,6 @@ export function Observations() {
             <>
               <button type="button" onClick={() => setShowTypeForm(!showTypeForm)}>+ CUSTOM TYPE</button>
               <button type="button" onClick={() => setShowImport(!showImport)}>PASTE IMPORT</button>
-              <button type="button" onClick={() => setShowForm(!showForm)} style={{ background: "var(--nb-accent)", color: "#fff" }}>+ NEW OBSERVATION</button>
             </>
           )}
         </div>
@@ -372,10 +372,17 @@ export function Observations() {
         </label>
       </div>
 
-      {/* Tabs */}
-      <div style={{ display: "flex", gap: 0, marginBottom: 16, borderBottom: "2px solid var(--nb-border, #e2e8f0)" }}>
-        <button onClick={() => setActiveTab("observations")} style={tabStyle(activeTab === "observations")}>Observations</button>
-        <button onClick={() => setActiveTab("inspection-comments")} style={tabStyle(activeTab === "inspection-comments")}>Inspection Comments</button>
+      {/* Tabs & Actions */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16, borderBottom: "2px solid var(--nb-border, #e2e8f0)" }}>
+        <div style={{ display: "flex", gap: 0 }}>
+          <button onClick={() => setActiveTab("observations")} style={tabStyle(activeTab === "observations")}>Observations</button>
+          <button onClick={() => setActiveTab("inspection-comments")} style={tabStyle(activeTab === "inspection-comments")}>Inspection Comments</button>
+        </div>
+        {activeTab === "observations" && (
+          <div style={{ paddingBottom: 6 }}>
+            <button onClick={() => setShowForm(!showForm)} style={{ ...btnStyle("primary"), background: "var(--nb-accent)", color: "#fff" }}>+ NEW OBSERVATION</button>
+          </div>
+        )}
       </div>
 
       {/* 筛选栏 */}
@@ -395,6 +402,26 @@ export function Observations() {
           <option value="open">Open</option>
           <option value="closed">Closed</option>
         </select>
+        <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+          <svg style={{ position: 'absolute', left: 8, pointerEvents: 'none', color: 'var(--nb-text-muted)' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input
+            type="text"
+            placeholder={activeTab === 'observations' ? 'Search content, location, remark...' : 'Search item name or comment...'}
+            value={searchKeyword}
+            onChange={(e) => setSearchKeyword(e.target.value)}
+            style={{
+              ...inputStyle,
+              paddingLeft: 26,
+              width: 240,
+            }}
+          />
+          {searchKeyword && (
+            <button
+              onClick={() => setSearchKeyword('')}
+              style={{ position: 'absolute', right: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--nb-text-muted)', fontSize: 12, padding: 2, lineHeight: 1 }}
+            >✕</button>
+          )}
+        </div>
         <span style={{ fontSize: 12, color: "var(--nb-text-muted)", fontWeight: 600 }}>
           {activeTab === "observations" ? `${items.length} records` : `${comments.length} records`}
         </span>
@@ -508,7 +535,18 @@ export function Observations() {
       {loading ? (
         <p style={{ color: "var(--nb-text-muted)", textAlign: "center", padding: 40 }}>Loading...</p>
       ) : activeTab === "observations" ? (
-        items.length === 0 ? (
+        (() => {
+          const kw = searchKeyword.toLowerCase();
+          const filteredItems = searchKeyword
+            ? items.filter(item =>
+                item.content.toLowerCase().includes(kw)
+                || (item.remark || "").toLowerCase().includes(kw)
+                || (item.location || "").toLowerCase().includes(kw)
+                || item.discipline.toLowerCase().includes(kw)
+                || (item.authorName || "").toLowerCase().includes(kw)
+              )
+            : items;
+          return filteredItems.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
             <p style={{ fontSize: 14 }}>No observation records found</p>
             <p style={{ fontSize: 12 }}>Click "+ New Observation" or "Paste Import" to start adding.</p>
@@ -522,7 +560,7 @@ export function Observations() {
                 <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Action</th>
               </tr></thead>
               <tbody>
-                {items.map(item => (
+                {filteredItems.map(item => (
                   <tr key={item.id} style={{ borderBottom: "1px solid var(--nb-border)" }}>
                     <td style={tdStyle}>{item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : item.serialNo}</td>
                     <td style={tdStyle}><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
@@ -543,9 +581,21 @@ export function Observations() {
               </tbody>
             </table>
           </div>
-        )
+        );
+        })()
       ) : (
-        comments.length === 0 ? (
+        (() => {
+          const kw = searchKeyword.toLowerCase();
+          const filteredComments = searchKeyword
+            ? comments.filter(cm =>
+                cm.content.toLowerCase().includes(kw)
+                || cm.inspectionItemName.toLowerCase().includes(kw)
+                || cm.hullNumber.toLowerCase().includes(kw)
+                || cm.discipline.toLowerCase().includes(kw)
+                || cm.authorName.toLowerCase().includes(kw)
+              )
+            : comments;
+          return filteredComments.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
             <p style={{ fontSize: 14 }}>No inspection comments found</p>
             <p style={{ fontSize: 12 }}>Inspection comments are generated from the inspection submission workflow.</p>
@@ -559,7 +609,7 @@ export function Observations() {
                 <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Closed At</th>
               </tr></thead>
               <tbody>
-                {comments.map(cm => (
+                {filteredComments.map(cm => (
                   <tr key={cm.id} style={{ borderBottom: "1px solid var(--nb-border)" }}>
                     <td style={tdStyle}>{cm.localId}</td>
                     <td style={tdStyle}>{cm.hullNumber}</td>
@@ -575,7 +625,8 @@ export function Observations() {
               </tbody>
             </table>
           </div>
-        )
+        );
+        })()
       )}
 
       {/* 编辑弹窗 */}

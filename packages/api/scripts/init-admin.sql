@@ -3,7 +3,7 @@ VALUES (
   'sys-admin',
   'admin',
   'System Admin',
-  'pbkdf2_sha256$120000$162da04d72ee27260448eab610d9c5bc$97761007c6cd78f4aaac7f53c67a54fb1ded164b2c6a28e55f0088358677f13e',
+  'pbkdf2_sha256$90000$736565642d7379732d73616c742d3031$1e79dc790dc7d87ffaa25aacf6b8b25fa805d339bed4523b9808cd27727b53b1',
   'admin',
   '[]',
   '[]',

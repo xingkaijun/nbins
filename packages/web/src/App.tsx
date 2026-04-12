@@ -7,6 +7,7 @@ import { Dashboard } from "./pages/Dashboard";
 import { Projects } from "./pages/Projects";
 import { Reports } from "./pages/Reports";
 import { Import } from "./pages/Import";
+import { SqlConsole } from './pages/SqlConsole';
 import { Admin } from "./pages/Admin";
 import { Login } from "./pages/Login";
 import { Observations } from "./pages/Observations";
@@ -36,6 +37,7 @@ export function App() {
                 <Route path="observations" element={<Observations />} />
                 <Route path="ncrs" element={<Ncrs />} />
                 <Route path="admin" element={<AdminGuard />} />
+                <Route path="admin/sql" element={<SqlConsole />} />
               </Route>
             </Route>
           </Routes>
