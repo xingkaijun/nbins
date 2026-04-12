@@ -660,9 +660,9 @@ export function Admin() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: '#e2e8f0' }}>
-                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '20%' }}>DISCIPLINE</th>
-                        <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '12%' }}>USERS</th>
-                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '68%' }}>USER NAMES</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '10%' }}>DISCIPLINE</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '10%' }}>USERS</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '80%' }}>USER NAMES</th>
                       </tr>
                     </thead>
                     <tbody>
