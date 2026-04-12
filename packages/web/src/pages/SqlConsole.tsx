@@ -1019,7 +1019,7 @@ export function SqlConsole() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <button 
                 className="sql-example-btn"
-                onClick={() => setSql("SELECT DISTINCT json_each.value as discipline\nFROM projects, json_each(projects.disciplines)\nUNION\nSELECT 'Electrical' as discipline\nUNION SELECT 'Hull'\nUNION SELECT 'Machinery'\nUNION SELECT 'Piping'\nUNION SELECT 'HVAC'\nUNION SELECT 'Outfit'\nUNION SELECT 'Safety'\nUNION SELECT 'Navigation'\nORDER BY discipline;")}
+                onClick={() => setSql("SELECT DISTINCT json_each.value as discipline\nFROM projects, json_each(projects.disciplines)\nWHERE projects.disciplines IS NOT NULL AND projects.disciplines != '[]'\nORDER BY discipline;")}
                 style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#f8fafc', border: '1px solid var(--nb-border)', borderRadius: 4, cursor: 'pointer', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
               >
                 All available disciplines
