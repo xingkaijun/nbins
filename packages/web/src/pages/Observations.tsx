@@ -68,6 +68,7 @@ export function Observations() {
   const [editingItem, setEditingItem] = useState<ObservationItem | null>(null);
   const [editType, setEditType] = useState("");
   const [editDiscipline, setEditDiscipline] = useState<string>("HULL");
+  const [editDate, setEditDate] = useState("");
   const [editLocation, setEditLocation] = useState("");
   const [editContent, setEditContent] = useState("");
   const [editRemark, setEditRemark] = useState("");
@@ -213,6 +214,7 @@ export function Observations() {
     setEditingItem(item);
     setEditType(item.type);
     setEditDiscipline(item.discipline);
+    setEditDate(item.date);
     setEditLocation(item.location || "");
     setEditContent(item.content);
     setEditRemark(item.remark || "");
@@ -227,6 +229,7 @@ export function Observations() {
       await updateObservation(editingItem.id, {
         type: editType,
         discipline: editDiscipline,
+        date: editDate || undefined,
         location: editLocation || null,
         content: editContent.trim(),
         remark: editRemark || null,
@@ -631,22 +634,25 @@ export function Observations() {
 
       {/* 编辑弹窗 */}
       {editingItem && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.45)", backdropFilter: "blur(4px)", display: "grid", placeItems: "center", zIndex: 9999 }}>
-          <form style={{ ...formBoxStyle, width: "90%", maxWidth: 500, margin: 0, boxShadow: "0 24px 64px rgba(15, 23, 42, 0.18)" }} onSubmit={handleEditSubmit}>
-            <h3 style={{ margin: "0 0 16px", fontSize: 15, fontWeight: 800 }}>Edit Observation #{editingItem.discipline ? `${editingItem.discipline.substring(0, 3).toUpperCase()}-${editingItem.serialNo}` : editingItem.serialNo}</h3>
-            <div style={{ display: "grid", gap: 12, gridTemplateColumns: "1fr 1fr" }}>
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", display: "grid", placeItems: "center", zIndex: 9999 }}>
+          <form style={{ ...formBoxStyle, width: "95%", maxWidth: 650, margin: 0, background: "var(--nb-panel)", borderRadius: 12, boxShadow: "0 20px 40px rgba(0,0,0,0.2)", padding: 24 }} onSubmit={handleEditSubmit}>
+            <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 800 }}>Edit Observation #{editingItem.discipline ? `${editingItem.discipline.substring(0, 3).toUpperCase()}-${editingItem.serialNo}` : editingItem.serialNo}</h3>
+            <div style={{ display: "grid", gap: 16, gridTemplateColumns: "1fr 1fr 1fr" }}>
               <label style={fieldLabelStyle}><span>Type</span>
-                <select value={editType} onChange={e => setEditType(e.target.value)} style={inputStyle} required>
+                <select value={editType} onChange={e => setEditType(e.target.value)} style={{ ...inputStyle, width: '100%' }} required>
                   {types.map(t => <option key={t.code} value={t.code}>{t.label}</option>)}
                 </select>
               </label>
               <label style={fieldLabelStyle}><span>Discipline</span>
-                <select value={editDiscipline} onChange={e => setEditDiscipline(e.target.value)} style={inputStyle}>
+                <select value={editDiscipline} onChange={e => setEditDiscipline(e.target.value)} style={{ ...inputStyle, width: '100%' }}>
                   {projectDisciplines.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
               </label>
+              <label style={fieldLabelStyle}><span>Date</span>
+                <input type="date" value={editDate} onChange={e => setEditDate(e.target.value)} style={{ ...inputStyle, width: '100%' }} required />
+              </label>
             </div>
-            <label style={{ ...fieldLabelStyle, marginTop: 12, display: "block" }}><span>Location</span>
+            <label style={{ ...fieldLabelStyle, marginTop: 16, display: "block" }}><span>Location</span>
               <input type="text" value={editLocation} onChange={e => setEditLocation(e.target.value)} style={{ ...inputStyle, width: "100%" }} />
             </label>
             <label style={{ ...fieldLabelStyle, marginTop: 12, display: "block" }}><span>Content</span>

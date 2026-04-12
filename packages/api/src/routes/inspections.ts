@@ -646,6 +646,26 @@ function createInspectionRoutes(
     }
   });
 
+  /* ── DELETE an entire inspection item (admin only) ── */
+  inspectionRoutes.delete("/:id/admin", requireAdmin, async (c) => {
+    try {
+      const inspectionItemId = c.req.param("id");
+
+      const itemRow = await c.env.DB!.prepare(`SELECT "id" FROM "inspection_items" WHERE "id" = ?`).bind(inspectionItemId).first<{ id: string }>();
+      if (!itemRow) return c.json({ ok: false, error: "Inspection item not found" }, 404);
+
+      // Cascade: delete comments, rounds, then item
+      await c.env.DB!.prepare(`DELETE FROM "comments" WHERE "inspectionItemId" = ?`).bind(inspectionItemId).run();
+      await c.env.DB!.prepare(`DELETE FROM "inspection_rounds" WHERE "inspectionItemId" = ?`).bind(inspectionItemId).run();
+      await c.env.DB!.prepare(`DELETE FROM "inspection_items" WHERE "id" = ?`).bind(inspectionItemId).run();
+
+      return c.json({ ok: true, data: { success: true } });
+    } catch (e: any) {
+      console.error("DELETE /:id/admin error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
   inspectionRoutes.delete("/:id/comments/:commentId/admin", requireAdmin, async (c) => {
     try {
       const inspectionItemId = c.req.param("id");

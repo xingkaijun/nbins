@@ -303,6 +303,14 @@ export async function updateInspectionItemAdmin(
   });
 }
 
+export async function deleteInspectionItem(
+  inspectionItemId: string
+): Promise<{ success: boolean }> {
+  return requestJson<{ success: boolean }>(`/inspections/${inspectionItemId}/admin`, {
+    method: "DELETE"
+  });
+}
+
 export async function updateInspectionCurrentRoundAdmin(
   inspectionItemId: string,
   data: {
