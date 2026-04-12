@@ -660,9 +660,9 @@ export function Admin() {
                   <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                     <thead>
                       <tr style={{ background: '#e2e8f0' }}>
-                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '25%' }}>DISCIPLINE</th>
-                        <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '15%' }}>ASSIGNED USERS</th>
-                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '60%' }}>USER NAMES</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '20%' }}>DISCIPLINE</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '12%' }}>USERS</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '68%' }}>USER NAMES</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -692,7 +692,16 @@ export function Admin() {
                               {usersInDiscipline.length === 0 ? (
                                 <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No users assigned</span>
                               ) : (
-                                usersInDiscipline.map(u => u.displayName || u.username).join(', ')
+                                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 0' }}>
+                                  {usersInDiscipline.map((u, idx) => (
+                                    <React.Fragment key={u.id}>
+                                      <span>{u.displayName || u.username}</span>
+                                      {idx < usersInDiscipline.length - 1 && (
+                                        <span style={{ margin: '0 8px', color: '#cbd5e1' }}>•</span>
+                                      )}
+                                    </React.Fragment>
+                                  ))}
+                                </div>
                               )}
                             </td>
                           </tr>
