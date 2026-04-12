@@ -28,6 +28,8 @@ function createApp(): Hono<{ Bindings: Bindings }> {
         "http://192.168.190.129:5173",
         "http://127.0.0.1:4173",
         "http://localhost:4173",
+        "https://ins.6666996.xyz",
+        "https://nbins-six.vercel.app",
       ],
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     })

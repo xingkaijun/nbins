@@ -11,10 +11,10 @@
       "binding": "DB",
       // Set both values after `wrangler d1 create <name>`.
       "database_name": "nbins-local",
-      "database_id": "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+      "database_id": "214dd5f8-c591-4a68-9134-e763ac773428"
     }
   ],
   "vars": {
-    "SQL_CONSOLE_SECRET": "nbins-sql-dev-2026"
+    "SQL_CONSOLE_SECRET": "pgnewbuilding"
   }
 }

@@ -57,29 +57,31 @@ export function Projects() {
             }}
             style={{
               padding: '24px',
-              border: `1px solid ${project.active ? 'var(--nb-border)' : 'rgba(148, 163, 184, 0.2)'}`,
+              border: `1px solid ${project.active ? 'rgba(0, 106, 99, 0.15)' : 'rgba(148, 163, 184, 0.2)'}`,
               borderRadius: '16px',
-              backgroundColor: project.active ? '#fff' : '#f8fafc',
+              background: project.active ? 'linear-gradient(145deg, #ffffff 0%, #f1f4f6 100%)' : '#f8fafc',
               cursor: project.active ? 'pointer' : 'not-allowed',
-              transition: 'all 0.2s ease',
-              boxShadow: project.active ? '0 4px 12px rgba(0,0,0,0.03)' : 'none',
+              transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+              boxShadow: project.active ? '0 4px 12px rgba(15, 23, 42, 0.04)' : 'none',
               opacity: project.active ? 1 : 0.6
             }}
             onMouseOver={(e) => {
               if (project.active) {
-                e.currentTarget.style.borderColor = 'var(--nb-primary)';
-                e.currentTarget.style.transform = 'translateY(-2px)';
+                e.currentTarget.style.borderColor = 'var(--nb-accent)';
+                e.currentTarget.style.transform = 'translateY(-4px)';
+                e.currentTarget.style.boxShadow = '0 16px 32px -8px rgba(0, 106, 99, 0.15)';
               }
             }}
             onMouseOut={(e) => {
               if (project.active) {
-                e.currentTarget.style.borderColor = 'var(--nb-border)';
+                e.currentTarget.style.borderColor = 'rgba(0, 106, 99, 0.15)';
                 e.currentTarget.style.transform = 'translateY(0)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(15, 23, 42, 0.04)';
               }
             }}
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
-              <span style={{ fontSize: '11px', fontWeight: 800, padding: '4px 8px', borderRadius: '4px', background: project.active ? '#0f766e15' : '#e2e8f0', color: project.active ? 'var(--nb-primary)' : 'var(--nb-text-muted)' }}>
+              <span style={{ fontSize: '11px', fontWeight: 800, padding: '4px 8px', borderRadius: '4px', background: project.active ? '#0f766e15' : '#e2e8f0', color: project.active ? 'var(--nb-accent)' : 'var(--nb-text-muted)' }}>
                 {project.code}
               </span>
               {!project.active && <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--nb-text-muted)' }}>ARCHIVED</span>}
@@ -94,7 +96,7 @@ export function Projects() {
             
             {project.active && (
               <div style={{ marginTop: '24px', paddingTop: '16px', borderTop: '1px solid var(--nb-border)' }}>
-                 <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: 'var(--nb-primary)', display: 'flex', justifyContent: 'space-between' }}>
+                 <p style={{ margin: 0, fontSize: '11px', fontWeight: 700, color: 'var(--nb-accent)', display: 'flex', justifyContent: 'space-between' }}>
                    <span>ENTER WORKSPACE</span>
                    <span>→</span>
                  </p>

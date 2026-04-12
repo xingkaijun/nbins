@@ -795,6 +795,10 @@ function integerValue(value: unknown): number {
 }
 
 function jsonArrayValue(value: unknown): string[] {
+  if (value === null || value === undefined) {
+    return [];
+  }
+
   if (typeof value !== "string") {
     throw new Error("Expected JSON string value from D1");
   }
