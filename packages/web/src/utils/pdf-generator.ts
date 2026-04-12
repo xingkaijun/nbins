@@ -29,233 +29,343 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 20;
 
+  // Colors
+  const colors = {
+    primary: [0, 89, 97] as [number, number, number],
+    primaryLight: [230, 243, 245] as [number, number, number],
+    secondary: [80, 96, 111] as [number, number, number],
+    tertiary: [117, 68, 30] as [number, number, number],
+    tertiaryLight: [242, 233, 228] as [number, number, number],
+    surfaceLow: [242, 244, 244] as [number, number, number],
+    outline: [191, 200, 202] as [number, number, number],
+    textMain: [25, 28, 29] as [number, number, number],
+    white: [255, 255, 255] as [number, number, number],
+  };
+
   let y = margin;
 
-  // --- HEADER ---
-  // Company Logo
-  drawPdfLogo(doc, margin, y);
-
-
-  // Title
-  doc.setFontSize(16);
-  doc.setTextColor(30, 41, 59); // Dark blue gray
-  doc.text('INSPECTION REPORT', pageWidth / 2, y, { align: 'center' });
-
-  y += 8;
-
-  // Horizontal Line
-  doc.setDrawColor(15, 118, 110);
-  doc.setLineWidth(0.5);
-  doc.line(margin, y, pageWidth - margin, y);
-
-  y += 12;
-
-  // --- SECTION 1: PROJECT INFORMATION ---
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('PROJECT INFORMATION', margin, y);
-  y += 6;
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Project Code: ${detail.projectCode}`, margin, y);
-  doc.text(`Project Name: ${detail.projectName}`, margin + 80, y);
-  y += 6;
-  doc.text(`Class: ${detail.projectClass || 'N/A'}`, margin, y);
-  doc.text(`Shipyard: ${detail.projectShipyard || 'N/A'}`, margin + 80, y);
-  y += 10;
-
-  // --- SECTION 2: VESSEL INFORMATION ---
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('VESSEL INFORMATION', margin, y);
-  y += 6;
-
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Hull Number: ${detail.hullNumber}`, margin, y);
-  doc.text(`Ship Name: ${detail.shipName}`, margin + 80, y);
-  y += 10;
-
-  // --- SECTION 3: INSPECTION DETAILS ---
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('INSPECTION ITEM DETAILS', margin, y);
-  y += 6;
-
-  // Simple bounding box for item details
-  doc.setDrawColor(200, 200, 200);
-  doc.setFillColor(248, 250, 252); // light slate
-  doc.rect(margin, y, pageWidth - (margin * 2), 24, 'FD');
-  
-  y += 6;
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Item Name:`, margin + 4, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${detail.itemName}`, margin + 28, y);
-
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Discipline:`, margin + 110, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${detail.discipline}`, margin + 130, y);
-  
-  y += 8;
-  const currentRoundObj = detail.roundHistory.find(r => r.roundNumber === detail.currentRound);
-  
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Result:`, margin + 4, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${detail.lastRoundResult || 'Pending'}`, margin + 20, y);
-
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Status:`, margin + 60, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${detail.workflowStatus.toUpperCase()}`, margin + 74, y);
-
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Insp. Date:`, margin + 110, y);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`${currentRoundObj?.actualDate || detail.plannedDate || 'N/A'}`, margin + 130, y);
-
-  y += 18;
-
-  // --- SECTION 4: ROUND HISTORY ---
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('ROUND HISTORY', margin, y);
-  y += 6;
-
-  // Table Headers
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'bold');
-  // Tight columns: RND | DATE | RESULT | INSPECTOR
-  doc.text('RND', margin, y);
-  doc.text('DATE', margin + 12, y);
-  doc.text('RESULT', margin + 36, y);
-  doc.text('INSPECTOR', margin + 60, y);
-  y += 6;
-
-  doc.setFont('helvetica', 'normal');
-  if (detail.roundHistory && detail.roundHistory.length > 0) {
-    detail.roundHistory.forEach(r => {
-      doc.text(`${r.roundNumber}`, margin, y);
-      doc.text(`${r.actualDate || '-'}`, margin + 12, y);
-      doc.text(`${r.submittedResult || '-'}`, margin + 36, y);
-      doc.text(`${r.inspectorDisplayName || r.submittedBy || '-'}`, margin + 60, y);
-      y += 5;
-    });
-  } else {
-    doc.text('No round history.', margin, y);
-    y += 6;
-  }
-
-  y += 6;
-
-  // --- SECTION 5: COMMENTS ---
-  doc.setFontSize(12);
-  doc.setFont('helvetica', 'bold');
-  doc.text('COMMENTS / DEFICIENCIES', margin, y);
-  y += 6;
-
-  if (detail.comments && detail.comments.length > 0) {
-    detail.comments.forEach((c) => {
-      // Manage page breaks
-      if (y > pageHeight - 40) {
-        doc.addPage();
-        y = margin;
-      }
-
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'bold');
-      doc.text(`[${c.status.toUpperCase()}]`, margin, y);
-      doc.setFont('helvetica', 'normal');
-      const contentWidth = pageWidth - margin - 20;
-      const splitContent = doc.splitTextToSize(c.message, contentWidth);
-      doc.text(splitContent, margin + 20, y);
-      y += splitContent.length * 4 + 3;
-    });
-  } else {
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text('No comments recorded.', margin, y);
-    y += 6;
-  }
-
-  // --- SECTION 6: SIGNATURES ---
-  // Always push signatures to the bottom or next page if no space
-  if (y > pageHeight - 50) {
-    doc.addPage();
-    y = margin;
-  } else {
-    y = pageHeight - 50; // Pin to bottom
-  }
-
-  doc.setDrawColor(200, 200, 200);
-  doc.setLineWidth(0.5);
-
-  const sigWidth = 70;
-  
-  // Finding last round for both signatures
+  // Generate HASH CODE early for top right
   const lastRound = detail.roundHistory.length > 0 
     ? detail.roundHistory.reduce((prev, current) => (prev.roundNumber > current.roundNumber) ? prev : current, detail.roundHistory[0])
     : null;
-  
-  // Signature 1: Yard QC (Left)
-  doc.line(margin, y, margin + sigWidth, y);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('YARD QC INSPECTOR', margin, y + 5);
-  doc.setFont('helvetica', 'normal');
-  
-  const inspectorName = lastRound?.inspectorDisplayName || detail.yardQc || '';
-  
-  doc.text(`Name: ${inspectorName}`, margin, y + 12);
-  doc.text(`Date: ${new Date().toLocaleDateString()}`, margin, y + 18);
-
-  // Signature 2: Owner Rep (Right)
-  const rightSigX = pageWidth - margin - sigWidth;
-  doc.line(rightSigX, y, rightSigX + sigWidth, y);
-  doc.setFont('helvetica', 'bold');
-  doc.text('OWNER REPRESENTATIVE', rightSigX, y + 5);
-  doc.setFont('helvetica', 'normal');
-  
-  const submitterName = lastRound?.inspectorDisplayName || lastRound?.submittedBy || '______________________';
-  const submitDate = lastRound?.submittedAt 
-    ? new Date(lastRound.submittedAt).toLocaleDateString() 
-    : '______________________';
-  
-  // Generate HASH CODE using SHA-256
-  let hashCode = '____________________';
-  if (lastRound?.submittedAt && submitterName !== '______________________') {
+    
+  const submitterName = lastRound?.inspectorDisplayName || lastRound?.submittedBy || 'SYSTEM';
+  let hashCode = 'PENDING-VERIFICATION';
+  if (lastRound?.submittedAt) {
     const text = `${submitterName}-${lastRound.submittedAt}`;
     const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     const hashArray = Array.from(new Uint8Array(hash));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    hashCode = hashHex.substring(0, 20).toUpperCase();
+    hashCode = `IA-${new Date().getFullYear()}-` + hashHex.substring(0, 8).toUpperCase();
+  }
+
+  // --- HEADER ---
+  // Left side: Logo (Enlarged)
+  drawPdfLogo(doc, margin, y - 6, 18);
+  
+  doc.setDrawColor(...colors.outline);
+  doc.setLineWidth(0.5);
+  doc.line(margin + 48, y - 2, margin + 48, y + 10);
+  
+  // Right side of pipe for Title
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(22);
+  doc.setTextColor(...colors.primary);
+  doc.text('INSPECTION REPORT', margin + 52, y + 8);
+
+  // Right side: Document Hash only
+  const topY = margin;
+  
+  doc.setFontSize(7);
+  doc.setTextColor(...colors.secondary);
+  doc.text('DOCUMENT HASH', pageWidth - margin, topY + 2, { align: 'right' });
+  
+  doc.setFontSize(9);
+  doc.setFont('courier', 'bold');
+  doc.setTextColor(...colors.textMain);
+  doc.text(hashCode, pageWidth - margin, topY + 7, { align: 'right' });
+
+  y += 18;
+  // Divider
+  doc.setDrawColor(...colors.primary);
+  doc.setLineWidth(0.5);
+  doc.line(margin, y, pageWidth - margin, y);
+
+  y += 10;
+
+  // --- INFO CARDS ---
+  const cardHeight = 45;
+  const leftCardWidth = 90;
+  const rightCardWidth = 75;
+  
+  // Left Card: Vessel Info
+  doc.setFillColor(...colors.surfaceLow);
+  doc.roundedRect(margin, y, leftCardWidth, cardHeight, 1.5, 1.5, 'F');
+  
+  let cy = y + 8;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(...colors.primary);
+  doc.text('VESSEL INFO', margin + 6, cy); 
+  
+  cy += 8;
+  doc.setFontSize(6);
+  doc.setTextColor(...colors.secondary);
+  doc.text('PROJECT CODE', margin + 6, cy);
+  doc.text('HULL NUMBER', margin + 45, cy);
+  
+  cy += 4;
+  doc.setFontSize(10);
+  doc.setTextColor(...colors.textMain);
+  doc.text(detail.projectCode || '-', margin + 6, cy);
+  // Hull Number (Style matched to project code)
+  doc.text(detail.hullNumber || '-', margin + 45, cy);
+  
+  cy += 10;
+  doc.setFontSize(6);
+  doc.setTextColor(...colors.secondary);
+  doc.text('SHIP OWNER', margin + 6, cy);
+  doc.text('SHIPYARD', margin + 45, cy);
+  
+  cy += 4;
+  doc.setFontSize(10);
+  doc.setTextColor(...colors.textMain);
+  doc.text('Pacific Gas', margin + 6, cy); 
+  doc.text('JN Shipyard', margin + 45, cy);
+
+  // Right Card: Inspection Data
+  const rx = pageWidth - margin - rightCardWidth;
+  doc.setFillColor(...colors.surfaceLow);
+  doc.roundedRect(rx, y, rightCardWidth, cardHeight, 1.5, 1.5, 'F');
+  
+  cy = y + 8;
+  doc.setFontSize(9);
+  doc.setTextColor(...colors.primary);
+  doc.text('INSPECTION DATA', rx + 6, cy);
+  
+  cy += 8;
+  doc.setFontSize(6);
+  doc.setTextColor(...colors.secondary);
+  doc.text('ITEM', rx + 6, cy);
+  
+  cy += 4;
+  doc.setFontSize(9);
+  doc.setTextColor(...colors.textMain);
+  const splitItem = doc.splitTextToSize(detail.itemName, rightCardWidth - 12);
+  doc.text(splitItem, rx + 6, cy);
+  
+  // Calculate bottom row labels: QC / ROUND / DATE
+  cy = y + cardHeight - 12; 
+  
+  doc.setFontSize(6);
+  doc.setTextColor(...colors.secondary);
+  doc.text('QC', rx + 6, cy);
+  doc.text('ROUND', rx + 30, cy);
+  doc.text('DATE', rx + rightCardWidth - 6, cy, { align: 'right' });
+  
+  cy += 4;
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.textMain);
+  // QC Value (Yard QC defined at import)
+  const qcName = detail.yardQc || '-';
+  doc.text(doc.splitTextToSize(qcName, 22), rx + 6, cy);
+  
+  // Round Value
+  doc.text(`R${detail.currentRound}`, rx + 30, cy);
+  
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(...colors.textMain);
+  doc.text(detail.actualDate || detail.plannedDate || '-', rx + rightCardWidth - 6, cy, { align: 'right' });
+  
+  y += cardHeight + 12;
+
+  // --- COMMENTS / DEFICIENCY ---
+  doc.setFontSize(10);
+  doc.setTextColor(...colors.primary);
+  doc.text('COMMENTS / DEFICIENCY', margin, y);
+  
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'italic');
+  doc.setTextColor(...colors.secondary);
+  const totalComments = detail.comments.length;
+  doc.text(totalComments > 0 ? `Items 01 - ${String(totalComments).padStart(2, '0')} recorded` : 'No items recorded', pageWidth - margin, y, { align: 'right' });
+  
+  y += 6;
+
+  // Render comments
+  if (totalComments > 0) {
+    detail.comments.forEach((c, idx) => {
+      // Height calculation
+      const contentWidth = pageWidth - margin * 2 - 35;
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      const splitContent = doc.splitTextToSize(c.message, contentWidth);
+      const cardH = Math.max(12, splitContent.length * 4 + 4);
+      
+      if (y + cardH > pageHeight - 50) {
+        doc.addPage();
+        y = margin;
+      }
+      
+      const isClosed = c.status === 'closed';
+      const indicatorColor = isClosed ? colors.primary : colors.tertiary;
+      const indicatorLight = isClosed ? colors.primaryLight : colors.tertiaryLight;
+      
+      // Card BG
+      doc.setFillColor(...colors.white);
+      doc.setDrawColor(...colors.outline);
+      doc.setLineWidth(0.2);
+      doc.roundedRect(margin, y, pageWidth - margin * 2, cardH, 1, 1, 'FD');
+      
+      // Left border indicator
+      doc.setFillColor(...indicatorColor);
+      doc.rect(margin, y + 1, 1.5, cardH - 2, 'F');
+      
+      // Number box
+      doc.setFillColor(...colors.surfaceLow);
+      doc.roundedRect(margin + 4, y + (cardH - 8) / 2, 8, 8, 0.5, 0.5, 'F');
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...indicatorColor);
+      doc.text(String(idx + 1).padStart(2, '0'), margin + 8, y + (cardH - 8) / 2 + 5.5, { align: 'center' });
+      
+      // Content
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(...colors.textMain);
+      const textH = splitContent.length * 4;
+      doc.text(splitContent, margin + 16, y + (cardH - textH) / 2 + 3);
+      
+      // Status Badge right side
+      const badgeW = 14;
+      const badgeX = pageWidth - margin - badgeW - 2;
+      const badgeY = y + (cardH - 5) / 2;
+      
+      doc.setFillColor(...indicatorLight);
+      doc.setDrawColor(...indicatorColor);
+      doc.setLineWidth(0.1);
+      doc.roundedRect(badgeX, badgeY, badgeW, 5, 0.5, 0.5, 'FD');
+      
+      doc.setFontSize(5);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...indicatorColor);
+      doc.text(c.status.toUpperCase(), badgeX + (badgeW / 2), badgeY + 3.5, { align: 'center' });
+      
+      y += cardH + 2;
+    });
+  }
+
+  // --- DIGITAL SIGNATURE ---
+  if (y > pageHeight - 45) {
+    doc.addPage();
+    y = margin;
+  } else {
+    y = pageHeight - 40;
   }
   
-  doc.text(`Name: ${submitterName}`, rightSigX, y + 12);
-  doc.text(`Date: ${submitDate}`, rightSigX, y + 18);
+  doc.setFillColor(...colors.surfaceLow);
+  // Remove border line
+  doc.setDrawColor(255, 255, 255);
+  doc.roundedRect(margin, y, pageWidth - margin * 2, 30, 1.5, 1.5, 'F');
   
-  // HASH CODE with smaller font
+  let sy = y + 6;
   doc.setFontSize(8);
-  doc.text(`HASH CODE: ${hashCode}`, rightSigX, y + 24);
-  doc.setFontSize(10); // Reset to default size
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(...colors.primary);
+  doc.text('OVERALL INSPECTION RESULT & SIGNATURE', margin + 8, sy);
+  
+  // --- RESULT BLOCK (NEW prominent placement) ---
+  const resultText = detail.lastRoundResult || 'PENDING';
+  let resultBg: [number, number, number] = [241, 245, 249]; 
+  let resultFg: [number, number, number] = [71, 85, 105]; 
+  let resultLabel = 'PENDING';
+  let resultFull = 'RESULT PENDING';
 
-  // Footer
-  doc.setFontSize(8);
-  doc.setTextColor(150, 150, 150);
-  doc.text('Generated by NBINS System', margin, pageHeight - 10);
+  if (resultText === 'AA') {
+    resultBg = [0, 89, 97]; // Primary dark green
+    resultFg = [255, 255, 255]; 
+    resultLabel = 'AA';
+    resultFull = 'ACCEPTED (AA)';
+  } else if (resultText === 'RJ') {
+    resultBg = [159, 18, 57]; // Dark crimson
+    resultFg = [255, 255, 255]; 
+    resultLabel = 'RJ';
+    resultFull = 'REJECTED (RJ)';
+  } else if (resultText === 'OWC') {
+    resultBg = [146, 64, 14]; 
+    resultFg = [255, 255, 255]; 
+    resultLabel = 'OWC';
+    resultFull = 'REINSPECT (OWC)';
+  } else if (resultText === 'QCC') {
+    resultBg = [12, 74, 110]; 
+    resultFg = [255, 255, 255]; 
+    resultLabel = 'QCC';
+    resultFull = 'CONDITION (QCC)';
+  }
+
+  // Prominent Result Badge
+  doc.setFillColor(...resultBg);
+  doc.roundedRect(margin + 8, sy + 4, 35, 12, 1, 1, 'F');
+  doc.setFontSize(10);
+  doc.setTextColor(...resultFg);
+  doc.setFont('helvetica', 'bold');
+  doc.text(resultFull, margin + 8 + 17.5, sy + 11.5, { align: 'center' });
+
+  // Left sig
+  sy += 18;
+  doc.setDrawColor(...colors.outline);
+  doc.setLineWidth(0.3);
+  doc.line(margin + 55, sy, margin + 115, sy);
   
-  // Determine components for filename
+  doc.setFontSize(6);
+  doc.setTextColor(...colors.primary);
+  doc.text('AUTHORIZED INSPECTOR', margin + 55, sy + 4);
+  
+  let inspectorName = lastRound?.inspectorDisplayName || lastRound?.submittedBy || '';
+  if (inspectorName) {
+     doc.setFont('times', 'italic');
+     doc.setFontSize(14);
+     doc.setTextColor(...colors.textMain);
+     doc.text(inspectorName, margin + 55, sy - 2);
+  }
+
+  // Middle sig (Date)
+  doc.line(margin + 125, sy, margin + 175, sy);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6);
+  doc.setTextColor(...colors.primary);
+  doc.text('DATE RECORDED', margin + 125, sy + 4);
+
+  const sigDate = lastRound?.actualDate || new Date().toLocaleDateString();
+  doc.setFont('times', 'italic');
+  doc.setFontSize(14);
+  doc.setTextColor(...colors.textMain);
+  doc.text(sigDate, margin + 125, sy - 2);
+
+  // Footer on all pages
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i++) {
+    doc.setPage(i);
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6);
+    doc.setTextColor(...colors.primary);
+    doc.text('NBINS-REPORT-v4', margin, pageHeight - 10);
+    
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(...colors.secondary);
+    doc.text('|', margin + 22, pageHeight - 10);
+    doc.text(`PAGE ${String(i).padStart(2, '0')} OF ${String(totalPages).padStart(2, '0')}`, margin + 26, pageHeight - 10);
+    
+    doc.text('© 2026 NBINS INSPECTION SYSTEM. ALL RIGHTS RESERVED.', pageWidth - margin, pageHeight - 10, { align: 'right' });
+  }
+
   const hullNum = detail.hullNumber || 'UNKNOWN';
   const discipline = detail.discipline || 'UNKNOWN';
-  const itemName = detail.itemName.replace(/[^a-zA-Z0-9_-]/g, '_');
+  const itemNameSafe = detail.itemName.replace(/[^a-zA-Z0-9_-]/g, '_').substring(0, 30);
   const roundText = `R${detail.currentRound}`;
-  const resultText = detail.lastRoundResult || 'PENDING';
+  const fileResultText = detail.lastRoundResult || 'PENDING';
   
-  const fileName = `${hullNum}-${discipline}-${itemName}-${roundText}-${resultText}.pdf`;
+  const fileName = `NBINS-${hullNum}-${discipline}-${itemNameSafe}-${roundText}-${fileResultText}.pdf`;
   
   return { doc, fileName };
 }
