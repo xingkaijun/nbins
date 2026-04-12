@@ -1013,30 +1013,23 @@ export function SqlConsole() {
             </div>
           </div>
 
-          {/* Data Modification */}
+          {/* Disciplines */}
           <div>
-            <h4 style={{ fontSize: 10, margin: '0 0 6px 0', fontWeight: 700, color: '#991b1b' }}>Data Modification</h4>
+            <h4 style={{ fontSize: 10, margin: '0 0 6px 0', fontWeight: 700, color: '#334155' }}>Disciplines</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <button 
                 className="sql-example-btn"
-                onClick={() => setSql("UPDATE observations SET status = 'Closed' WHERE id = 'observation-id-here';")}
-                style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 4, cursor: 'pointer', color: '#991b1b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                onClick={() => setSql("SELECT DISTINCT json_each.value as discipline\nFROM projects, json_each(projects.disciplines)\nUNION\nSELECT 'Electrical' as discipline\nUNION SELECT 'Hull'\nUNION SELECT 'Machinery'\nUNION SELECT 'Piping'\nUNION SELECT 'HVAC'\nUNION SELECT 'Outfit'\nUNION SELECT 'Safety'\nUNION SELECT 'Navigation'\nORDER BY discipline;")}
+                style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#f8fafc', border: '1px solid var(--nb-border)', borderRadius: 4, cursor: 'pointer', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
               >
-                Close observation
+                All available disciplines
               </button>
               <button 
                 className="sql-example-btn"
-                onClick={() => setSql("UPDATE users SET role = 'admin' WHERE username = 'someuser';")}
-                style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 4, cursor: 'pointer', color: '#991b1b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
+                onClick={() => setSql("SELECT code, name, disciplines\nFROM projects\nWHERE disciplines IS NOT NULL AND disciplines != '[]';")}
+                style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#f8fafc', border: '1px solid var(--nb-border)', borderRadius: 4, cursor: 'pointer', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
               >
-                Change user role
-              </button>
-              <button 
-                className="sql-example-btn"
-                onClick={() => setSql("DELETE FROM comments WHERE id = 'comment-id-here';")}
-                style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#fef2f2', border: '1px solid #fca5a5', borderRadius: 4, cursor: 'pointer', color: '#991b1b', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
-              >
-                Delete comment
+                Project selected disciplines
               </button>
             </div>
           </div>
