@@ -1019,7 +1019,7 @@ export function SqlConsole() {
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <button 
                 className="sql-example-btn"
-                onClick={() => setSql("SELECT * FROM (\n  VALUES \n    ('HULL'),\n    ('PAINT'),\n    ('MACH'),\n    ('ELEC'),\n    ('OUTFIT'),\n    ('HSE'),\n    ('SEC'),\n    ('DOC'),\n    ('CHS'),\n    ('CCS'),\n    ('PIPE')\n) AS disciplines(discipline)\nORDER BY discipline;")}
+                onClick={() => setSql("SELECT 'HULL' as discipline\nUNION ALL SELECT 'PAINT'\nUNION ALL SELECT 'MACH'\nUNION ALL SELECT 'ELEC'\nUNION ALL SELECT 'OUTFIT'\nUNION ALL SELECT 'HSE'\nUNION ALL SELECT 'SEC'\nUNION ALL SELECT 'DOC'\nUNION ALL SELECT 'CHS'\nUNION ALL SELECT 'CCS'\nUNION ALL SELECT 'PIPE'\nORDER BY discipline;")}
                 style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#f8fafc', border: '1px solid var(--nb-border)', borderRadius: 4, cursor: 'pointer', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
               >
                 All available disciplines
