@@ -97,6 +97,9 @@ export function Admin() {
   const [inspectionList, setInspectionList] = useState<InspectionListItem[]>([]);
   const [observations, setObservations] = useState<ObservationItem[]>([]);
   const [inspectionDetail, setInspectionDetail] = useState<InspectionItemDetailResponse | null>(null);
+  
+  /* ── disciplines state ── */
+  const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
 
   /* ── filters ── */
   const [projStatusFilter, setProjStatusFilter] = useState("");
@@ -226,7 +229,7 @@ export function Admin() {
     switch (activeTable) {
       case "projects": return filteredProjects;
       case "ships": return filteredShips;
-      case "disciplines": return DISCIPLINES.map(d => ({ discipline: d }));
+      case "disciplines": return []; // Disciplines uses custom rendering
       case "users": return filteredUsers;
       case "obsTypes": return obsTypes;
       case "inspections": return filteredInspections;
@@ -244,7 +247,7 @@ export function Admin() {
     switch (key) {
       case "projects": return filteredProjects.length;
       case "ships": return filteredShips.length;
-      case "disciplines": return DISCIPLINES.length;
+      case "disciplines": return projects.length; // Show project count for disciplines
       case "users": return filteredUsers.length;
       case "obsTypes": return obsTypes.length;
       case "inspections": return inspLoaded ? filteredInspections.length : 0;
@@ -588,6 +591,124 @@ export function Admin() {
     });
   }
 
+  /* ── toggle project expansion in disciplines view ── */
+  function toggleProjectExpansion(projectId: string) {
+    setExpandedProjects(prev => {
+      const next = new Set(prev);
+      if (next.has(projectId)) {
+        next.delete(projectId);
+      } else {
+        next.add(projectId);
+      }
+      return next;
+    });
+  }
+
+  /* ── render disciplines custom view ── */
+  function renderDisciplinesView(): React.ReactNode {
+    return (
+      <div style={{ padding: '0 16px' }}>
+        {projects.map(project => {
+          const isExpanded = expandedProjects.has(project.id);
+          const projectDisciplines = project.disciplines && project.disciplines.length > 0 ? project.disciplines : DISCIPLINES;
+          
+          return (
+            <div key={project.id} style={{ marginBottom: 12, border: '1px solid var(--nb-border)', borderRadius: 8, overflow: 'hidden' }}>
+              {/* Project Header Button */}
+              <button
+                onClick={() => toggleProjectExpansion(project.id)}
+                style={{
+                  width: '100%',
+                  padding: '14px 16px',
+                  background: isExpanded ? '#f1f5f9' : '#fff',
+                  border: 'none',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  color: '#1e293b',
+                  transition: 'background 0.2s'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                  <svg 
+                    width="16" 
+                    height="16" 
+                    viewBox="0 0 24 24" 
+                    fill="none" 
+                    stroke="currentColor" 
+                    strokeWidth="2"
+                    style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }}
+                  >
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                  <span style={{ fontSize: 11, fontWeight: 800, color: '#64748b', letterSpacing: '0.05em' }}>{project.code}</span>
+                  <span>{project.name}</span>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span style={{ fontSize: 11, color: '#64748b' }}>
+                    {projectDisciplines.length} {projectDisciplines.length === DISCIPLINES.length ? 'disciplines (all)' : 'disciplines'}
+                  </span>
+                </div>
+              </button>
+
+              {/* Expanded Content */}
+              {isExpanded && (
+                <div style={{ background: '#fafafa', borderTop: '1px solid var(--nb-border)' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                    <thead>
+                      <tr style={{ background: '#e2e8f0' }}>
+                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '25%' }}>DISCIPLINE</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'center', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '15%' }}>ASSIGNED USERS</th>
+                        <th style={{ padding: '10px 16px', textAlign: 'left', fontSize: 10, fontWeight: 800, color: '#475569', letterSpacing: '0.05em', width: '60%' }}>USER NAMES</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {DISCIPLINES.map(discipline => {
+                        const isSelected = projectDisciplines.includes(discipline);
+                        const usersInDiscipline = users.filter(u => 
+                          u.disciplines.includes(discipline as Discipline) &&
+                          (u.accessibleProjectIds.length === 0 || u.accessibleProjectIds.includes(project.id))
+                        );
+                        
+                        return (
+                          <tr 
+                            key={discipline}
+                            style={{ 
+                              background: isSelected ? '#dbeafe' : '#fff',
+                              borderBottom: '1px solid #e2e8f0'
+                            }}
+                          >
+                            <td style={{ padding: '12px 16px', fontSize: 12, fontWeight: isSelected ? 600 : 400, color: isSelected ? '#1e40af' : '#64748b' }}>
+                              {isSelected && <span style={{ marginRight: 6 }}>✓</span>}
+                              {discipline}
+                            </td>
+                            <td style={{ padding: '12px 16px', textAlign: 'center', fontSize: 12, fontWeight: 600, color: '#475569' }}>
+                              {usersInDiscipline.length}
+                            </td>
+                            <td style={{ padding: '12px 16px', fontSize: 11, color: '#475569' }}>
+                              {usersInDiscipline.length === 0 ? (
+                                <span style={{ color: '#94a3b8', fontStyle: 'italic' }}>No users assigned</span>
+                              ) : (
+                                usersInDiscipline.map(u => u.displayName || u.username).join(', ')
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
+
   /* ───────── RENDER ───────── */
 
   return (
@@ -647,14 +768,15 @@ export function Admin() {
         {/* Disciplines Info Banner */}
         {activeTable === "disciplines" && (
           <div style={{ padding: '12px 16px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, marginBottom: 16, fontSize: 11, color: '#1e40af' }}>
-            <strong>ℹ️ Disciplines Overview:</strong> This view shows all available disciplines in the system. 
-            You can see which projects use each discipline and which users are assigned to them. 
-            To modify disciplines for a project, edit the project settings. To assign disciplines to users, edit the user settings.
+            <strong>ℹ️ Disciplines Overview:</strong> Click on any project to expand and view discipline assignments. 
+            Blue-highlighted disciplines are enabled for that project. User assignments are filtered by project access.
           </div>
         )}
 
         {/* Table or Empty Prompt */}
-        {LAZY_TABLES.includes(activeTable) && !isLazyLoaded() ? (
+        {activeTable === "disciplines" ? (
+          renderDisciplinesView()
+        ) : LAZY_TABLES.includes(activeTable) && !isLazyLoaded() ? (
           <div className="admin-empty-prompt">
             {activeTable === "inspections" ? "Set filter conditions and click Search to load inspections." : "Select a ship and click Search to load observations."}
           </div>
@@ -821,48 +943,6 @@ export function Admin() {
         const s = raw as ShipRecord;
         const proj = projects.find(p => p.id === s.projectId);
         return <><td>{s.hullNumber}</td><td>{s.shipName}</td><td>{proj?.code ?? s.projectId}</td><td>{s.shipType ?? "—"}</td><td>{s.status}</td>{actionsCell(s.id)}</>;
-      }
-      case "disciplines": {
-        const d = (raw as { discipline: string }).discipline;
-        // Find projects using this discipline
-        const projectsUsing = projects.filter(p => 
-          !p.disciplines || p.disciplines.length === 0 || p.disciplines.includes(d)
-        );
-        // Find users assigned to this discipline
-        const usersAssigned = users.filter(u => 
-          u.disciplines.includes(d as Discipline)
-        );
-        return (
-          <>
-            <td style={{ fontWeight: 600 }}>{d}</td>
-            <td>
-              {projectsUsing.length === 0 ? (
-                <span style={{ color: "var(--nb-text-muted)" }}>—</span>
-              ) : (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                  {projectsUsing.map(p => (
-                    <span key={p.id} style={{ padding: '2px 6px', background: '#e0f2fe', color: '#0369a1', borderRadius: 4, fontSize: 10 }}>
-                      {p.code}
-                    </span>
-                  ))}
-                </div>
-              )}
-            </td>
-            <td style={{ textAlign: 'center' }}>{usersAssigned.length}</td>
-            <td>
-              {usersAssigned.length === 0 ? (
-                <span style={{ color: "var(--nb-text-muted)" }}>—</span>
-              ) : (
-                <div style={{ fontSize: 11 }}>
-                  {usersAssigned.map(u => u.displayName || u.username).join(', ')}
-                </div>
-              )}
-            </td>
-            <td>
-              <span style={{ color: "var(--nb-text-muted)", fontSize: 10 }}>View Only</span>
-            </td>
-          </>
-        );
       }
       case "users": {
         const u = raw as UserRecord;
