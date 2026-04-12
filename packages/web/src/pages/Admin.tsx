@@ -273,6 +273,7 @@ export function Admin() {
     const defaults: Record<TableKey, Record<string, string>> = {
       projects: { code: "", name: "", status: "active", owner: "", shipyard: "", class: "", disciplines: "[]", reportRecipients: "", ncrRecipients: "" },
       ships: { projectId: shipProjFilter || projects[0]?.id || "", hullNumber: "", shipName: "", shipType: "", status: "building" },
+      disciplines: {},
       users: { username: "", displayName: "", password: "", role: "inspector", disciplines: "[]", accessibleProjectIds: "[]", isActive: "true" },
       obsTypes: { code: "", label: "", sortOrder: "0" },
       inspections: {},
