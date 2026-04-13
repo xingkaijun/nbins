@@ -6,6 +6,7 @@ export interface UserRecord {
   displayName: string;
   passwordHash: string;
   role: Role;
+  title?: string | null;
   disciplines: Discipline[];
   accessibleProjectIds: string[];
   isActive: 0 | 1;

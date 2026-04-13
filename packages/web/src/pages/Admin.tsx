@@ -274,7 +274,7 @@ export function Admin() {
       projects: { code: "", name: "", status: "active", owner: "", shipyard: "", class: "", disciplines: "[]", reportRecipients: "", ncrRecipients: "" },
       ships: { projectId: shipProjFilter || projects[0]?.id || "", hullNumber: "", shipName: "", shipType: "", status: "building" },
       disciplines: {},
-      users: { username: "", displayName: "", password: "", role: "inspector", disciplines: "[]", accessibleProjectIds: "[]", isActive: "true" },
+      users: { username: "", displayName: "", password: "", role: "inspector", title: "", disciplines: "[]", accessibleProjectIds: "[]", isActive: "true" },
       obsTypes: { code: "", label: "", sortOrder: "0" },
       inspections: {},
       observations: {},
@@ -373,9 +373,9 @@ export function Admin() {
     const discs = Array.isArray(d.disciplines) ? (d.disciplines as Discipline[]) : [];
     const projIds = Array.isArray(d.accessibleProjectIds) ? (d.accessibleProjectIds as string[]) : [];
     if (modalMode === "edit" && d.id) {
-      await updateUser(d.id, { username: d.username, displayName: d.displayName, role: d.role as Role, disciplines: discs, accessibleProjectIds: projIds, isActive: d.isActive === "true" });
+      await updateUser(d.id, { username: d.username, displayName: d.displayName, role: d.role as Role, title: d.title || undefined, disciplines: discs, accessibleProjectIds: projIds, isActive: d.isActive === "true" });
     } else {
-      await createUser({ username: d.username, displayName: d.displayName, password: d.password || "changeme", role: d.role as Role, disciplines: discs, accessibleProjectIds: projIds });
+      await createUser({ username: d.username, displayName: d.displayName, password: d.password || "changeme", role: d.role as Role, title: d.title || undefined, disciplines: discs, accessibleProjectIds: projIds });
     }
     setUsers(await fetchUsers());
   }
@@ -913,7 +913,7 @@ export function Admin() {
       projects: ["Code", "Name", "Status", "Disciplines", "Owner", "Shipyard", "Class"],
       ships: ["Hull", "Ship Name", "Project", "Type", "Status"],
       disciplines: ["Discipline", "Projects Using", "Assigned Users", "User Names"],
-      users: ["Username", "Display Name", "Role", "Disciplines", "Projects", "Active"],
+      users: ["Username", "Display Name", "Role", "Title", "Disciplines", "Projects", "Active"],
       obsTypes: ["Code", "Label", "Sort Order"],
       inspections: ["Item", "Ship", "Discipline", "Round", "Result", "Status", "Comments"],
       observations: ["Type", "Discipline", "Date", "Author", "Status", "Content"],
@@ -956,7 +956,7 @@ export function Admin() {
       }
       case "users": {
         const u = raw as UserRecord;
-        return <><td>{u.username}</td><td>{u.displayName}</td><td>{u.role}</td><td>{u.disciplines.join(", ") || "—"}</td><td>{u.accessibleProjectIds.map(id => projects.find(p => p.id === id)?.code ?? id).join(", ") || "—"}</td><td>{u.isActive ? "✔" : "✗"}</td>
+        return <><td>{u.username}</td><td>{u.displayName}</td><td>{u.role}</td><td>{u.title || "—"}</td><td>{u.disciplines.join(", ") || "—"}</td><td>{u.accessibleProjectIds.map(id => projects.find(p => p.id === id)?.code ?? id).join(", ") || "—"}</td><td>{u.isActive ? "✔" : "✗"}</td>
           <td onClick={e => e.stopPropagation()}>
             <div className="actions-cell">
               <button onClick={() => openEdit(row)} title="Edit"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>
@@ -1053,6 +1053,7 @@ export function Admin() {
             <div className="admin-field"><label>Username</label><input value={modalData.username || ""} onChange={e => setField("username", e.target.value)} /></div>
             <div className="admin-field"><label>Display Name</label><input value={modalData.displayName || ""} onChange={e => setField("displayName", e.target.value)} /></div>
             <div className="admin-field"><label>Role</label><select value={modalData.role || "inspector"} onChange={e => setField("role", e.target.value)}>{ROLES.map(r => <option key={r} value={r}>{r}</option>)}</select></div>
+            <div className="admin-field"><label>Title</label><input value={modalData.title || ""} onChange={e => setField("title", e.target.value)} placeholder="e.g. Senior Inspector" /></div>
             <div className="admin-field"><label>Active</label><select value={modalData.isActive ?? "true"} onChange={e => setField("isActive", e.target.value)}><option value="true">Active</option><option value="false">Inactive</option></select></div>
             {modalMode === "new" && <div className="admin-field"><label>Password</label><input type="password" value={modalData.password || ""} onChange={e => setField("password", e.target.value)} /></div>}
             <div className="admin-field" style={{ gridColumn: "1 / -1" }}>

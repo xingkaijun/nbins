@@ -618,6 +618,7 @@ function mapUserRecord(row: JsonRow): UserRecord {
     displayName: stringValue(row.displayName),
     passwordHash: stringValue(row.passwordHash),
     role: stringValue(row.role) as UserRecord["role"],
+    title: row.title ? stringValue(row.title) : null,
     disciplines: jsonArrayValue(row.disciplines) as UserRecord["disciplines"],
     accessibleProjectIds: jsonArrayValue(row.accessibleProjectIds),
     isActive: integerValue(row.isActive) as 0 | 1,

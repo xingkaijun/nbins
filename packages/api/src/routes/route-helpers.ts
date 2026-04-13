@@ -69,6 +69,7 @@ export function mapUserRecord(row: Record<string, unknown>): UserRecord {
     displayName: String(row.displayName),
     passwordHash: "",
     role: row.role as UserRecord["role"],
+    title: row.title ? String(row.title) : null,
     disciplines: parseStringArray(row.disciplines) as UserRecord["disciplines"],
     accessibleProjectIds: parseStringArray(row.accessibleProjectIds),
     isActive: row.isActive === 0 || row.isActive === "0" || row.isActive === false ? 0 : 1,

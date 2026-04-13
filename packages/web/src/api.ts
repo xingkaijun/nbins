@@ -67,6 +67,7 @@ export interface UserRecord {
   username: string;
   displayName: string;
   role: Role;
+  title?: string | null;
   disciplines: Discipline[];
   accessibleProjectIds: string[];
   isActive: 0 | 1;
@@ -569,6 +570,7 @@ export async function createUser(data: {
   displayName: string;
   password: string;
   role: Role;
+  title?: string;
   disciplines?: Discipline[];
   accessibleProjectIds?: string[];
 }): Promise<UserRecord> {
@@ -580,7 +582,7 @@ export async function createUser(data: {
 
 export async function updateUser(
   userId: string,
-  data: Partial<Pick<UserRecord, "username" | "displayName" | "role" | "disciplines" | "accessibleProjectIds">> & {
+  data: Partial<Pick<UserRecord, "username" | "displayName" | "role" | "title" | "disciplines" | "accessibleProjectIds">> & {
     isActive?: boolean;
   }
 ): Promise<{ id: string; updatedAt: string }> {

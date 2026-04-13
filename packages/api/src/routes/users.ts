@@ -77,7 +77,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
       const where = conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : "";
       const result = await c.env.DB!
         .prepare(
-          `SELECT "id", "username", "displayName", "role", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt"
+          `SELECT "id", "username", "displayName", "role", "title", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt"
            FROM "users"${where} ORDER BY "createdAt" DESC`
         )
         .bind(...params)
@@ -103,7 +103,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
 
       const userRow = await c.env.DB!
         .prepare(
-          `SELECT "id", "username", "displayName", "role", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt"
+          `SELECT "id", "username", "displayName", "role", "title", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt"
            FROM "users" WHERE "id" = ?`
         )
         .bind(id)
@@ -127,6 +127,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
       displayName: string;
       password: string;
       role: string;
+      title?: string;
       disciplines?: string[];
       accessibleProjectIds?: string[];
     }>();
@@ -143,6 +144,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
       displayName: body.displayName,
       passwordHash: await hashPassword(body.password),
       role: body.role as UserRecord["role"],
+      title: body.title || null,
       disciplines: (body.disciplines ?? []) as UserRecord["disciplines"],
       accessibleProjectIds,
       isActive: 1,
@@ -155,8 +157,8 @@ function createUserRoutes(): Hono<UserRouteEnv> {
       await c.env.DB!
         .prepare(
           `INSERT INTO "users"
-           ("id", "username", "displayName", "passwordHash", "role", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt")
-           VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
+           ("id", "username", "displayName", "passwordHash", "role", "title", "disciplines", "accessibleProjectIds", "isActive", "createdAt", "updatedAt")
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`
         )
         .bind(
           record.id,
@@ -164,6 +166,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
           record.displayName,
           record.passwordHash,
           record.role,
+          record.title,
           JSON.stringify(record.disciplines),
           JSON.stringify(record.accessibleProjectIds),
           record.createdAt,
@@ -192,6 +195,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
         username?: string;
         displayName?: string;
         role?: string;
+        title?: string;
         disciplines?: string[];
         accessibleProjectIds?: string[];
         isActive?: boolean;
@@ -207,6 +211,7 @@ function createUserRoutes(): Hono<UserRouteEnv> {
       if (body.username !== undefined) sets.push('"username" = ?'), params.push(body.username.trim().toLowerCase());
       if (body.displayName !== undefined) sets.push('"displayName" = ?'), params.push(body.displayName);
       if (body.role !== undefined) sets.push('"role" = ?'), params.push(body.role);
+      if (body.title !== undefined) sets.push('"title" = ?'), params.push(body.title || null);
       if (body.disciplines !== undefined) {
         sets.push('"disciplines" = ?');
         params.push(JSON.stringify(body.disciplines));
