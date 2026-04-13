@@ -662,8 +662,9 @@ export async function fetchNcrById(ncrId: string): Promise<NcrItemResponse> {
 }
 
 export async function fetchNextNcrSerial(shipId: string): Promise<{ serial: number; formatted: string }> {
-  return requestJson<{ serial: number; formatted: string }>(`/ncrs/next-serial?shipId=${shipId}`);
+  return requestJson<{ serial: number; formatted: string }>(`/ncrs/meta/next-serial?shipId=${encodeURIComponent(shipId)}`);
 }
+
 
 export async function createNcr(shipId: string, data: CreateNcrRequest): Promise<NcrItemResponse> {
   return requestJson<NcrItemResponse>(`/ncrs/ships/${shipId}`, {

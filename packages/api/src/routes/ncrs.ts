@@ -132,21 +132,60 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
     }
   });
 
-  routes.get("/next-serial", async (c) => {
+  routes.get("/meta/next-serial", async (c) => {
     try {
+      const authUser = c.get("authUser");
       const shipId = c.req.query("shipId")?.trim();
       if (!shipId) {
         return c.json({ ok: false, error: "shipId is required" }, 400);
       }
-      const serial = await getNextNcrSerialNo(c.env, shipId);
+
       const ship = await getShipContextByShipId(c.env.DB!, shipId);
-      const formatted = `NCR-${ship?.hullNumber ?? shipId}-${String(serial).padStart(3, "0")}`;
+      if (!ship) {
+        return c.json({ ok: false, error: "Ship not found" }, 404);
+      }
+
+      const allowed = await hasProjectAccess(c.env.DB!, authUser, ship.projectId);
+      if (!allowed) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
+
+      const serial = await getNextNcrSerialNo(c.env, shipId);
+      const formatted = `NCR-${ship.hullNumber ?? shipId}-${String(serial).padStart(3, "0")}`;
+      return c.json({ ok: true, data: { serial, formatted } });
+    } catch (error) {
+      console.error("GET /ncrs/meta/next-serial error:", error);
+      return c.json({ ok: false, error: String(error) }, 500);
+    }
+  });
+
+  routes.get("/next-serial", async (c) => {
+    try {
+      const authUser = c.get("authUser");
+      const shipId = c.req.query("shipId")?.trim();
+      if (!shipId) {
+        return c.json({ ok: false, error: "shipId is required" }, 400);
+      }
+
+      const ship = await getShipContextByShipId(c.env.DB!, shipId);
+      if (!ship) {
+        return c.json({ ok: false, error: "Ship not found" }, 404);
+      }
+
+      const allowed = await hasProjectAccess(c.env.DB!, authUser, ship.projectId);
+      if (!allowed) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
+
+      const serial = await getNextNcrSerialNo(c.env, shipId);
+      const formatted = `NCR-${ship.hullNumber ?? shipId}-${String(serial).padStart(3, "0")}`;
       return c.json({ ok: true, data: { serial, formatted } });
     } catch (error) {
       console.error("GET /ncrs/next-serial error:", error);
       return c.json({ ok: false, error: String(error) }, 500);
     }
   });
+
 
   routes.get("/:id", async (c) => {
     try {
