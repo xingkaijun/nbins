@@ -82,6 +82,7 @@ export function Ncrs() {
   const [error, setError] = useState<string | null>(null);
 
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterOpenClosed, setFilterOpenClosed] = useState("");
   const [filterKeyword, setFilterKeyword] = useState("");
 
   const [showEditor, setShowEditor] = useState(false);
@@ -171,15 +172,24 @@ export function Ncrs() {
         status: filterStatus || undefined,
         keyword: filterKeyword.trim() || undefined
       });
-      setItems(data);
-      setReviewDrafts(Object.fromEntries(data.map((item) => [item.id, createReviewDraft(item)])));
+      
+      // Apply open/closed filter on frontend
+      let filteredData = data;
+      if (filterOpenClosed === "open") {
+        filteredData = data.filter(item => item.status === "approved" && !item.closedAt);
+      } else if (filterOpenClosed === "closed") {
+        filteredData = data.filter(item => item.status === "approved" && item.closedAt);
+      }
+      
+      setItems(filteredData);
+      setReviewDrafts(Object.fromEntries(filteredData.map((item) => [item.id, createReviewDraft(item)])));
     } catch (loadError: any) {
       setItems([]);
       setError(loadError?.message || "Failed to load NCRs");
     } finally {
       setLoading(false);
     }
-  }, [filterKeyword, filterStatus, selectedProjectId, selectedShipId]);
+  }, [filterKeyword, filterStatus, filterOpenClosed, selectedProjectId, selectedShipId]);
 
   useEffect(() => {
     void loadNcrs();
@@ -364,7 +374,15 @@ export function Ncrs() {
             <option value="pending_approval">Pending approval</option>
             <option value="approved">Approved</option>
             <option value="rejected">Rejected</option>
-            <option value="draft">Draft</option>
+          </select>
+        </label>
+
+        <label style={labelInlineStyle}>
+          <span>Open/Closed</span>
+          <select value={filterOpenClosed} onChange={(event) => setFilterOpenClosed(event.target.value)} style={inputStyle}>
+            <option value="">All</option>
+            <option value="open">Open</option>
+            <option value="closed">Closed</option>
           </select>
         </label>
 
@@ -417,10 +435,19 @@ export function Ncrs() {
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 280 }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
-                      <span style={tagStyle(badgeColor(item.status))}>{item.status.replace(/_/g, " ").toUpperCase()}</span>
+                      <span style={tagStyle(badgeColor(item.status))}>
+                        {item.status.replace(/_/g, " ").toUpperCase()}
+                        {item.status === "approved" && (
+                          item.closedAt 
+                            ? " & CLOSED" 
+                            : <span style={{ color: "#dc2626" }}> & OPEN</span>
+                        )}
+                      </span>
                       <strong style={{ fontSize: 16, color: "var(--nb-text)", wordBreak: "break-word" }}>{item.title}</strong>
                       <span style={{ fontSize: 12, color: "var(--nb-text-muted)" }}>
                         {item.shipName ? `${item.shipName} (${item.hullNumber ?? item.shipId})` : item.shipId}
+                        {" · "}
+                        {item.formattedSerial || `#${item.serialNo}`}
                       </span>
                     </div>
                     <div style={{ fontSize: 13, color: "var(--nb-text-muted)", marginBottom: 8 }}>
