@@ -303,10 +303,10 @@ export function Ncrs() {
   async function handleDownloadPdf(item: NcrItemResponse): Promise<void> {
     try {
       setPdfBusyId(item.id);
-      const blob = await downloadNcrPdf(item.id);
-      saveBlob(blob, getNcrPdfFilename(item));
+      const { exportNcrToPdf } = await import("../utils/ncr-export");
+      await exportNcrToPdf(item);
     } catch (pdfError: any) {
-      alert(`Failed to download PDF: ${pdfError?.message || "Unknown error"}`);
+      alert(`Failed to generate PDF: ${pdfError?.message || "Unknown error"}`);
     } finally {
       setPdfBusyId((current) => (current === item.id ? null : current));
     }
