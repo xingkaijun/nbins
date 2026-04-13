@@ -15,8 +15,10 @@ import type {
   ProjectRecord,
   ShipRecord,
   UserRecord,
-  NcrRecord
+  NcrRecord,
+  NcrIndexRecord
 } from "../persistence/records.ts";
+
 
 type SqliteStorage = "text" | "integer";
 
@@ -211,12 +213,48 @@ export const ncrsTable = sqliteTable<{
   status: textColumn<"draft" | "pending_approval" | "approved" | "rejected">({ default: "draft" }),
   approvedBy: textColumn<string | null>({ nullable: true, references: "users.id" }),
   approvedAt: textColumn<string | null>({ nullable: true }),
+  pdfObjectKey: textColumn<string | null>({ nullable: true }),
+  builderReply: textColumn<string | null>({ nullable: true }),
+  replyDate: textColumn<string | null>({ nullable: true }),
+  verifiedBy: textColumn<string | null>({ nullable: true }),
+  verifyDate: textColumn<string | null>({ nullable: true }),
+  closedBy: textColumn<string | null>({ nullable: true, references: "users.id" }),
+  closedAt: textColumn<string | null>({ nullable: true }),
+  rectifyRequest: textColumn<string | null>({ nullable: true }),
   attachments: textColumn<string[]>({ mode: "json", default: [] }),
   createdAt: textColumn<string>(),
   updatedAt: textColumn<string>()
 });
 
+export const ncrIndexTable = sqliteTable<{
+  [K in keyof NcrIndexRecord]: ColumnDefinition<NcrIndexRecord[K]>;
+}>("ncr_index", {
+  id: textColumn<string>({ primaryKey: true }),
+  projectId: textColumn<string>({ references: "projects.id" }),
+  shipId: textColumn<string>({ references: "ships.id" }),
+  title: textColumn<string>(),
+  discipline: textColumn<string>(),
+  serialNo: integerColumn<number>({ default: 0 }),
+  remark: textColumn<string | null>({ nullable: true }),
+  status: textColumn<"draft" | "pending_approval" | "approved" | "rejected">({ default: "draft" }),
+  authorId: textColumn<string>({ references: "users.id" }),
+  approvedBy: textColumn<string | null>({ nullable: true, references: "users.id" }),
+  approvedAt: textColumn<string | null>({ nullable: true }),
+  pdfObjectKey: textColumn<string | null>({ nullable: true }),
+  fileCount: integerColumn<number>({ default: 0 }),
+  builderReply: textColumn<string | null>({ nullable: true }),
+  replyDate: textColumn<string | null>({ nullable: true }),
+  verifiedBy: textColumn<string | null>({ nullable: true }),
+  verifyDate: textColumn<string | null>({ nullable: true }),
+  closedBy: textColumn<string | null>({ nullable: true, references: "users.id" }),
+  closedAt: textColumn<string | null>({ nullable: true }),
+  createdAt: textColumn<string>(),
+
+  updatedAt: textColumn<string>()
+});
+
 export const schema = {
+
   users: usersTable,
   projects: projectsTable,
   projectMembers: projectMembersTable,
@@ -225,7 +263,9 @@ export const schema = {
   inspectionRounds: inspectionRoundsTable,
   comments: commentsTable,
   ncrs: ncrsTable,
+  ncrIndex: ncrIndexTable,
   observationTypes: observationTypesTable,
+
   observations: observationsTable
 } as const;
 

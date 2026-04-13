@@ -148,10 +148,44 @@ export interface NcrRecord {
   status: "draft" | "pending_approval" | "approved" | "rejected";
   approvedBy: string | null;
   approvedAt: string | null;
-  attachments: string[]; // JSON array of urls
+  pdfObjectKey: string | null;
+  builderReply: string | null;
+  replyDate: string | null;
+  verifiedBy: string | null;
+  verifyDate: string | null;
+  rectifyRequest: string | null;
+  closedBy: string | null;
+  closedAt: string | null;
+  attachments: string[];
   createdAt: string;
   updatedAt: string;
 }
+
+export interface NcrIndexRecord {
+  id: string;
+  projectId: string;
+  shipId: string;
+  title: string;
+  discipline: string;
+  serialNo: number;
+  remark: string | null;
+  status: "draft" | "pending_approval" | "approved" | "rejected";
+  authorId: string;
+  approvedBy: string | null;
+  approvedAt: string | null;
+  pdfObjectKey: string | null;
+  fileCount: number;
+  builderReply: string | null;
+  replyDate: string | null;
+  verifiedBy: string | null;
+  verifyDate: string | null;
+  closedBy: string | null;
+  closedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+
 
 export function cloneStorageSnapshot(snapshot: InspectionStorageSnapshot): InspectionStorageSnapshot {
   return JSON.parse(JSON.stringify(snapshot));

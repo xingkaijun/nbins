@@ -56,9 +56,9 @@ const SIDEBAR_ITEMS: { key: TableKey; label: string; group: "base" | "data" }[] 
   { key: "ships", label: "Ships", group: "base" },
   { key: "disciplines", label: "Disciplines", group: "base" },
   { key: "users", label: "Users", group: "base" },
-  { key: "obsTypes", label: "Observation Types", group: "base" },
+  { key: "obsTypes", label: "Punch List Types", group: "base" },
   { key: "inspections", label: "Inspections", group: "data" },
-  { key: "observations", label: "Observations", group: "data" },
+  { key: "observations", label: "Punch List", group: "data" },
 ];
 
 const PAGE_SIZE = 30;

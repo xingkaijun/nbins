@@ -327,9 +327,9 @@ export function AdminPage() {
     },
     observations: {
       key: "observations",
-      label: "observations",
+      label: "Punch List",
       group: "observation",
-      description: "Cross-ship observation browser built from the existing ship-scoped API.",
+      description: "Cross-ship punch list browser built from the existing ship-scoped API.",
       columns: [
         { key: "date", label: "Date", sortable: true },
         { key: "shipLabel", label: "Ship", sortable: true },

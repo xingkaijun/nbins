@@ -14,7 +14,14 @@
       "database_id": "214dd5f8-c591-4a68-9134-e763ac773428"
     }
   ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "nbins-assets"
+    }
+  ],
   "vars": {
+
     "SQL_CONSOLE_SECRET": "pgnewbuilding"
   }
 }

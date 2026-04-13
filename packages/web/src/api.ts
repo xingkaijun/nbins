@@ -4,15 +4,21 @@ import type {
   InspectionCommentView,
   InspectionItemDetailResponse,
   InspectionListItem,
+  NcrItemResponse,
+  NcrPdfMeta,
+  NcrRelatedFile,
   ObservationItem,
   ObservationType,
   ResolveCommentRequest,
   ResolveCommentResponse,
   Role,
   SubmitInspectionResultRequest,
-  SubmitInspectionResultResponse
+  SubmitInspectionResultResponse,
+  CreateNcrRequest,
+  ApproveNcrRequest,
+  UpdateNcrRequest
 } from "@nbins/shared";
-import type { NcrItemResponse, CreateNcrRequest, ApproveNcrRequest } from "@nbins/shared";
+
 import { clearAuthSession, getAuthToken, notifySessionExpired, type AuthUser } from "./auth";
 
 interface ApiEnvelope<T> {
@@ -24,7 +30,7 @@ interface ApiEnvelope<T> {
 export interface ApiMeta {
   appName: string;
   environment: string;
-  storageMode: "mock" | "d1";
+  storageMode: "mock" | "d1" | "d1+r2";
   generatedAt: string;
   disciplines: string[];
   routes: string[];
@@ -109,11 +115,14 @@ function getApiBaseUrl(): string {
   return baseUrl;
 }
 
-async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+async function authorizedRequest(path: string, init?: RequestInit): Promise<Response> {
   const token = getAuthToken();
   const headers = new Headers(init?.headers);
+  const isFormData = typeof FormData !== "undefined" && init?.body instanceof FormData;
 
-  headers.set("Content-Type", "application/json");
+  if (!isFormData && init?.body !== undefined && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
 
   if (token) {
     headers.set("Authorization", `Bearer ${token}`);
@@ -124,17 +133,23 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
     headers
   });
 
+  if (response.status === 401 && token) {
+    clearAuthSession();
+    notifySessionExpired();
+  }
+
+  return response;
+}
+
+async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const response = await authorizedRequest(path, init);
+
   let payload: ApiEnvelope<T> | null = null;
 
   try {
     payload = (await response.json()) as ApiEnvelope<T>;
   } catch {
     payload = null;
-  }
-
-  if (response.status === 401 && token) {
-    clearAuthSession();
-    notifySessionExpired();
   }
 
   if (!response.ok || !payload?.ok || payload.data === undefined) {
@@ -146,6 +161,23 @@ async function requestJson<T>(path: string, init?: RequestInit): Promise<T> {
 
   return payload.data;
 }
+
+async function requestBlob(path: string, init?: RequestInit): Promise<Blob> {
+  const response = await authorizedRequest(path, init);
+  if (!response.ok) {
+    let payload: ApiEnvelope<unknown> | null = null;
+    try {
+      payload = (await response.json()) as ApiEnvelope<unknown>;
+    } catch {
+      payload = null;
+    }
+
+    throw new ApiError(payload?.error ?? `Request failed with status ${response.status}`, response.status);
+  }
+
+  return response.blob();
+}
+
 
 function withQuery(path: string, params: Record<string, string | undefined>): string {
   const searchParams = new URLSearchParams();
@@ -591,8 +623,46 @@ export async function batchImportInspections(payload: {
 
 export type { InspectionListItem };
 
+export interface NcrListFilters {
+  projectId?: string;
+  shipId?: string;
+  status?: string;
+  keyword?: string;
+}
+
+export interface UploadedMedia {
+  key: string;
+  filename: string;
+  contentType: string;
+  size: number;
+  variant?: "original" | "medium" | "thumb";
+}
+
+export interface UploadMediaOptions {
+  baseId?: string;
+  variant?: "original" | "medium" | "thumb";
+  originalName?: string;
+}
+
+export async function fetchNcrList(filters?: NcrListFilters): Promise<NcrItemResponse[]> {
+  return requestJson<NcrItemResponse[]>(withQuery("/ncrs", {
+    projectId: filters?.projectId,
+    shipId: filters?.shipId,
+    status: filters?.status,
+    keyword: filters?.keyword
+  }));
+}
+
 export async function fetchNcrs(shipId: string): Promise<NcrItemResponse[]> {
   return requestJson<NcrItemResponse[]>(`/ncrs/ships/${shipId}`);
+}
+
+export async function fetchNcrById(ncrId: string): Promise<NcrItemResponse> {
+  return requestJson<NcrItemResponse>(`/ncrs/${ncrId}`);
+}
+
+export async function fetchNextNcrSerial(shipId: string): Promise<{ serial: number; formatted: string }> {
+  return requestJson<{ serial: number; formatted: string }>(`/ncrs/next-serial?shipId=${shipId}`);
 }
 
 export async function createNcr(shipId: string, data: CreateNcrRequest): Promise<NcrItemResponse> {
@@ -602,12 +672,111 @@ export async function createNcr(shipId: string, data: CreateNcrRequest): Promise
   });
 }
 
+export async function updateNcr(ncrId: string, data: UpdateNcrRequest): Promise<NcrItemResponse> {
+  return requestJson<NcrItemResponse>(`/ncrs/${ncrId}`, {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function updateNcrRemark(ncrId: string, remark: string | null): Promise<NcrItemResponse> {
+  return requestJson<NcrItemResponse>(`/ncrs/${ncrId}/remark`, {
+    method: "PUT",
+    body: JSON.stringify({ remark })
+  });
+}
+
 export async function approveNcr(ncrId: string, data: ApproveNcrRequest): Promise<NcrItemResponse> {
   return requestJson<NcrItemResponse>(`/ncrs/${ncrId}/approve`, {
     method: "PUT",
     body: JSON.stringify(data)
   });
 }
+
+export async function deleteNcr(ncrId: string): Promise<void> {
+  await requestJson<{ deleted: boolean }>(`/ncrs/${ncrId}`, {
+    method: "DELETE"
+  });
+}
+
+export async function generateNcrPdf(ncrId: string): Promise<NcrPdfMeta> {
+  return requestJson<NcrPdfMeta>(`/ncrs/${ncrId}/pdf`, {
+    method: "POST"
+  });
+}
+
+export async function downloadNcrPdf(ncrId: string): Promise<Blob> {
+  return requestBlob(`/ncrs/${ncrId}/pdf`, {
+    headers: {
+      Accept: "application/pdf"
+    }
+  });
+}
+
+
+export async function uploadNcrFile(ncrId: string, file: File): Promise<NcrRelatedFile> {
+  const formData = new FormData();
+  formData.set("file", file);
+  return requestJson<NcrRelatedFile>(`/ncrs/${ncrId}/files`, {
+    method: "POST",
+    body: formData
+  });
+}
+
+export async function closeNcr(ncrId: string, data: { closed: boolean }): Promise<NcrItemResponse> {
+  return requestJson<NcrItemResponse>(`/ncrs/${ncrId}/close`, {
+    method: "PUT",
+    body: JSON.stringify(data)
+  });
+}
+
+export async function listNcrFiles(ncrId: string): Promise<NcrRelatedFile[]> {
+  return requestJson<NcrRelatedFile[]>(`/ncrs/${ncrId}/files`);
+}
+
+export async function downloadNcrFile(ncrId: string, fileId: string): Promise<Blob> {
+  return requestBlob(`/ncrs/${ncrId}/files/${fileId}`);
+}
+
+export async function deleteNcrFile(ncrId: string, fileId: string): Promise<void> {
+  await requestJson<{ deleted: boolean }>(`/ncrs/${ncrId}/files/${fileId}`, {
+    method: "DELETE"
+  });
+}
+
+export async function uploadMedia(shipId: string, file: File, options?: UploadMediaOptions): Promise<UploadedMedia> {
+  const formData = new FormData();
+  formData.set("shipId", shipId);
+  formData.set("file", file);
+  if (options?.baseId) {
+    formData.set("baseId", options.baseId);
+  }
+  if (options?.variant) {
+    formData.set("variant", options.variant);
+  }
+  if (options?.originalName) {
+    formData.set("originalName", options.originalName);
+  }
+  return requestJson<UploadedMedia>("/media/upload", {
+    method: "POST",
+    body: formData
+  });
+}
+
+export async function listMedia(shipId: string): Promise<string[]> {
+  return requestJson<string[]>(`/media/${shipId}`);
+}
+
+export async function downloadMedia(shipId: string, filename: string): Promise<Blob> {
+  return requestBlob(`/media/${shipId}/${encodeURIComponent(filename)}`);
+}
+
+export async function deleteMedia(shipId: string, filename: string): Promise<void> {
+  await requestJson<{ deleted: boolean }>(`/media/${shipId}/${encodeURIComponent(filename)}`, {
+    method: "DELETE"
+  });
+}
+
 
 /** ----- SQL Console API -----
  * 独立的 fetch 封装，不走 requestJson 以避免触发全局 401 session 过期逻辑。

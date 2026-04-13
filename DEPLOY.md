@@ -1,5 +1,11 @@
 # NBINS 项目部署与环境安装说明
 
+> `NCR + R2` 当前版本的专用文档已新增：
+> - `docs/NCR_R2_Local_Test_Guide.md`
+> - `docs/NCR_R2_Deployment_Guide.md`
+>
+> 本文件仍可作为通用环境安装说明，但若你要验收或部署当前的 `NCR + R2` 能力，请优先参考上述两份新文档。
+
 本项目是一个基于 Cloudflare D1 数据库和 Monorepo 结构的船舶检验管理系统。
 
 ## 1. 环境依赖
@@ -43,8 +49,72 @@ pnpm dev:web
 npx wrangler d1 create nbins-db
 
 # 执行初始化 SQL 脚本到远程数据库
+npx wrangler d1 d1 execute nbins-db --remote --file=packages/api/src/db/d1-bootstrap.sql
+```
+
+#### D1 数据库运维
+
+**查看数据库内容**：
+```bash
+# 查看所有表名
+npx wrangler d1 execute nbins-db --remote --command "SELECT name FROM sqlite_master WHERE type='table'"
+
+# 查看某个表的 schema
+npx wrangler d1 execute nbins-db --remote --command "PRAGMA table_info(users)"
+
+# 查询表数据
+npx wrangler d1 execute nbins-db --remote --command "SELECT * FROM users LIMIT 10"
+```
+
+**修改数据库 schema**：
+```bash
+# 如果 schema 有更新，重新生成 bootstrap SQL
+pnpm d1:gen
+
+# 执行新增的 SQL 到远程数据库
 npx wrangler d1 execute nbins-db --remote --file=packages/api/src/db/d1-bootstrap.sql
 ```
+
+**注意**：当前项目没有使用正式的 migration 系统，每次修改 schema 会**重新生成完整的 `d1-bootstrap.sql`**。远程数据库执行时：
+- 已存在的表不会重复创建
+- 新增的字段需要手动 `ALTER TABLE` 或重建数据库
+
+### 部署 R2 存储桶
+
+当前项目需要 R2 存储桶来保存 NCR 数据、图片附件、文件和 PDF：
+
+```bash
+# 创建 R2 存储桶（默认桶名：nbins-assets）
+npx wrangler r2 bucket create nbins-assets
+
+# 验证桶是否创建成功
+npx wrangler r2 bucket list
+```
+
+**配置 wrangler.jsonc**：
+
+确认 `packages/api/wrangler.jsonc` 中的 R2 绑定：
+```jsonc
+{
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "nbins-assets"
+    }
+  ]
+}
+```
+
+**查看 R2 对象**：
+```bash
+# 列出桶内对象
+npx wrangler r2 object list nbins-assets
+
+# 下载某个对象（调试用）
+npx wrangler r2 object get nbins-assets ncrs/ship-001/ncr-001.json
+```
+
+**完整的 NCR + R2 部署流程**请参考：`docs/NCR_R2_Deployment_Guide.md`
 
 ### 部署 API (Cloudflare Workers)
 确保 `packages/api/wrangler.jsonc` 中的 `database_id` 已正确配置为您的远程数据库 ID，然后运行：

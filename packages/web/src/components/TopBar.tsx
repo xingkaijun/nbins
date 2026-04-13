@@ -6,7 +6,7 @@ import { PG_LOGO_B64 } from '../utils/pg-logo-b64';
 
 const navItems = [
   { path: "/dashboard", label: "Dashboard" },
-  { path: "/observations", label: "Observations" },
+  { path: "/observations", label: "Punch List" },
   { path: "/ncrs", label: "NCRs" },
   { path: "/reports", label: "Reports" },
   { path: "/import", label: "Import" }

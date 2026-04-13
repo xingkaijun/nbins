@@ -585,14 +585,14 @@ export function SqlConsole() {
     addCodeBlock('SELECT p.code, p.name, COUNT(s.id) as ship_count\nFROM projects p\nLEFT JOIN ships s ON p.id = s.projectId\nGROUP BY p.id;');
     y += 3;
     
-    addSubsectionTitle('Observations Queries');
-    addParagraph('View recent observations:');
+    addSubsectionTitle('Punch List Queries');
+    addParagraph('View recent punch list items:');
     addCodeBlock('SELECT * FROM observations\nORDER BY createdAt DESC\nLIMIT 50;');
     
-    addParagraph('View open observations only:');
+    addParagraph('View open punch list items only:');
     addCodeBlock("SELECT * FROM observations\nWHERE status = 'Open';");
     
-    addParagraph('Count observations by status:');
+    addParagraph('Count punch list items by status:');
     addCodeBlock('SELECT status, COUNT(*) as count\nFROM observations\nGROUP BY status;');
     y += 3;
     
@@ -903,28 +903,28 @@ export function SqlConsole() {
                 onClick={() => setSql('SELECT s.hullNumber, s.name, COUNT(o.id) as obs_count\nFROM ships s\nLEFT JOIN observations o ON s.id = o.shipId\nGROUP BY s.id;')}
                 style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#f8fafc', border: '1px solid var(--nb-border)', borderRadius: 4, cursor: 'pointer', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
               >
-                Ships with observation count
+                Ships with punch list count
               </button>
             </div>
           </div>
 
-          {/* Observations */}
+          {/* Punch List */}
           <div>
-            <h4 style={{ fontSize: 10, margin: '0 0 6px 0', fontWeight: 700, color: '#334155' }}>Observations</h4>
+            <h4 style={{ fontSize: 10, margin: '0 0 6px 0', fontWeight: 700, color: '#334155' }}>Punch List</h4>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
               <button 
                 className="sql-example-btn"
                 onClick={() => setSql('SELECT * FROM observations ORDER BY createdAt DESC LIMIT 50;')}
                 style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#f8fafc', border: '1px solid var(--nb-border)', borderRadius: 4, cursor: 'pointer', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
               >
-                Recent observations
+                Recent punch list items
               </button>
               <button 
                 className="sql-example-btn"
                 onClick={() => setSql("SELECT * FROM observations WHERE status = 'Open';")}
                 style={{ textAlign: 'left', padding: '4px 8px', fontSize: 10, background: '#f8fafc', border: '1px solid var(--nb-border)', borderRadius: 4, cursor: 'pointer', color: '#475569', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}
               >
-                Open observations only
+                Open punch list items only
               </button>
               <button 
                 className="sql-example-btn"

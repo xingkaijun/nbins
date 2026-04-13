@@ -11,8 +11,12 @@ import { createObservationTypeRoutes } from "./routes/observation-types.ts";
 import { createProjectRoutes } from "./routes/projects.ts";
 import { createShipRoutes } from "./routes/ships.ts";
 import { createUserRoutes } from "./routes/users.ts";
+import { createMediaRoutes } from "./routes/media.ts";
 import { createNcrRoutes } from "./routes/ncrs.ts";
+import { createNcrFileRoutes } from "./routes/ncr-files.ts";
+import { createNcrPdfRoutes } from "./routes/ncr-pdf.ts";
 import { createSqlConsoleRoutes } from "./routes/sql-console.ts";
+
 
 function createApp(): Hono<{ Bindings: Bindings }> {
   const app = new Hono<{ Bindings: Bindings }>();
@@ -47,7 +51,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
     return c.json({
       appName: c.env.APP_NAME ?? "NBINS",
       environment: c.env.APP_ENV ?? "development",
-      storageMode: "d1",
+      storageMode: "d1+r2",
       generatedAt: new Date().toISOString(),
       disciplines: DISCIPLINES.filter((d: string) => d !== "all"),
       routes: [
@@ -71,6 +75,18 @@ function createApp(): Hono<{ Bindings: Bindings }> {
         "/api/users",
         "/api/users/:id",
         "/api/users/:id/password",
+        "/api/media/upload",
+        "/api/media/:shipId",
+        "/api/media/:shipId/:filename",
+        "/api/ncrs",
+        "/api/ncrs/ships/:shipId",
+        "/api/ncrs/:id",
+        "/api/ncrs/:id/remark",
+        "/api/ncrs/:id/approve",
+        "/api/ncrs/:id (DELETE)",
+        "/api/ncrs/:id/files",
+        "/api/ncrs/:id/files/:fileId",
+        "/api/ncrs/:id/pdf",
         "/api/dev/inspection-item-submission",
         "/api/dev/inspection-item-submission/examples",
         "/api/dev/resolve-item-state",
@@ -99,8 +115,12 @@ function createApp(): Hono<{ Bindings: Bindings }> {
   app.route("/api/ships", createShipRoutes());
   app.route("/api/users", createUserRoutes());
   app.route("/api", createObservationRoutes());
+  app.route("/api/media", createMediaRoutes());
   app.route("/api/ncrs", createNcrRoutes());
+  app.route("/api/ncrs", createNcrFileRoutes());
+  app.route("/api/ncrs", createNcrPdfRoutes());
   app.route("/api/sql", createSqlConsoleRoutes());
+
 
   return app;
 }

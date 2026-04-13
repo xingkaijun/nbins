@@ -13,7 +13,7 @@ interface NavItem {
 const MAIN_APP_LINKS = [
   { path: "/", label: "Projects (Hall)" },
   { path: "/dashboard", label: "Dashboard" },
-  { path: "/observations", label: "Observations" },
+  { path: "/observations", label: "Punch List" },
   { path: "/ncrs", label: "NCRs" },
   { path: "/reports", label: "Reports" },
   { path: "/import", label: "Import" }

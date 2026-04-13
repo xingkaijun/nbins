@@ -19,9 +19,9 @@ SQL Console is a database management tool for the NBINS system, providing direct
 
 **Key Features:**
 - Execute arbitrary SQL queries (SELECT, INSERT, UPDATE, DELETE, etc.)
-- Export/Import complete database
-- Export/Import individual project data
-- Delete projects and associated data
+- Export/Import the complete database, including `ncr_index` and `R2` objects
+- Export/Import individual project data, including project-scoped `R2` objects
+- Delete projects and associated data, while cleaning related `R2` objects
 - Quick access to common data tables
 
 ---
@@ -123,7 +123,8 @@ SQL Console interface is divided into two main areas:
 
 **Export Contents:**
 - Complete data from all tables
-- Includes: users, projects, ships, inspections, observations, ncrs, etc.
+- Includes: `users`, `projects`, `ships`, `inspection_items`, `inspection_rounds`, `comments`, `ncrs`, `ncr_index`, `observation_types`, `observations`, etc.
+- When an `R2` bucket is configured, objects under `ncrs/`, `media/`, `ncr-files/`, and `ncr-pdf/` are exported as well
 
 ### Import Complete Database
 
@@ -139,6 +140,7 @@ SQL Console interface is divided into two main areas:
 - Database migration
 - Disaster recovery
 - Test environment data reset
+- Full `NCR + R2` environment backup and restore
 
 ---
 
@@ -163,6 +165,7 @@ Example: `PRJ001 — Ship Project Name`
 - All observations
 - All NCR records
 - Project member information
+- Project-scoped `R2` objects under `ncrs/`, `media/`, `ncr-files/`, and `ncr-pdf/`
 
 ### Import Project Data
 
@@ -394,6 +397,7 @@ UPDATE users SET role = 'admin' WHERE username = 'someuser';
 1. **File Format**: Import files must be JSON format exported by the system
 2. **Data Integrity**: Verify file completeness before import to avoid data corruption
 3. **Environment Isolation**: Don't import production data to test environment and vice versa
+4. **Large Payloads**: Full exports that include `R2` object bodies can become much larger and take longer to import/export
 
 ### Performance Optimization
 1. **Use Indexes**: Query using indexed fields when possible (e.g., id, projectId, shipId)

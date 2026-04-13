@@ -86,7 +86,7 @@ export function exportObservationsAsciiPdf(
       pageNum++;
     }
     currentLineIdx = 0;
-    const title = mode === "observations" ? 'SITE OBSERVATION REPORT' : 'SITE INSPECTION REPORT';
+    const title = mode === "observations" ? 'SITE PUNCH LIST REPORT' : 'SITE INSPECTION REPORT';
     const topBorder = "=".repeat(103);
     doc.text(topBorder, margin, margin + (currentLineIdx++ * lineHeight));
     doc.text(title.padStart(51 + title.length/2, " "), margin, margin + (currentLineIdx++ * lineHeight));
@@ -177,7 +177,7 @@ export function exportObservationsAsciiPdf(
     doc.text(`Page ${i} of ${totalPages}`, doc.internal.pageSize.getWidth() - margin - 20, doc.internal.pageSize.getHeight() - margin);
   }
   
-  const prefix = mode === "observations" ? "Observations" : "InspectionComments";
+  const prefix = mode === "observations" ? "PunchList" : "InspectionComments";
   doc.save(`NBINS_${prefix}_ASCII_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
@@ -189,330 +189,256 @@ export function exportObservationsPdf(
   shipInfo?: string,
   ownerInfo?: { owner?: string; shipyard?: string; classification?: string }
 ) {
-  // A4 Portrait, 15mm margins
-  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 15;
-  
-  // Color scheme
-  const PRIMARY_BLUE = [31, 78, 120] as [number, number, number];
-  const MEDIUM_GRAY = [102, 102, 102] as [number, number, number];
-  const LIGHT_GRAY = [249, 249, 249] as [number, number, number];
-  
-  // Helper function to add page with header and footer
-  const addPageWithHeaderFooter = (isFirstPage: boolean) => {
-    if (!isFirstPage) {
-      doc.addPage();
-    }
-    
-    let y = margin;
-    
-    // Logo on left
-    const logoHeight = 12;
-    drawPdfLogo(doc, margin, y, logoHeight);
-    
-    // Title on right
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(22);
-    doc.setTextColor(...PRIMARY_BLUE);
-    const reportTitle = mode === "observations" ? 'SITE OBSERVATION REPORT' : 'SITE INSPECTION REPORT';
-    doc.text(reportTitle, pageWidth - margin, y + 8, { align: 'right' });
-    
-    y += logoHeight + 3;
-    
-    // 2pt thick blue horizontal line
-    doc.setDrawColor(...PRIMARY_BLUE);
-    doc.setLineWidth(0.75);
-    doc.line(margin, y, pageWidth - margin, y);
-    
-    y += 5;
-    
-    // Info matrix (3 columns)
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...MEDIUM_GRAY);
-    
-    const col1X = margin;
-    const col2X = margin + 60;
-    const col3X = margin + 120;
-    
-    // Column 1: Project & Hull No
-    doc.text(`Project: ${projectName || '-'}`, col1X, y);
-    doc.text(`Hull No: ${shipInfo ? shipInfo.split('(')[1]?.replace(')', '') || '-' : '-'}`, col1X, y + 5);
-    
-    // Column 2: Ship & Shipyard
-    doc.text(`Ship: ${shipInfo ? shipInfo.split('(')[0].trim() || '-' : '-'}`, col2X, y);
-    doc.text(`Shipyard: ${ownerInfo?.shipyard || '-'}`, col2X, y + 5);
-    
-    // Column 3: Owner & Date
-    doc.text(`Owner: ${ownerInfo?.owner || '-'}`, col3X, y);
-    doc.text(`Date: ${new Date().toLocaleDateString()}`, col3X, y + 5);
-    
-    y += 10;
-    
-    // Summary bar (light gray background)
-    const totalCount = mode === "observations" ? items.length : comments.length;
-    const openCount = mode === "observations" 
-      ? items.filter(i => i.status === "open").length 
-      : comments.filter(c => c.status === "open").length;
-    const closedCount = totalCount - openCount;
-    
-    doc.setFillColor(...LIGHT_GRAY);
-    doc.rect(margin, y, pageWidth - 2 * margin, 7, 'F');
-    
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(0, 0, 0);
-    doc.text(`Summary: Total ${totalCount} | Open ${openCount} | Closed ${closedCount}`, margin + 2, y + 5);
-    
-    y += 12;
-    
-    return y;
+  const margin = 12;
+  const usableWidth = pageWidth - margin * 2;
+  const headerRowHeight = 7;
+  const bodyRowHeight = 6;
+  const footerY = pageHeight - 7;
+
+  const colors = {
+    primary: [0, 89, 97] as [number, number, number],
+    primaryLight: [230, 243, 245] as [number, number, number],
+    secondary: [80, 96, 111] as [number, number, number],
+    tertiary: [117, 68, 30] as [number, number, number],
+    surfaceLow: [242, 244, 244] as [number, number, number],
+    outline: [191, 200, 202] as [number, number, number],
+    textMain: [25, 28, 29] as [number, number, number],
+    white: [255, 255, 255] as [number, number, number],
   };
-  
-  // Start first page
-  let y = addPageWithHeaderFooter(true);
-  
-  // Table header
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.setTextColor(255, 255, 255);
-  doc.setFillColor(...PRIMARY_BLUE);
-  
-  const headerY = y;
-  const headerHeight = 8;
-  
-  if (mode === "observations") {
-    // Column positions for observations
-    const colX = {
-      num: margin,
-      type: margin + 8,
-      disc: margin + 23,
-      location: margin + 43,
-      content: margin + 68,
-      status: pageWidth - margin - 18
-    };
-    
-    // Draw header background
-    doc.rect(margin, headerY, pageWidth - 2 * margin, headerHeight, 'F');
-    
-    // Header text
-    doc.text('S/N', colX.num + 1, headerY + 5.5);
-    doc.text('Type', colX.type + 1, headerY + 5.5);
-    doc.text('Discipline', colX.disc + 1, headerY + 5.5);
-    doc.text('Location', colX.location + 1, headerY + 5.5);
-    doc.text('Content', colX.content + 1, headerY + 5.5);
-    doc.text('Status', colX.status + 1, headerY + 5.5);
-    
-    y += headerHeight + 2;
-    
-    // Data rows
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    
-    let rowIndex = 0;
-    for (const item of items) {
-      // Check if we need a new page
-      if (y > pageHeight - 30) {
-        // Footer for current page
-        const pageNum = doc.getCurrentPageInfo().pageNumber;
-        doc.setDrawColor(...MEDIUM_GRAY);
-        doc.setLineWidth(0.2);
-        doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(...MEDIUM_GRAY);
-        doc.text('Confidential - Sinonavtek Digital Management System', margin, pageHeight - 10);
-        doc.text(`Page ${pageNum}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
-        
-        // New page
-        y = addPageWithHeaderFooter(false);
-        
-        // Redraw table header
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.setTextColor(255, 255, 255);
-        doc.setFillColor(...PRIMARY_BLUE);
-        doc.rect(margin, y, pageWidth - 2 * margin, headerHeight, 'F');
-        doc.text('S/N', colX.num + 1, y + 5.5);
-        doc.text('Type', colX.type + 1, y + 5.5);
-        doc.text('Discipline', colX.disc + 1, y + 5.5);
-        doc.text('Location', colX.location + 1, y + 5.5);
-        doc.text('Content', colX.content + 1, y + 5.5);
-        doc.text('Status', colX.status + 1, y + 5.5);
-        
-        y += headerHeight + 2;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        rowIndex = 0;
-      }
-      
-      // Alternating row colors
-      const locationText = doc.splitTextToSize(item.location || '-', 23);
-      const contentText = doc.splitTextToSize(item.content || '-', 90); // 减少宽度从110到90
-      const maxLines = Math.max(locationText.length, contentText.length);
-      const rowHeight = maxLines * 4 + 2;
-      
-      if (rowIndex % 2 === 1) {
-        doc.setFillColor(...LIGHT_GRAY);
-        doc.rect(margin, y - 2, pageWidth - 2 * margin, rowHeight, 'F');
-      }
-      
-      // Status background with conditional formatting (draw BEFORE text)
-      const status = (item.status || 'open').toUpperCase();
-      if (status === 'OPEN') {
-        doc.setFillColor(255, 199, 206); // #FFC7CE
-        doc.rect(colX.status, y - 2, 18, rowHeight, 'F');
-      } else if (status === 'CLOSED') {
-        doc.setFillColor(198, 239, 206); // #C6EFCE
-        doc.rect(colX.status, y - 2, 18, rowHeight, 'F');
-      }
-      
-      // Draw cell content (AFTER backgrounds)
-      doc.setTextColor(0, 0, 0);
-      doc.text(item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : String(item.serialNo || '-'), colX.num + 1, y + 3);
-      doc.text(item.type || '-', colX.type + 1, y + 3);
-      doc.text(item.discipline || '-', colX.disc + 1, y + 3);
-      doc.text(locationText, colX.location + 1, y + 3);
-      doc.text(contentText, colX.content + 1, y + 3);
-      
-      // Status text with conditional color
-      if (status === 'OPEN') {
-        doc.setTextColor(156, 0, 6); // #9C0006
-      } else if (status === 'CLOSED') {
-        doc.setTextColor(0, 97, 0); // #006100
-      }
-      doc.text(status, colX.status + 1, y + 3);
-      
-      y += rowHeight;
-      rowIndex++;
+
+  const hashText = `OB-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().substring(0, 8)}`;
+  const reportTitle = mode === "observations" ? 'PUNCH LIST REPORT' : 'INSPECTION COMMENTS REPORT';
+  const totalCount = mode === "observations" ? items.length : comments.length;
+  const openCount = mode === "observations"
+    ? items.filter((item) => item.status === 'open').length
+    : comments.filter((comment) => comment.status === 'open').length;
+  const closedCount = totalCount - openCount;
+
+  const formatDate = (value?: string | null) => {
+    if (!value) return '-';
+    return value.length >= 10 ? value.slice(0, 10) : value;
+  };
+
+  const fitText = (text: string | null | undefined, maxWidth: number) => {
+    const normalized = (text ?? '-').replace(/\s+/g, ' ').trim() || '-';
+    if (doc.getTextWidth(normalized) <= maxWidth) return normalized;
+    let output = normalized;
+    while (output.length > 0 && doc.getTextWidth(`${output}...`) > maxWidth) {
+      output = output.slice(0, -1);
     }
-  } else {
-    // Inspection comments mode
-    const colX = {
-      num: margin,
-      ship: margin + 8,
-      disc: margin + 28,
-      item: margin + 48,
-      content: margin + 88,
-      status: pageWidth - margin - 18
-    };
-    
-    // Draw header background
-    doc.rect(margin, headerY, pageWidth - 2 * margin, headerHeight, 'F');
-    
-    // Header text
-    doc.text('S/N', colX.num + 1, headerY + 5.5);
-    doc.text('Ship', colX.ship + 1, headerY + 5.5);
-    doc.text('Discipline', colX.disc + 1, headerY + 5.5);
-    doc.text('Item', colX.item + 1, headerY + 5.5);
-    doc.text('Content', colX.content + 1, headerY + 5.5);
-    doc.text('Status', colX.status + 1, headerY + 5.5);
-    
-    y += headerHeight + 2;
-    
-    // Data rows
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    
-    let rowIndex = 0;
-    for (const cm of comments) {
-      // Check if we need a new page
-      if (y > pageHeight - 30) {
-        // Footer for current page
-        const pageNum = doc.getCurrentPageInfo().pageNumber;
-        doc.setDrawColor(...MEDIUM_GRAY);
-        doc.setLineWidth(0.2);
-        doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
-        
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(8);
-        doc.setTextColor(...MEDIUM_GRAY);
-        doc.text('Confidential - Sinonavtek Digital Management System', margin, pageHeight - 10);
-        doc.text(`Page ${pageNum}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
-        
-        // New page
-        y = addPageWithHeaderFooter(false);
-        
-        // Redraw table header
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(11);
-        doc.setTextColor(255, 255, 255);
-        doc.setFillColor(...PRIMARY_BLUE);
-        doc.rect(margin, y, pageWidth - 2 * margin, headerHeight, 'F');
-        doc.text('S/N', colX.num + 1, y + 5.5);
-        doc.text('Ship', colX.ship + 1, y + 5.5);
-        doc.text('Discipline', colX.disc + 1, y + 5.5);
-        doc.text('Item', colX.item + 1, y + 5.5);
-        doc.text('Content', colX.content + 1, y + 5.5);
-        doc.text('Status', colX.status + 1, y + 5.5);
-        
-        y += headerHeight + 2;
-        doc.setFont('helvetica', 'normal');
-        doc.setFontSize(9);
-        rowIndex = 0;
-      }
-      
-      // Alternating row colors
-      const itemText = doc.splitTextToSize(cm.inspectionItemName || '-', 38);
-      const contentText = doc.splitTextToSize(cm.content || '-', 70); // 减少宽度从90到70
-      const maxLines = Math.max(itemText.length, contentText.length);
-      const rowHeight = maxLines * 4 + 2;
-      
-      if (rowIndex % 2 === 1) {
-        doc.setFillColor(...LIGHT_GRAY);
-        doc.rect(margin, y - 2, pageWidth - 2 * margin, rowHeight, 'F');
-      }
-      
-      // Status background with conditional formatting (draw BEFORE text)
-      const status = (cm.status || 'open').toUpperCase();
-      if (status === 'OPEN') {
-        doc.setFillColor(255, 199, 206); // #FFC7CE
-        doc.rect(colX.status, y - 2, 18, rowHeight, 'F');
-      } else if (status === 'CLOSED') {
-        doc.setFillColor(198, 239, 206); // #C6EFCE
-        doc.rect(colX.status, y - 2, 18, rowHeight, 'F');
-      }
-      
-      // Draw cell content (AFTER backgrounds)
-      doc.setTextColor(0, 0, 0);
-      doc.text(String(cm.localId || '-'), colX.num + 1, y + 3);
-      doc.text(cm.hullNumber || '-', colX.ship + 1, y + 3);
-      doc.text(cm.discipline || '-', colX.disc + 1, y + 3);
-      doc.text(itemText, colX.item + 1, y + 3);
-      doc.text(contentText, colX.content + 1, y + 3);
-      
-      // Status text with conditional color
-      if (status === 'OPEN') {
-        doc.setTextColor(156, 0, 6); // #9C0006
-      } else if (status === 'CLOSED') {
-        doc.setTextColor(0, 97, 0); // #006100
-      }
-      doc.text(status, colX.status + 1, y + 3);
-      
-      y += rowHeight;
-      rowIndex++;
+    return output ? `${output}...` : '...';
+  };
+
+  const drawStatusIcon = (x: number, y: number, isClosed: boolean) => {
+    if (isClosed) {
+      doc.setDrawColor(0, 97, 0);
+      doc.setLineWidth(0.3);
+      doc.circle(x, y, 1.8, 'S');
+      doc.line(x - 1.0, y + 0.1, x - 0.2, y + 0.9);
+      doc.line(x - 0.2, y + 0.9, x + 1.2, y - 0.8);
+      return;
     }
-  }
-  
-  // Final page footer
-  const totalPages = doc.getNumberOfPages();
-  for (let i = 1; i <= totalPages; i++) {
-    doc.setPage(i);
-    doc.setDrawColor(...MEDIUM_GRAY);
+    doc.setDrawColor(156, 0, 6);
+    doc.setLineWidth(0.3);
+    doc.circle(x, y, 1.8, 'S');
+    doc.line(x - 0.8, y - 0.8, x + 0.8, y + 0.8);
+    doc.line(x - 0.8, y + 0.8, x + 0.8, y - 0.8);
+  };
+
+  const observationColumns = [
+    { key: 'no', label: 'NO.', width: 14 },
+    { key: 'date', label: 'DATE', width: 22 },
+    { key: 'author', label: 'AUTHOR', width: 28 },
+    { key: 'location', label: 'LOCATION', width: 34 },
+    { key: 'type', label: 'TYPE', width: 20 },
+    { key: 'content', label: 'CONTENT', width: 140 },
+    { key: 'status', label: 'ST', width: 15 },
+  ];
+
+  const commentColumns = [
+    { key: 'no', label: 'NO.', width: 14 },
+    { key: 'date', label: 'DATE', width: 22 },
+    { key: 'author', label: 'AUTHOR', width: 28 },
+    { key: 'ship', label: 'HULL', width: 22 },
+    { key: 'item', label: 'ITEM', width: 42 },
+    { key: 'content', label: 'CONTENT', width: 115 },
+    { key: 'status', label: 'ST', width: 15 },
+  ];
+
+  const columns = mode === 'observations' ? observationColumns : commentColumns;
+
+  const getColumnX = (columnIndex: number) => {
+    let x = margin;
+    for (let i = 0; i < columnIndex; i += 1) x += columns[i].width;
+    return x;
+  };
+
+  const drawHeader = () => {
+    let y = margin;
+    drawPdfLogo(doc, margin, y - 3, 11);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(16);
+    doc.setTextColor(...colors.primary);
+    doc.text(reportTitle, margin + 26, y + 4);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(...colors.secondary);
+    doc.text(`Project: ${projectName || '-'}`, pageWidth - margin, y + 1, { align: 'right' });
+    doc.text(`Ship: ${shipInfo || '-'}`, pageWidth - margin, y + 5, { align: 'right' });
+
+    y += 11;
+    doc.setDrawColor(...colors.primary);
+    doc.setLineWidth(0.4);
+    doc.line(margin, y, pageWidth - margin, y);
+
+    y += 4;
+    doc.setFillColor(...colors.primaryLight);
+    doc.roundedRect(margin, y, usableWidth, 8, 1, 1, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(7);
+    doc.setTextColor(...colors.primary);
+    doc.text(`TOTAL ${totalCount}`, margin + 4, y + 5.3);
+
+    doc.setTextColor(156, 0, 6);
+    doc.text(`OPEN ${openCount}`, margin + 34, y + 5.3);
+    doc.setTextColor(0, 97, 0);
+    doc.text(`CLOSED ${closedCount}`, margin + 58, y + 5.3);
+
+    doc.setTextColor(...colors.secondary);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`OWNER ${ownerInfo?.owner || '-'}`, margin + 88, y + 5.3);
+    doc.text(`SHIPYARD ${ownerInfo?.shipyard || '-'}`, margin + 150, y + 5.3);
+    doc.text(`GENERATED ${new Date().toLocaleDateString()}`, pageWidth - margin, y + 5.3, { align: 'right' });
+
+    y += 11;
+
+    doc.setFillColor(...colors.primary);
+    doc.rect(margin, y, usableWidth, headerRowHeight, 'F');
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(6.5);
+    doc.setTextColor(...colors.white);
+
+    columns.forEach((column, index) => {
+      const cellX = getColumnX(index);
+      doc.text(column.label, cellX + 2, y + 4.5);
+    });
+
+    return y + headerRowHeight;
+  };
+
+  const drawFooter = (pageNumber: number, totalPages: number) => {
+    doc.setPage(pageNumber);
+    doc.setDrawColor(...colors.outline);
     doc.setLineWidth(0.2);
-    doc.line(margin, pageHeight - 15, pageWidth - margin, pageHeight - 15);
-    
+    doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(8);
-    doc.setTextColor(...MEDIUM_GRAY);
-    doc.text('Confidential - Sinonavtek Digital Management System', margin, pageHeight - 10);
-    doc.text(`Page ${i} of ${totalPages}`, pageWidth - margin, pageHeight - 10, { align: 'right' });
+    doc.setFontSize(6);
+    doc.setTextColor(...colors.secondary);
+    doc.text(`HASH: ${hashText}`, margin, footerY);
+    doc.text(`PAGE ${pageNumber}/${totalPages}`, pageWidth / 2, footerY, { align: 'center' });
+    doc.text('© NBINS', pageWidth - margin, footerY, { align: 'right' });
+  };
+
+  let y = drawHeader();
+
+  const renderObservationRow = (item: ObservationItem, idx: number) => {
+    if (y + bodyRowHeight > pageHeight - 14) {
+      doc.addPage();
+      y = drawHeader();
+    }
+
+    if (idx % 2 === 0) {
+      doc.setFillColor(...colors.surfaceLow);
+      doc.rect(margin, y, usableWidth, bodyRowHeight, 'F');
+    }
+
+    doc.setDrawColor(...colors.outline);
+    doc.setLineWidth(0.15);
+    doc.line(margin, y + bodyRowHeight, pageWidth - margin, y + bodyRowHeight);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.3);
+    doc.setTextColor(...colors.textMain);
+
+    const serialText = item.discipline
+      ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}`
+      : String(item.serialNo || idx + 1);
+
+    const values = [
+      serialText,
+      formatDate(item.date),
+      item.authorName || '-',
+      item.location || '-',
+      item.type || '-',
+      item.content || '-',
+    ];
+
+    values.forEach((value, index) => {
+      const cellX = getColumnX(index);
+      const text = fitText(value, columns[index].width - 4);
+      doc.text(text, cellX + 2, y + 4.2);
+    });
+
+    drawStatusIcon(pageWidth - margin - (columns[columns.length - 1].width / 2), y + bodyRowHeight / 2, item.status === 'closed');
+    y += bodyRowHeight;
+  };
+
+  const renderCommentRow = (comment: InspectionCommentView, idx: number) => {
+    if (y + bodyRowHeight > pageHeight - 14) {
+      doc.addPage();
+      y = drawHeader();
+    }
+
+    if (idx % 2 === 0) {
+      doc.setFillColor(...colors.surfaceLow);
+      doc.rect(margin, y, usableWidth, bodyRowHeight, 'F');
+    }
+
+    doc.setDrawColor(...colors.outline);
+    doc.setLineWidth(0.15);
+    doc.line(margin, y + bodyRowHeight, pageWidth - margin, y + bodyRowHeight);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.3);
+    doc.setTextColor(...colors.textMain);
+
+    const values = [
+      String(comment.localId || idx + 1).padStart(2, '0'),
+      formatDate(comment.createdAt),
+      comment.authorName || '-',
+      comment.hullNumber || '-',
+      comment.inspectionItemName || '-',
+      comment.content || '-',
+    ];
+
+    values.forEach((value, index) => {
+      const cellX = getColumnX(index);
+      const text = fitText(value, columns[index].width - 4);
+      doc.text(text, cellX + 2, y + 4.2);
+    });
+
+    drawStatusIcon(pageWidth - margin - (columns[columns.length - 1].width / 2), y + bodyRowHeight / 2, comment.status === 'closed');
+    y += bodyRowHeight;
+  };
+
+  if (mode === 'observations') {
+    items.forEach(renderObservationRow);
+  } else {
+    comments.forEach(renderCommentRow);
   }
-  
-  const prefix = mode === "observations" ? "Observations" : "InspectionComments";
+
+  const totalPages = doc.getNumberOfPages();
+  for (let i = 1; i <= totalPages; i += 1) {
+    drawFooter(i, totalPages);
+  }
+
+  const prefix = mode === 'observations' ? 'PunchList' : 'InspectionComments';
   doc.save(`NBINS_${prefix}_${new Date().toISOString().slice(0, 10)}.pdf`);
 }
 
@@ -632,7 +558,7 @@ export async function exportObservationsExcel(
   ownerInfo?: { owner?: string; shipyard?: string; classification?: string }
 ): Promise<void> {
   const wb = new ExcelJS.Workbook();
-  const ws = wb.addWorksheet(mode === "observations" ? "Observations" : "Inspection Comments");
+  const ws = wb.addWorksheet(mode === "observations" ? "Punch List" : "Inspection Comments");
 
   // ===== 页面设置 =====
   ws.views = [{ showGridLines: false }];
@@ -666,7 +592,7 @@ export async function exportObservationsExcel(
   // ===== 大标题 (Row 1-3, C1:G3) =====
   ws.mergeCells("C1:G3");
   const titleCell = ws.getCell("C1");
-  titleCell.value = "OBSERVATIONS REPORT";
+  titleCell.value = mode === "observations" ? "PUNCH LIST REPORT" : "INSPECTION COMMENTS REPORT";
   titleCell.font = { 
     name: "Calibri", 
     size: 20, 
@@ -908,20 +834,19 @@ export async function exportObservationsExcel(
     // 设置列宽
     ws.getColumn(1).width = 5;   // S/N
     ws.getColumn(2).width = 12;  // Type
-    ws.getColumn(3).width = 12;  // Discipline
-    ws.getColumn(4).width = 15;  // Location
-    ws.getColumn(5).width = 15;  // Date
-    ws.getColumn(6).width = 55;  // Content
-    ws.getColumn(7).width = 20;  // Remark
-    ws.getColumn(8).width = 15;  // Author
-    ws.getColumn(9).width = 12;  // Status
-    ws.getColumn(10).width = 15; // Closed At
+    ws.getColumn(3).width = 15;  // Location
+    ws.getColumn(4).width = 15;  // Date
+    ws.getColumn(5).width = 67;  // Content
+    ws.getColumn(6).width = 20;  // Remark
+    ws.getColumn(7).width = 15;  // Author
+    ws.getColumn(8).width = 12;  // Status
+    ws.getColumn(9).width = 15;  // Closed At
     
     // 添加自动筛选
     const lastRow = headerRow + items.length;
     ws.autoFilter = {
       from: { row: headerRow, column: 1 },
-      to: { row: lastRow, column: 10 }
+      to: { row: lastRow, column: 9 }
     };
     
   } else {
@@ -1063,7 +988,7 @@ export async function exportObservationsExcel(
   const a = document.createElement("a");
   a.href = url;
   const fileName = mode === "observations" 
-    ? `NBINS_Observations_${projectName.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`
+    ? `NBINS_PunchList_${projectName.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`
     : `NBINS_InspectionComments_${projectName.replace(/\s+/g, "_")}_${new Date().toISOString().slice(0, 10)}.xlsx`;
   a.download = fileName;
   document.body.appendChild(a);

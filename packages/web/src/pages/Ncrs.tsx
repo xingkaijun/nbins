@@ -2,16 +2,74 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { NcrItemResponse } from "@nbins/shared";
 import {
   approveNcr,
+  closeNcr,
   createNcr,
-  fetchNcrs,
+  downloadNcrPdf,
+  fetchNcrList,
   fetchProjects,
   fetchShips,
+  fetchNextNcrSerial,
+  updateNcr,
   type ProjectRecord,
   type ShipRecord
 } from "../api";
+import { useAuth } from "../auth-context";
+import { NcrEditor } from "../components/NcrEditor";
+import { ImageUploader } from "../components/ImageUploader";
+import { RelatedFileUploader } from "../components/RelatedFileUploader";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 
+function saveBlob(blob: Blob, filename: string): void {
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement("a");
+  anchor.href = url;
+  anchor.download = filename;
+  anchor.click();
+  URL.revokeObjectURL(url);
+}
+
+function getNcrPdfFilename(item: Pick<NcrItemResponse, "id" | "hullNumber" | "serialNo" | "discipline">): string {
+  const hull = item.hullNumber?.trim() || "SHIP";
+  const serial = String(item.serialNo).padStart(3, "0");
+  const discipline = item.discipline?.trim() || "GENERAL";
+  return `NCR-${hull}-${serial}-${discipline}.pdf`;
+}
+
+function badgeColor(status: NcrItemResponse["status"]): string {
+
+  switch (status) {
+    case "approved":
+      return "#16a34a";
+    case "rejected":
+      return "#dc2626";
+    case "pending_approval":
+      return "#d97706";
+    default:
+      return "#64748b";
+  }
+}
+
+interface NcrReviewDraft {
+  title: string;
+  discipline: string;
+  content: string;
+  rectifyRequest: string;
+  remark: string;
+}
+
+function createReviewDraft(item: NcrItemResponse): NcrReviewDraft {
+  return {
+    title: item.title,
+    discipline: item.discipline,
+    content: item.content,
+    rectifyRequest: item.rectifyRequest ?? "",
+    remark: item.remark ?? ""
+  };
+}
+
 export function Ncrs() {
+  const { session } = useAuth();
+  const canApprove = session?.user.role === "admin" || session?.user.role === "manager";
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   const [ships, setShips] = useState<ShipRecord[]>([]);
@@ -20,18 +78,21 @@ export function Ncrs() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [showForm, setShowForm] = useState(false);
-  const [formTitle, setFormTitle] = useState("");
-  const [formContent, setFormContent] = useState("");
-  const [submitting, setSubmitting] = useState(false);
+  const [filterStatus, setFilterStatus] = useState("");
+  const [filterKeyword, setFilterKeyword] = useState("");
+
+  const [showEditor, setShowEditor] = useState(false);
+  const [editorSerial, setEditorSerial] = useState<{ serial: number; formatted: string } | null>(null);
+
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [reviewDrafts, setReviewDrafts] = useState<Record<string, NcrReviewDraft>>({});
+  const [savingReviewId, setSavingReviewId] = useState<string | null>(null);
+  const [savingImagesId, setSavingImagesId] = useState<string | null>(null);
+  const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
-  );
-  const selectedShip = useMemo(
-    () => ships.find((ship) => ship.id === selectedShipId) ?? null,
-    [ships, selectedShipId]
   );
 
   useEffect(() => {
@@ -67,7 +128,6 @@ export function Ncrs() {
       };
     }
 
-    setSelectedShipId("");
     fetchShips(selectedProjectId)
       .then((data) => {
         if (!active) {
@@ -75,7 +135,7 @@ export function Ncrs() {
         }
 
         setShips(data);
-        setSelectedShipId(data[0]?.id ?? "");
+        setSelectedShipId((current) => (current && data.some((ship) => ship.id === current) ? current : ""));
       })
       .catch(() => {
         if (!active) {
@@ -92,96 +152,188 @@ export function Ncrs() {
   }, [selectedProjectId]);
 
   const loadNcrs = useCallback(async () => {
-    if (!selectedShipId) {
+    if (!selectedProjectId) {
       setItems([]);
-      setError(null);
       setLoading(false);
+      setError(null);
       return;
     }
 
     setLoading(true);
     setError(null);
-
     try {
-      const data = await fetchNcrs(selectedShipId);
+      const data = await fetchNcrList({
+        projectId: selectedProjectId,
+        shipId: selectedShipId || undefined,
+        status: filterStatus || undefined,
+        keyword: filterKeyword.trim() || undefined
+      });
       setItems(data);
-    } catch (e: any) {
-      setError(e.message || "Failed to load NCRs");
+      setReviewDrafts(Object.fromEntries(data.map((item) => [item.id, createReviewDraft(item)])));
+    } catch (loadError: any) {
       setItems([]);
+      setError(loadError?.message || "Failed to load NCRs");
     } finally {
       setLoading(false);
     }
-  }, [selectedShipId]);
+  }, [filterKeyword, filterStatus, selectedProjectId, selectedShipId]);
 
   useEffect(() => {
     void loadNcrs();
   }, [loadNcrs]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedShipId || !formTitle.trim() || !formContent.trim()) {
+  function updateLocalItem(nextItem: NcrItemResponse): void {
+    setItems((current) => current.map((item) => (item.id === nextItem.id ? nextItem : item)));
+    setReviewDrafts((current) => ({ ...current, [nextItem.id]: createReviewDraft(nextItem) }));
+  }
+
+  async function handleOpenEditor() {
+    if (!selectedShipId) return;
+    try {
+      const serialData = await fetchNextNcrSerial(selectedShipId);
+      setEditorSerial(serialData);
+      setShowEditor(true);
+    } catch (err: any) {
+      alert(`Failed to fetch next serial: ${err?.message || "Unknown error"}`);
+    }
+  }
+
+  async function handlePublishNcr(data: {
+    title: string;
+    content: string;
+    rectifyRequest?: string;
+    remark: string;
+    discipline: string;
+    serialNo: number;
+    imageAttachments: string[];
+  }) {
+    if (!selectedShipId) return;
+    const created = await createNcr(selectedShipId, {
+      shipId: selectedShipId,
+      title: data.title,
+      content: data.content,
+      rectifyRequest: data.rectifyRequest,
+      remark: data.remark || undefined,
+      discipline: data.discipline,
+      serialNo: data.serialNo,
+      imageAttachments: data.imageAttachments
+    });
+    setItems((current) => [created, ...current]);
+    setReviewDrafts((current) => ({ ...current, [created.id]: createReviewDraft(created) }));
+    setShowEditor(false);
+    setExpandedId(created.id);
+    alert("NCR 已提交，状态为待审批。请口头通知 manager 审核、修改并发布。");
+  }
+
+  async function handleApprove(id: string, approved: boolean): Promise<void> {
+    try {
+      const updated = await approveNcr(id, { approved });
+      updateLocalItem(updated);
+      alert(approved ? "NCR 已发布，正式 PDF 已同步生成。" : "NCR 已拒绝。");
+    } catch (approveError: any) {
+      alert(`Failed to ${approved ? "publish" : "reject"} NCR: ${approveError?.message || "Unknown error"}`);
+    }
+  }
+
+  async function handleCloseNcr(id: string, closed: boolean): Promise<void> {
+    try {
+      const updated = await closeNcr(id, { closed });
+      updateLocalItem(updated);
+    } catch (err: any) {
+      alert(`Failed to ${closed ? "close" : "open"} NCR: ${err?.message || "Unknown error"}`);
+    }
+  }
+
+  async function handleUpdateReply(id: string, data: Partial<NcrItemResponse>): Promise<void> {
+    try {
+      const updated = await updateNcr(id, {
+        builderReply: data.builderReply,
+        replyDate: data.replyDate,
+        verifiedBy: data.verifiedBy,
+        verifyDate: data.verifyDate
+      });
+      updateLocalItem(updated);
+      console.log("Reply updated successfully.");
+    } catch (err: any) {
+      alert(`Failed to update reply: ${err?.message || "Unknown error"}`);
+    }
+  }
+
+  async function handleSaveReview(id: string): Promise<void> {
+    const draft = reviewDrafts[id];
+    if (!draft) {
       return;
     }
 
-    setSubmitting(true);
     try {
-      await createNcr(selectedShipId, {
-        shipId: selectedShipId,
-        title: formTitle.trim(),
-        content: formContent.trim()
+      setSavingReviewId(id);
+      const updated = await updateNcr(id, {
+        title: draft.title.trim(),
+        discipline: draft.discipline.trim(),
+        content: draft.content.trim(),
+        rectifyRequest: draft.rectifyRequest.trim() || null,
+        remark: draft.remark.trim() || null
       });
-      setFormTitle("");
-      setFormContent("");
-      setShowForm(false);
-      void loadNcrs();
-    } catch (e: any) {
-      alert("Failed to submit NCR: " + (e.message || "Unknown error"));
+      updateLocalItem(updated);
+    } catch (reviewError: any) {
+      alert(`Failed to save review changes: ${reviewError?.message || "Unknown error"}`);
     } finally {
-      setSubmitting(false);
+      setSavingReviewId(null);
     }
-  };
+  }
 
-  const handleApprove = async (id: string, approved: boolean) => {
+  async function handleImageChange(item: NcrItemResponse, images: string[]): Promise<void> {
+    const previousImages = item.imageAttachments;
+    updateLocalItem({ ...item, imageAttachments: images, attachments: images });
+
     try {
-      await approveNcr(id, { approved });
-      void loadNcrs();
-    } catch (e: any) {
-      alert("Failed to approve/reject: " + (e.message || "Unknown error"));
+      setSavingImagesId(item.id);
+      const updated = await updateNcr(item.id, { imageAttachments: images });
+      updateLocalItem(updated);
+    } catch (imageError: any) {
+      updateLocalItem({ ...item, imageAttachments: previousImages, attachments: previousImages });
+      alert(`Failed to save images: ${imageError?.message || "Unknown error"}`);
+    } finally {
+      setSavingImagesId((current) => (current === item.id ? null : current));
     }
-  };
+  }
+
+  async function handleDownloadPdf(item: NcrItemResponse): Promise<void> {
+    try {
+      setPdfBusyId(item.id);
+      const blob = await downloadNcrPdf(item.id);
+      saveBlob(blob, getNcrPdfFilename(item));
+    } catch (pdfError: any) {
+      alert(`Failed to download PDF: ${pdfError?.message || "Unknown error"}`);
+    } finally {
+      setPdfBusyId((current) => (current === item.id ? null : current));
+    }
+  }
+
 
   return (
-    <main className="ncrs-page" style={{ padding: "24px 32px", maxWidth: 1200, margin: "0 auto" }}>
+    <main className="ncrs-page" style={{ padding: "24px 32px", maxWidth: 1280, margin: "0 auto" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
         <div>
-          <h1 style={{ fontSize: 22, fontWeight: 700, margin: 0, color: "var(--nb-text)" }}>
-            Non-Conformance Reports
-          </h1>
+          <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: "var(--nb-text)" }}>Non-Conformance Reports</h1>
           <p style={{ fontSize: 13, color: "var(--nb-text-muted)", margin: "4px 0 0" }}>
             NCR MANAGEMENT · {selectedProject ? `${selectedProject.name} (${selectedProject.code})` : "NO PROJECT SELECTED"}
-            {selectedShip ? ` · Ship: ${selectedShip.shipName} (${selectedShip.hullNumber})` : ""}
           </p>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button
-            className="nb-btn nb-btn-primary"
-            onClick={() => setShowForm(!showForm)}
-            style={btnStyle("primary")}
-            disabled={!selectedShipId}
-          >
-            + Create NCR
-          </button>
-        </div>
+        <button
+          className="nb-btn nb-btn-primary"
+          onClick={() => void handleOpenEditor()}
+          style={btnStyle("primary")}
+          disabled={!selectedShipId}
+        >
+          {showEditor ? "Close Editor" : "+ Create NCR"}
+        </button>
       </div>
 
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+      <div style={filterBarStyle}>
         <label style={labelInlineStyle}>
           <span>Project</span>
-          <select
-            value={selectedProjectId}
-            onChange={(e) => setSelectedProjectId(e.target.value)}
-            style={inputStyle}
-          >
+          <select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} style={inputStyle}>
             {projects.map((project) => (
               <option key={project.id} value={project.id}>
                 {project.name} ({project.code})
@@ -189,134 +341,306 @@ export function Ncrs() {
             ))}
           </select>
         </label>
+
         <label style={labelInlineStyle}>
           <span>Ship</span>
-          <select
-            value={selectedShipId}
-            onChange={(e) => setSelectedShipId(e.target.value)}
-            style={inputStyle}
-            disabled={ships.length === 0}
-          >
-            {ships.length === 0 ? (
-              <option value="">No ships in current project</option>
-            ) : (
-              ships.map((ship) => (
-                <option key={ship.id} value={ship.id}>
-                  {ship.shipName} ({ship.hullNumber})
-                </option>
-              ))
-            )}
+          <select value={selectedShipId} onChange={(event) => setSelectedShipId(event.target.value)} style={inputStyle} disabled={ships.length === 0}>
+            <option value="">All ships</option>
+            {ships.map((ship) => (
+              <option key={ship.id} value={ship.id}>
+                {ship.shipName} ({ship.hullNumber})
+              </option>
+            ))}
           </select>
+        </label>
+
+        <label style={labelInlineStyle}>
+          <span>Status</span>
+          <select value={filterStatus} onChange={(event) => setFilterStatus(event.target.value)} style={inputStyle}>
+            <option value="">All status</option>
+            <option value="pending_approval">Pending approval</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+            <option value="draft">Draft</option>
+          </select>
+        </label>
+
+        <label style={{ ...labelInlineStyle, flex: 1, minWidth: 220 }}>
+          <span>Remark / Title</span>
+          <input
+            type="text"
+            value={filterKeyword}
+            onChange={(event) => setFilterKeyword(event.target.value)}
+            placeholder="Search remark or title..."
+            style={{ ...inputStyle, width: "100%" }}
+          />
         </label>
       </div>
 
-      {showForm && (
-        <form onSubmit={handleSubmit} style={formBoxStyle}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 15 }}>Create New NCR</h3>
-          <label style={{ ...labelStyle, display: "block" }}>
-            <span>Title</span>
-            <input
-              type="text"
-              value={formTitle}
-              onChange={(e) => setFormTitle(e.target.value)}
-              placeholder="Brief NCR Title"
-              style={{ ...inputStyle, width: "100%" }}
-              required
-            />
-          </label>
-          <label style={{ ...labelStyle, marginTop: 12, display: "block" }}>
-            <span>Content</span>
-            <textarea
-              value={formContent}
-              onChange={(e) => setFormContent(e.target.value)}
-              placeholder="Detailed description of the non-conformance..."
-              rows={4}
-              style={{ ...inputStyle, resize: "vertical", width: "100%" }}
-              required
-            />
-          </label>
-          <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button type="submit" disabled={submitting || !selectedShipId} style={btnStyle("primary")}>
-              {submitting ? "Submitting..." : "Submit NCR"}
-            </button>
-            <button type="button" onClick={() => setShowForm(false)} style={btnStyle("secondary")}>Cancel</button>
-          </div>
-        </form>
+      {showEditor && editorSerial && selectedProject && (
+        <NcrEditor
+          projectCode={selectedProject.code}
+          projectName={selectedProject.name}
+          hullNumber={ships.find((s) => s.id === selectedShipId)?.hullNumber || ""}
+          shipName={ships.find((s) => s.id === selectedShipId)?.shipName || ""}
+          shipId={selectedShipId}
+          authorName={session?.user.displayName || ""}
+          userDisciplines={session?.user.disciplines || []}
+          serialNo={editorSerial.serial}
+          formattedSerial={editorSerial.formatted}
+          onPublish={handlePublishNcr}
+          onClose={() => setShowEditor(false)}
+        />
       )}
 
       {!selectedProjectId ? (
-        <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
-          <p style={{ fontSize: 15 }}>Please select a project in Hall first.</p>
-        </div>
+        <div style={emptyStateStyle}>Please select a project first.</div>
       ) : loading ? (
-        <p style={{ color: "var(--nb-text-muted)", textAlign: "center", padding: 40 }}>Loading NCRs...</p>
+        <div style={emptyStateStyle}>Loading NCRs...</div>
       ) : error ? (
-        <p style={{ color: "#ef4444", textAlign: "center", padding: 40 }}>{error}</p>
-      ) : !selectedShipId ? (
-        <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
-          <p style={{ fontSize: 15 }}>No ships found in the current project.</p>
-        </div>
+        <div style={{ ...emptyStateStyle, color: "#dc2626" }}>{error}</div>
       ) : items.length === 0 ? (
-        <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
-          <p style={{ fontSize: 15 }}>No NCRs found.</p>
-          <p style={{ fontSize: 13 }}>Click "+ Create NCR" to add a new record for the current ship.</p>
-        </div>
+        <div style={emptyStateStyle}>No NCRs found for the current filters.</div>
       ) : (
-        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {items.map((item) => (
-            <div
-              key={item.id}
-              style={{
-                background: "var(--nb-surface)",
-                border: "1px solid var(--nb-border)",
-                borderRadius: 10,
-                padding: "14px 18px",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "flex-start",
-                gap: 16
-              }}
-            >
-              <div style={{ flex: 1 }}>
-                <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
-                  <span style={tagStyle(
-                    item.status === "pending_approval" ? "#f59e0b" :
-                    item.status === "approved" ? "#22c55e" :
-                    item.status === "rejected" ? "#ef4444" : "#94a3b8"
-                  )}>
-                    {item.status.toUpperCase().replace("_", " ")}
-                  </span>
-                  <span style={{ fontSize: 14, fontWeight: 600, color: "var(--nb-text)" }}>{item.title}</span>
-                  <span style={{ fontSize: 12, color: "var(--nb-text-muted)" }}>
-                    {new Date(item.createdAt).toLocaleDateString()}
-                  </span>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {items.map((item) => {
+            const expanded = expandedId === item.id;
+            const reviewDraft = reviewDrafts[item.id] ?? createReviewDraft(item);
+            const canReviewEdit = canApprove && !item.closedAt && item.status === "pending_approval";
+            const canDownloadPdf = item.status === "approved" || !!item.pdf;
+
+            return (
+              <section key={item.id} style={panelStyle}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+                  <div style={{ flex: 1, minWidth: 280 }}>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
+                      <span style={tagStyle(badgeColor(item.status))}>{item.status.replace(/_/g, " ").toUpperCase()}</span>
+                      <strong style={{ fontSize: 16, color: "var(--nb-text)", wordBreak: "break-word" }}>{item.title}</strong>
+                      <span style={{ fontSize: 12, color: "var(--nb-text-muted)" }}>
+                        {item.shipName ? `${item.shipName} (${item.hullNumber ?? item.shipId})` : item.shipId}
+                      </span>
+                    </div>
+                    <div style={{ fontSize: 13, color: "var(--nb-text-muted)", marginBottom: 8 }}>
+                      Raised by {item.authorName ?? item.authorId} on {new Date(item.createdAt).toLocaleString()}
+                      {item.approvedBy
+                        ? ` · Published by ${item.approvedByName ?? item.approvedBy}${item.approvedAt ? ` on ${new Date(item.approvedAt).toLocaleString()}` : ""}`
+                        : ""}
+                    </div>
+                    <div style={{ fontSize: 14, color: "var(--nb-text)", lineHeight: 1.6, marginBottom: 8, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+                      {item.content.length > 180 && !expanded ? `${item.content.slice(0, 180)}...` : item.content}
+                    </div>
+                    <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12, color: "var(--nb-text-muted)" }}>
+                      <span style={{ wordBreak: "break-word" }}>Remark: {item.remark || "-"}</span>
+                      <span>Images: {item.imageAttachments.length}</span>
+                      <span>Files: {item.relatedFiles.length}</span>
+                      <span>Official PDF: {item.pdf ? `v${item.pdf.version}` : "Not published"}</span>
+                    </div>
+                    {item.closedAt && (
+                      <div style={tagStyle("#64748b")}>
+                        CLOSED • {item.closedAt.slice(0, 10)}
+                      </div>
+                    )}
+                  </div>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    <button type="button" style={btnStyle("secondary")} onClick={() => setExpandedId(expanded ? null : item.id)}>
+                      {expanded ? "Hide Details" : "Show Details"}
+                    </button>
+                    {canDownloadPdf ? (
+                      <button type="button" style={btnStyle("secondary")} onClick={() => void handleDownloadPdf(item)} disabled={pdfBusyId === item.id}>
+                        {pdfBusyId === item.id ? "Downloading..." : "Download PDF"}
+                      </button>
+
+                    ) : null}
+                    {canApprove && item.status === "pending_approval" ? (
+                      <>
+                        <button type="button" style={btnStyle("primary")} onClick={() => void handleApprove(item.id, true)}>
+                          Publish
+                        </button>
+                        <button type="button" style={dangerStyle} onClick={() => void handleApprove(item.id, false)}>
+                          Reject
+                        </button>
+                      </>
+                    ) : null}
+
+                    {item.status === "approved" && (
+                      <button
+                        type="button"
+                        style={item.closedAt ? btnStyle("secondary") : dangerStyle}
+                        onClick={() => void handleCloseNcr(item.id, !item.closedAt)}
+                      >
+                        {item.closedAt ? "Re-open NCR" : "Close NCR"}
+                      </button>
+                    )}
+                  </div>
                 </div>
-                <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: "var(--nb-text)" }}>
-                  {item.content}
-                </p>
-                <p style={{ margin: "4px 0 0", fontSize: 12, color: "var(--nb-text-muted)" }}>
-                  Inspector: {item.authorName ?? item.authorId}
-                  {item.approvedBy && ` · Handled by ${item.approvedByName ?? item.approvedBy} on ${new Date(item.approvedAt!).toLocaleDateString()}`}
-                </p>
-              </div>
-              {item.status === "pending_approval" && (
-                <div style={{ display: "flex", gap: 6, flexDirection: "column" }}>
-                  <button
-                    onClick={() => handleApprove(item.id, true)}
-                    style={{ ...btnStyle("primary"), fontSize: 12, padding: "4px 10px", whiteSpace: "nowrap" }}
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => handleApprove(item.id, false)}
-                    style={{ ...btnStyle("secondary"), fontSize: 12, padding: "4px 10px", whiteSpace: "nowrap" }}
-                  >
-                    Reject
-                  </button>
-                </div>
-              )}
-            </div>
-          ))}
+
+                {expanded ? (
+                  <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      <div style={{ ...subPanelStyle, borderLeft: canReviewEdit ? "4px solid var(--nb-accent, #0f766e)" : "4px solid #cbd5e1" }}>
+                        <div style={{ ...subTitleStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span>Manager Review Draft</span>
+                          {canReviewEdit ? <span style={{ fontSize: 11, color: "#d97706", fontWeight: 700 }}>EDITABLE BEFORE PUBLISH</span> : null}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          <label style={labelStyle}>
+                            TITLE
+                            <input
+                              value={reviewDraft.title}
+                              onChange={(event) => setReviewDrafts((current) => ({ ...current, [item.id]: { ...reviewDraft, title: event.target.value } }))}
+                              style={inputStyle}
+                              disabled={!canReviewEdit}
+                            />
+                          </label>
+                          <label style={labelStyle}>
+                            DISCIPLINE
+                            <input
+                              value={reviewDraft.discipline}
+                              onChange={(event) => setReviewDrafts((current) => ({ ...current, [item.id]: { ...reviewDraft, discipline: event.target.value } }))}
+                              style={inputStyle}
+                              disabled={!canReviewEdit}
+                            />
+                          </label>
+                          <label style={labelStyle}>
+                            DESCRIPTION OF NON-CONFORMITY
+                            <textarea
+                              value={reviewDraft.content}
+                              onChange={(event) => setReviewDrafts((current) => ({ ...current, [item.id]: { ...reviewDraft, content: event.target.value } }))}
+                              rows={6}
+                              style={{ ...inputStyle, width: "100%", resize: "vertical" }}
+                              disabled={!canReviewEdit}
+                            />
+                          </label>
+                          <label style={labelStyle}>
+                            REQUESTED RECTIFY
+                            <textarea
+                              value={reviewDraft.rectifyRequest}
+                              onChange={(event) => setReviewDrafts((current) => ({ ...current, [item.id]: { ...reviewDraft, rectifyRequest: event.target.value } }))}
+                              rows={4}
+                              style={{ ...inputStyle, width: "100%", resize: "vertical" }}
+                              disabled={!canReviewEdit}
+                            />
+                          </label>
+                          <label style={labelStyle}>
+                            REMARK
+                            <textarea
+                              value={reviewDraft.remark}
+                              onChange={(event) => setReviewDrafts((current) => ({ ...current, [item.id]: { ...reviewDraft, remark: event.target.value } }))}
+                              rows={3}
+                              style={{ ...inputStyle, width: "100%", resize: "vertical" }}
+                              disabled={!canReviewEdit}
+                            />
+                          </label>
+                          {canReviewEdit ? (
+                            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                              <button type="button" style={btnStyle("primary")} onClick={() => void handleSaveReview(item.id)} disabled={savingReviewId === item.id}>
+                                {savingReviewId === item.id ? "Saving..." : "Save Review Changes"}
+                              </button>
+                              <button type="button" style={btnStyle("secondary")} onClick={() => setReviewDrafts((current) => ({ ...current, [item.id]: createReviewDraft(item) }))}>
+                                Reset Draft
+                              </button>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+
+                      <div style={subPanelStyle}>
+                        <div style={subTitleStyle}>Images</div>
+                        <ImageUploader
+                          shipId={item.shipId}
+                          existingImages={item.imageAttachments}
+                          onImagesChange={(images) => void handleImageChange(item, images)}
+                          disabled={savingImagesId === item.id}
+                        />
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      <div style={subPanelStyle}>
+                        <div style={subTitleStyle}>Related Files</div>
+                        <RelatedFileUploader
+                          ncrId={item.id}
+                          files={item.relatedFiles}
+                          onFilesChange={(files) => updateLocalItem({ ...item, relatedFiles: files })}
+                        />
+                      </div>
+
+                      <div style={{ ...subPanelStyle, borderLeft: "4px solid #0f172a" }}>
+                        <div style={{ ...subTitleStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span>Shipbuilder's Formal Reply</span>
+                          {item.closedAt && <span style={{ fontSize: 10, color: "#64748b" }}>🔒 READ ONLY (CLOSED)</span>}
+                        </div>
+                        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                          <label style={labelStyle}>
+                            REPLY CONTENT
+                            <textarea
+                              style={{ ...inputStyle, minHeight: 80 }}
+                              defaultValue={item.builderReply || ""}
+                              onBlur={(e) => {
+                                if (e.target.value !== (item.builderReply || "")) {
+                                  void handleUpdateReply(item.id, { builderReply: e.target.value });
+                                }
+                              }}
+                              disabled={!!item.closedAt}
+                              placeholder="Enter shipyard corrective actions..."
+                            />
+                          </label>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                            <label style={labelStyle}>
+                              REPLY DATE
+                              <input
+                                type="date"
+                                style={inputStyle}
+                                defaultValue={item.replyDate || ""}
+                                onBlur={(e) => {
+                                  if (e.target.value !== (item.replyDate || "")) {
+                                    void handleUpdateReply(item.id, { replyDate: e.target.value });
+                                  }
+                                }}
+                                disabled={!!item.closedAt}
+                              />
+                            </label>
+                            <label style={labelStyle}>
+                              VERIFIED BY (PG)
+                              <input
+                                style={inputStyle}
+                                defaultValue={item.verifiedBy || ""}
+                                onBlur={(e) => {
+                                  if (e.target.value !== (item.verifiedBy || "")) {
+                                    void handleUpdateReply(item.id, { verifiedBy: e.target.value });
+                                  }
+                                }}
+                                disabled={!!item.closedAt}
+                              />
+                            </label>
+                          </div>
+                          <label style={labelStyle}>
+                            VERIFICATION DATE
+                            <input
+                              type="date"
+                              style={inputStyle}
+                              defaultValue={item.verifyDate || ""}
+                              onBlur={(e) => {
+                                if (e.target.value !== (item.verifyDate || "")) {
+                                  void handleUpdateReply(item.id, { verifyDate: e.target.value });
+                                }
+                              }}
+                              disabled={!!item.closedAt}
+                            />
+                          </label>
+                        </div>
+                        {item.closedBy && (
+                          <div style={{ marginTop: 15, padding: 10, background: "#f8fafc", borderRadius: 8, fontSize: 11, color: "#64748b" }}>
+                            ✅ <strong>Closed by</strong> {item.closedByName || item.closedBy} on {new Date(item.closedAt!).toLocaleString()}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
         </div>
       )}
     </main>
@@ -325,31 +649,58 @@ export function Ncrs() {
 
 function btnStyle(variant: "primary" | "secondary"): React.CSSProperties {
   const base: React.CSSProperties = {
-    border: "none",
+    border: "1px solid transparent",
     borderRadius: 6,
-    padding: "7px 14px",
+    padding: "8px 14px",
     fontSize: 13,
     fontWeight: 600,
-    cursor: "pointer",
-    transition: "background 0.15s"
+    cursor: "pointer"
   };
   if (variant === "primary") {
     return { ...base, background: "var(--nb-accent, #0f766e)", color: "#fff" };
   }
   return {
     ...base,
-    background: "var(--nb-surface, #f1f5f9)",
+    background: "var(--nb-surface, #f8fafc)",
     color: "var(--nb-text, #334155)",
     border: "1px solid var(--nb-border, #e2e8f0)"
   };
 }
 
-const formBoxStyle: React.CSSProperties = {
-  background: "var(--nb-surface)",
-  border: "1px solid var(--nb-border)",
+const dangerStyle: React.CSSProperties = {
+  ...btnStyle("secondary"),
+  background: "#fef2f2",
+  border: "1px solid #fecaca",
+  color: "#b91c1c"
+};
+
+const panelStyle: React.CSSProperties = {
+  background: "var(--nb-surface, #fff)",
+  border: "1px solid var(--nb-border, #e2e8f0)",
+  borderRadius: 12,
+  padding: 18
+};
+
+const subPanelStyle: React.CSSProperties = {
+  border: "1px solid var(--nb-border, #e2e8f0)",
   borderRadius: 10,
-  padding: "16px 20px",
-  marginBottom: 16
+  padding: 14,
+  background: "var(--nb-bg, #fff)"
+};
+
+const subTitleStyle: React.CSSProperties = {
+  fontWeight: 700,
+  fontSize: 13,
+  color: "var(--nb-text, #334155)",
+  marginBottom: 10
+};
+
+const filterBarStyle: React.CSSProperties = {
+  display: "flex",
+  gap: 12,
+  marginBottom: 16,
+  flexWrap: "wrap",
+  alignItems: "center"
 };
 
 const labelStyle: React.CSSProperties = {
@@ -371,7 +722,7 @@ const labelInlineStyle: React.CSSProperties = {
 };
 
 const inputStyle: React.CSSProperties = {
-  padding: "6px 10px",
+  padding: "7px 10px",
   borderRadius: 6,
   border: "1px solid var(--nb-border, #e2e8f0)",
   fontSize: 13,
@@ -379,15 +730,21 @@ const inputStyle: React.CSSProperties = {
   color: "var(--nb-text, #334155)"
 };
 
+const emptyStateStyle: React.CSSProperties = {
+  textAlign: "center",
+  padding: "56px 24px",
+  color: "var(--nb-text-muted)"
+};
+
 function tagStyle(color: string): React.CSSProperties {
   return {
     fontSize: 11,
     fontWeight: 700,
-    padding: "2px 8px",
-    borderRadius: 4,
+    padding: "3px 8px",
+    borderRadius: 999,
     background: `${color}18`,
     color,
-    letterSpacing: 0.5,
-    textTransform: "uppercase" as const
+    letterSpacing: 0.4,
+    textTransform: "uppercase"
   };
 }

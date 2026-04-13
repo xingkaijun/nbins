@@ -351,7 +351,7 @@ export function Observations() {
       {/* 页面标题区 */}
       <section className="hero" style={{ paddingBottom: 16 }}>
         <div>
-          <p className="eyebrow">OBSERVATION MANAGEMENT</p>
+          <p className="eyebrow">PUNCH LIST MANAGEMENT</p>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
             <h2 style={{ fontSize: "1.25rem", margin: 0 }}>
               {getProjectName() ? `Project: ${getProjectName()}` : "ALL PROJECTS"}
@@ -391,12 +391,12 @@ export function Observations() {
       {/* Tabs & Actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16, borderBottom: "2px solid var(--nb-border, #e2e8f0)" }}>
         <div style={{ display: "flex", gap: 0 }}>
-          <button onClick={() => setActiveTab("observations")} style={tabStyle(activeTab === "observations")}>Observations</button>
+          <button onClick={() => setActiveTab("observations")} style={tabStyle(activeTab === "observations")}>Punch List</button>
           <button onClick={() => setActiveTab("inspection-comments")} style={tabStyle(activeTab === "inspection-comments")}>Inspection Comments</button>
         </div>
         {activeTab === "observations" && (
           <div style={{ paddingBottom: 6 }}>
-            <button onClick={() => setShowForm(!showForm)} style={{ ...btnStyle("primary"), background: "var(--nb-accent)", color: "#fff" }}>+ NEW OBSERVATION</button>
+            <button onClick={() => setShowForm(!showForm)} style={{ ...btnStyle("primary"), background: "var(--nb-accent)", color: "#fff" }}>+ NEW PUNCH ITEM</button>
           </div>
         )}
       </div>
@@ -446,7 +446,7 @@ export function Observations() {
       {/* 新增类型 */}
       {showTypeForm && (
         <form onSubmit={handleAddType} style={formBoxStyle}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700 }}>Add Custom Observation Type</h3>
+          <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700 }}>Add Custom Punch List Type</h3>
           <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
             <label style={fieldLabelStyle}><span>Code</span><input type="text" value={newTypeCode} onChange={e => setNewTypeCode(e.target.value)} placeholder="e.g. hatch_cover" style={inputStyle} required /></label>
             <label style={fieldLabelStyle}><span>Label</span><input type="text" value={newTypeLabel} onChange={e => setNewTypeLabel(e.target.value)} placeholder="e.g. Hatch Cover" style={inputStyle} required /></label>
@@ -514,7 +514,7 @@ export function Observations() {
       {/* 新增意见表单 */}
       {showForm && (
         <form onSubmit={handleSubmit} style={formBoxStyle}>
-          <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700 }}>New Observation</h3>
+          <h3 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700 }}>New Punch List Item</h3>
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <label style={fieldLabelStyle}><span>Type</span>
               <select value={formType} onChange={e => setFormType(e.target.value)} style={inputStyle} required>
@@ -535,7 +535,7 @@ export function Observations() {
             </label>
           </div>
           <label style={{ ...fieldLabelStyle, marginTop: 12, display: "block" }}><span>Content (one per line)</span>
-            <textarea value={formContent} onChange={e => setFormContent(e.target.value)} placeholder="Enter observations, one per line..." rows={3} style={{ ...inputStyle, resize: "vertical", width: "100%" }} required />
+            <textarea value={formContent} onChange={e => setFormContent(e.target.value)} placeholder="Enter punch list items, one per line..." rows={3} style={{ ...inputStyle, resize: "vertical", width: "100%" }} required />
           </label>
           <label style={{ ...fieldLabelStyle, marginTop: 8, display: "block" }}><span>Remark</span>
             <input type="text" value={formRemark} onChange={e => setFormRemark(e.target.value)} placeholder="Optional remark" style={{ ...inputStyle, width: "100%" }} />
@@ -564,8 +564,8 @@ export function Observations() {
             : items;
           return filteredItems.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
-            <p style={{ fontSize: 14 }}>No observation records found</p>
-            <p style={{ fontSize: 12 }}>Click "+ New Observation" or "Paste Import" to start adding.</p>
+            <p style={{ fontSize: 14 }}>No punch list records found</p>
+            <p style={{ fontSize: 12 }}>Click "+ New Punch Item" or "Paste Import" to start adding.</p>
           </div>
         ) : (
           <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
@@ -649,7 +649,7 @@ export function Observations() {
       {editingItem && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(15, 23, 42, 0.6)", display: "grid", placeItems: "center", zIndex: 9999 }}>
           <form style={{ ...formBoxStyle, width: "95%", maxWidth: 650, margin: 0, background: "var(--nb-panel)", borderRadius: 12, boxShadow: "0 20px 40px rgba(0,0,0,0.2)", padding: 24 }} onSubmit={handleEditSubmit}>
-            <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 800 }}>Edit Observation #{editingItem.discipline ? `${editingItem.discipline.substring(0, 3).toUpperCase()}-${editingItem.serialNo}` : editingItem.serialNo}</h3>
+            <h3 style={{ margin: "0 0 20px", fontSize: 16, fontWeight: 800 }}>Edit Punch Item #{editingItem.discipline ? `${editingItem.discipline.substring(0, 3).toUpperCase()}-${editingItem.serialNo}` : editingItem.serialNo}</h3>
             <div style={{ display: "grid", gap: 16, gridTemplateColumns: "1fr 1fr 1fr" }}>
               <label style={fieldLabelStyle}><span>Type</span>
                 <select value={editType} onChange={e => setEditType(e.target.value)} style={{ ...inputStyle, width: '100%' }} required>

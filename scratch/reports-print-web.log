@@ -1,0 +1,21 @@
+
+> @nbins/web@0.1.0 dev D:\Code\nbins\packages\web
+> vite "--host" "127.0.0.1" "--port" "4173"
+
+
+  [32m[1mVITE[22m v5.4.21[39m  [2mready in [0m[1m642[22m[2m[0m ms[22m
+
+  [32m➜[39m  [1mLocal[22m:   [36mhttp://127.0.0.1:[1m4173[22m/[39m
+[2m21:38:35[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/NcrEditor.tsx[22m
+[2m21:40:44[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/NcrEditor.tsx[22m
+[2m21:50:48[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Ncrs.tsx[22m
+[2m21:51:53[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Ncrs.tsx[22m
+[2m21:54:24[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Ncrs.tsx[22m
+[2m21:55:59[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Import.tsx, /src/pages/Observations.tsx, /src/pages/Dashboard.tsx, /src/pages/Admin.tsx[22m
+[2m21:55:59[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/NcrEditor.tsx[22m
+[2m21:56:00[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/NcrEditor.tsx[22m
+[2m21:56:00[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/components/NcrEditor.tsx[22m
+[2m21:57:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Ncrs.tsx[22m
+[2m21:57:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Ncrs.tsx[22m
+[2m21:57:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Ncrs.tsx[22m
+[2m21:57:41[22m [36m[1m[vite][22m[39m [32mhmr update [39m[2m/src/pages/Ncrs.tsx[22m

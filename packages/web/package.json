@@ -10,9 +10,11 @@
   },
   "dependencies": {
     "@nbins/shared": "workspace:*",
+    "@types/html2canvas": "^1.0.0",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",
     "file-saver": "^2.0.5",
+    "html2canvas": "^1.4.1",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.8.0",
     "react": "^18.3.1",

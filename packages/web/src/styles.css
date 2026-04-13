@@ -1263,32 +1263,22 @@ tbody tr.record-row.isSelected {
     width: 100% !important;
   }
 
-  .shell,
+  body {
+    background: white !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
   .overflow-y-auto,
-  .overflow-auto {
+  .overflow-auto,
+  .overflow-hidden {
     overflow: visible !important;
     height: auto !important;
     min-height: 0 !important;
   }
 
-  .overflow-hidden {
-    overflow: visible !important;
-  }
-
   .no-print {
     display: none !important;
-  }
-
-  .print-only {
-    display: block !important;
-    width: 100% !important;
-    position: relative !important;
-  }
-
-  body {
-    background: white !important;
-    -webkit-print-color-adjust: exact;
-    print-color-adjust: exact;
   }
 
   .break-after-page {
@@ -1324,8 +1314,59 @@ tbody tr.record-row.isSelected {
   .shadow {
     box-shadow: none !important;
   }
-}
 
-.print-only {
-  display: none;
+  body.reports-print-mode #root,
+  body.reports-print-mode .shell {
+    min-height: auto !important;
+    height: auto !important;
+    background: #ffffff !important;
+  }
+
+  body.reports-print-mode .shell {
+    padding: 0 !important;
+    display: block !important;
+  }
+
+  body.reports-print-mode .shell > .topbar,
+  body.reports-print-mode .shell > .bottomStatusBar {
+    display: none !important;
+  }
+
+  body.reports-print-mode .shell > .workspace {
+    padding: 0 !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+    box-shadow: none !important;
+  }
+
+  body.reports-print-mode .reports-page-root {
+    display: block !important;
+    height: auto !important;
+    background: #ffffff !important;
+  }
+
+  body.reports-print-mode .reports-page-root > :not(.reports-print-frame) {
+    display: none !important;
+  }
+
+  body.reports-print-mode #a4-pages-container {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    overflow: visible !important;
+    background: #ffffff !important;
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  body.reports-print-mode #a4-pages-container > * {
+    margin: 0 auto !important;
+    box-shadow: none !important;
+  }
+
+  body.reports-print-mode #a4-pages-container > *:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
 }

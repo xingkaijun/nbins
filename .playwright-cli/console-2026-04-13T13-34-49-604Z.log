@@ -1,0 +1,18 @@
+[     104ms] [INFO] %cDownload the React DevTools for a better development experience: https://reactjs.org/link/react-devtools font-weight:bold @ http://127.0.0.1:4173/node_modules/.vite/deps/chunk-XMNNGJFR.js?v=8616d48c:21550
+[     298ms] [VERBOSE] [DOM] Input elements should have autocomplete attributes (suggested: "current-password"): (More info: https://www.chromium.org/developers/design-documents/create-amazing-password-forms) %o @ http://127.0.0.1:4173/login?redirect=%2Freports:0
+[ 1451206ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:4173/src/pages/Reports.tsx?t=1776088740712:0
+[ 1451207ms] [ERROR] [hmr] Failed to reload /src/pages/Reports.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:175
+[ 1874686ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:4173/src/pages/Reports.tsx?t=1776089164234:0
+[ 1874687ms] [ERROR] [hmr] Failed to reload /src/pages/Reports.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:175
+[ 1927868ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:4173/src/pages/Reports.tsx?t=1776089217425:0
+[ 1927869ms] [ERROR] [hmr] Failed to reload /src/pages/Reports.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:175
+[ 2050256ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:4173/src/pages/Reports.tsx?t=1776089339799:0
+[ 2050257ms] [ERROR] [hmr] Failed to reload /src/pages/Reports.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:175
+[ 2058321ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:4173/src/pages/Reports.tsx?t=1776089347868:0
+[ 2058326ms] [ERROR] [hmr] Failed to reload /src/pages/Reports.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:175
+[ 2076614ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:4173/src/pages/Reports.tsx?t=1776089366174:0
+[ 2076615ms] [ERROR] [hmr] Failed to reload /src/pages/Reports.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:175
+[ 2090162ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:4173/src/pages/Reports.tsx?t=1776089379725:0
+[ 2090163ms] [ERROR] [hmr] Failed to reload /src/pages/Reports.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:175
+[ 2154002ms] [ERROR] Failed to load resource: the server responded with a status of 500 (Internal Server Error) @ http://127.0.0.1:4173/src/pages/Reports.tsx?t=1776089443564:0
+[ 2154002ms] [ERROR] [hmr] Failed to reload /src/pages/Reports.tsx. This could be due to syntax errors or importing non-existent modules. (see errors above) @ http://127.0.0.1:4173/@vite/client:175

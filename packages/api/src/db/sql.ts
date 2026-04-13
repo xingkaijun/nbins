@@ -9,6 +9,7 @@ const TABLE_ORDER = [
   "inspectionRounds",
   "comments",
   "ncrs",
+  "ncrIndex",
   "observationTypes",
   "observations"
 ] as const satisfies ReadonlyArray<keyof SchemaDefinition>;
