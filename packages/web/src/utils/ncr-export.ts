@@ -1,6 +1,7 @@
 import { jsPDF } from "jspdf";
 import { PG_LOGO_B64 } from "./pg-logo-b64";
 import type { NcrItemResponse } from "@nbins/shared";
+import { downloadMedia } from "../api";
 
 /**
  * NCR 高清矢量导出工具
@@ -23,6 +24,47 @@ const COLORS = {
  */
 function wrapText(doc: jsPDF, text: string, maxWidth: number): string[] {
   return doc.splitTextToSize(text || "-", maxWidth);
+}
+
+/**
+ * 从对象键中提取文件名
+ */
+function extractFilename(objectKey: string): string {
+  const segments = objectKey.split("/");
+  return segments[segments.length - 1] ?? objectKey;
+}
+
+/**
+ * 将Blob转换为base64字符串
+ */
+async function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const result = reader.result as string;
+      resolve(result);
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * 下载图片并转换为base64
+ */
+async function downloadImageAsBase64(shipId: string, objectKey: string): Promise<string | null> {
+  try {
+    const filename = extractFilename(objectKey);
+    console.log(`Downloading image: ${filename} for ship ${shipId}`);
+    const blob = await downloadMedia(shipId, filename);
+    console.log(`Downloaded blob size: ${blob.size}, type: ${blob.type}`);
+    const base64 = await blobToBase64(blob);
+    console.log(`Converted to base64, length: ${base64.length}`);
+    return base64;
+  } catch (error) {
+    console.error(`Failed to download image ${objectKey}:`, error);
+    return null;
+  }
 }
 
 export async function exportNcrToPdf(ncr: NcrItemResponse) {
@@ -200,54 +242,78 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
 
   // --- 后续页: 附件照片 ---
   if (ncr.imageAttachments && ncr.imageAttachments.length > 0) {
-    const imagesPerPage = 4; // 矢量模式下，放 4 张大图效果更好
-    const totalPages = Math.ceil(ncr.imageAttachments.length / imagesPerPage);
-
-    for (let p = 0; p < totalPages; p++) {
-      doc.addPage();
-      
-      // Attachment Page Header
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(...COLORS.accent);
-      doc.text("PG SHIPMANAGEMENT", margin, 20);
-      doc.setFontSize(22);
-      doc.setTextColor(...COLORS.dark);
-      doc.text("PHOTO ATTACHMENTS", margin, 30);
-      doc.setDrawColor(...COLORS.dark);
-      doc.setLineWidth(0.8);
-      doc.line(margin, 35, pageWidth - margin, 35);
-
-      const pageAttachments = ncr.imageAttachments.slice(p * imagesPerPage, (p + 1) * imagesPerPage);
-      
-      let imgY = 45;
-      pageAttachments.forEach((url, i) => {
-        const row = Math.floor(i / 2);
-        const col = i % 2;
-        const imgX = margin + col * (usableWidth / 2 + 5);
-        const currentY = imgY + row * 95;
-        
-        // 绘制图片容器
-        doc.setDrawColor(...COLORS.border);
-        doc.roundedRect(imgX, currentY, usableWidth / 2 - 2, 75, 2, 2, "S");
-        
-        try {
-          doc.addImage(url, "JPEG", imgX + 1, currentY + 1, usableWidth / 2 - 4, 73);
-        } catch (e) {
-          doc.text("Image Load Error", imgX + 10, currentY + 30);
-        }
-
-        doc.setFontSize(8);
-        doc.setTextColor(...COLORS.dark);
-        doc.text(`Photo ${p * imagesPerPage + i + 1}`, imgX, currentY + 82);
-      });
-
-      // Footer
-      doc.setFontSize(7);
-      doc.setTextColor(...COLORS.muted);
-      doc.text(`PG SHIPMANAGEMENT • ATTACHMENT • ${ncr.hullNumber || '-'}`, margin, pageHeight - 10);
-      doc.text(`Page ${p + 2}`, pageWidth - margin, pageHeight - 10, { align: "right" });
+    console.log(`Processing ${ncr.imageAttachments.length} image attachments for NCR ${ncr.id}`);
+    console.log('Image attachments:', ncr.imageAttachments);
+    
+    // 先下载所有图片并转换为base64
+    const imageBase64List: Array<{ base64: string; index: number }> = [];
+    for (let i = 0; i < ncr.imageAttachments.length; i++) {
+      const base64 = await downloadImageAsBase64(ncr.shipId, ncr.imageAttachments[i]);
+      if (base64) {
+        imageBase64List.push({ base64, index: i });
+      }
     }
+
+    console.log(`Successfully loaded ${imageBase64List.length} images out of ${ncr.imageAttachments.length}`);
+
+    if (imageBase64List.length > 0) {
+      const imagesPerPage = 4; // 矢量模式下，放 4 张大图效果更好
+      const totalPages = Math.ceil(imageBase64List.length / imagesPerPage);
+
+      for (let p = 0; p < totalPages; p++) {
+        doc.addPage();
+        
+        // Attachment Page Header
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8);
+        doc.setTextColor(...COLORS.accent);
+        doc.text("PG SHIPMANAGEMENT", margin, 20);
+        doc.setFontSize(22);
+        doc.setTextColor(...COLORS.dark);
+        doc.text("PHOTO ATTACHMENTS", margin, 30);
+        doc.setDrawColor(...COLORS.dark);
+        doc.setLineWidth(0.8);
+        doc.line(margin, 35, pageWidth - margin, 35);
+
+        const pageImages = imageBase64List.slice(p * imagesPerPage, (p + 1) * imagesPerPage);
+        
+        let imgY = 45;
+        pageImages.forEach((imgData, i) => {
+          const row = Math.floor(i / 2);
+          const col = i % 2;
+          const imgX = margin + col * (usableWidth / 2 + 5);
+          const currentY = imgY + row * 95;
+          
+          // 绘制图片容器
+          doc.setDrawColor(...COLORS.border);
+          doc.roundedRect(imgX, currentY, usableWidth / 2 - 2, 75, 2, 2, "S");
+          
+          try {
+            console.log(`Adding image ${imgData.index + 1} to PDF at position (${imgX}, ${currentY})`);
+            doc.addImage(imgData.base64, "JPEG", imgX + 1, currentY + 1, usableWidth / 2 - 4, 73);
+          } catch (e) {
+            console.error("Failed to add image to PDF:", e);
+            doc.setFontSize(8);
+            doc.setTextColor(...COLORS.muted);
+            doc.text("Image Load Error", imgX + 10, currentY + 30);
+          }
+
+          doc.setFontSize(8);
+          doc.setTextColor(...COLORS.dark);
+          doc.text(`Photo ${imgData.index + 1}`, imgX, currentY + 82);
+        });
+
+        // Footer
+        doc.setFontSize(7);
+        doc.setTextColor(...COLORS.muted);
+        doc.text(`PG SHIPMANAGEMENT • ATTACHMENT • ${ncr.hullNumber || '-'}`, margin, pageHeight - 10);
+        doc.text(`Page ${p + 2}`, pageWidth - margin, pageHeight - 10, { align: "right" });
+      }
+    } else {
+      console.warn('No images were successfully loaded');
+    }
+  } else {
+    console.log('No image attachments found');
   }
 
   // 保存

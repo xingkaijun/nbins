@@ -18,6 +18,7 @@ import {
 import { useAuth } from "../auth-context";
 import { NcrEditor } from "../components/NcrEditor";
 import { ImageUploader } from "../components/ImageUploader";
+import { ImageGallery } from "../components/ImageGallery";
 import { RelatedFileUploader } from "../components/RelatedFileUploader";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 
@@ -548,12 +549,27 @@ export function Ncrs() {
 
                       <div style={subPanelStyle}>
                         <div style={subTitleStyle}>Images</div>
-                        <ImageUploader
-                          shipId={item.shipId}
-                          existingImages={item.imageAttachments}
-                          onImagesChange={(images) => void handleImageChange(item, images)}
-                          disabled={savingImagesId === item.id}
-                        />
+                        {item.status === "pending_approval" || item.status === "draft" ? (
+                          <ImageUploader
+                            shipId={item.shipId}
+                            existingImages={item.imageAttachments}
+                            onImagesChange={(images) => void handleImageChange(item, images)}
+                            disabled={savingImagesId === item.id}
+                          />
+                        ) : (
+                          <>
+                            {item.imageAttachments.length > 0 ? (
+                              <ImageGallery
+                                shipId={item.shipId}
+                                images={item.imageAttachments}
+                              />
+                            ) : (
+                              <div style={{ fontSize: 12, color: "var(--nb-text-muted, #64748b)", fontStyle: "italic" }}>
+                                No images attached
+                              </div>
+                            )}
+                          </>
+                        )}
                       </div>
                     </div>
 

@@ -301,16 +301,12 @@ export function ImageUploader({ shipId, existingImages, onImagesChange, disabled
       ) : null}
 
       {existingImages.length > 0 ? (
-        <>
-          <ImageGallery shipId={shipId} images={existingImages} />
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-            {existingImages.map((key) => (
-              <button key={key} type="button" onClick={() => void handleRemove(key)} style={removeButtonStyle} disabled={disabled || uploading}>
-                Remove {extractFilename(key)}
-              </button>
-            ))}
-          </div>
-        </>
+        <ImageGallery 
+          shipId={shipId} 
+          images={existingImages} 
+          onRemove={handleRemove}
+          disabled={disabled || uploading}
+        />
       ) : null}
     </div>
   );
@@ -324,16 +320,6 @@ const buttonStyle: React.CSSProperties = {
   color: "var(--nb-text, #334155)",
   cursor: "pointer",
   fontWeight: 600,
-  fontSize: 12
-};
-
-const removeButtonStyle: React.CSSProperties = {
-  border: "1px solid #fecaca",
-  borderRadius: 999,
-  padding: "4px 10px",
-  background: "#fef2f2",
-  color: "#b91c1c",
-  cursor: "pointer",
   fontSize: 12
 };
 

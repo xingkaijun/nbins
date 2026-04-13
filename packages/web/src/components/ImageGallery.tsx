@@ -4,6 +4,8 @@ import { downloadMedia } from "../api";
 interface ImageGalleryProps {
   shipId: string;
   images: string[];
+  onRemove?: (key: string) => void;
+  disabled?: boolean;
 }
 
 function extractFilename(objectKey: string): string {
@@ -23,7 +25,7 @@ function previewBlob(blob: Blob): void {
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
 }
 
-export function ImageGallery({ shipId, images }: ImageGalleryProps) {
+export function ImageGallery({ shipId, images, onRemove, disabled = false }: ImageGalleryProps) {
   const [urls, setUrls] = useState<Record<string, string>>({});
   const imagesKey = images.join(",");
 
@@ -92,7 +94,7 @@ export function ImageGallery({ shipId, images }: ImageGalleryProps) {
       {images.map((key) => {
         const previewUrl = urls[key];
         return (
-          <div key={key} style={{ border: "1px solid var(--nb-border, #e2e8f0)", borderRadius: 8, overflow: "hidden", background: "var(--nb-bg, #fff)" }}>
+          <div key={key} style={{ border: "1px solid var(--nb-border, #e2e8f0)", borderRadius: 8, overflow: "hidden", background: "var(--nb-bg, #fff)", display: "flex", flexDirection: "column" }}>
             {previewUrl ? (
               <button
                 type="button"
@@ -106,9 +108,27 @@ export function ImageGallery({ shipId, images }: ImageGalleryProps) {
                 Loading...
               </div>
             )}
-            <div style={{ padding: "6px 8px", fontSize: 11, color: "var(--nb-text-muted)", wordBreak: "break-all" }}>
-              {extractFilename(key)}
-            </div>
+            {onRemove && (
+              <button
+                type="button"
+                onClick={() => onRemove(key)}
+                disabled={disabled}
+                style={{
+                  border: "1px solid #fecaca",
+                  borderTop: "none",
+                  borderRadius: "0 0 8px 8px",
+                  padding: "6px 8px",
+                  background: "#fef2f2",
+                  color: "#b91c1c",
+                  cursor: disabled ? "not-allowed" : "pointer",
+                  fontSize: 11,
+                  fontWeight: 600,
+                  opacity: disabled ? 0.5 : 1
+                }}
+              >
+                Remove
+              </button>
+            )}
           </div>
         );
       })}
