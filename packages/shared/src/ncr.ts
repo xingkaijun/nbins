@@ -20,10 +20,12 @@ export interface NcrItemResponse {
   projectId: string;
   shipId: string;
   shipName?: string;
+  projectName?: string;
   hullNumber?: string;
   title: string;
   discipline: string;
   serialNo: number;
+  formattedSerial?: string;
   content: string;
   remark: string | null;
   authorId: string;
