@@ -662,8 +662,18 @@ export async function fetchNcrById(ncrId: string): Promise<NcrItemResponse> {
 }
 
 export async function fetchNextNcrSerial(shipId: string): Promise<{ serial: number; formatted: string }> {
-  return requestJson<{ serial: number; formatted: string }>(`/ncrs/meta/next-serial?shipId=${encodeURIComponent(shipId)}`);
+  const encodedShipId = encodeURIComponent(shipId);
+
+  try {
+    return await requestJson<{ serial: number; formatted: string }>(`/ncrs/meta/next-serial?shipId=${encodedShipId}`);
+  } catch (error) {
+    if (error instanceof ApiError && error.status === 404) {
+      return requestJson<{ serial: number; formatted: string }>(`/ncrs/next-serial?shipId=${encodedShipId}`);
+    }
+    throw error;
+  }
 }
+
 
 
 export async function createNcr(shipId: string, data: CreateNcrRequest): Promise<NcrItemResponse> {
