@@ -1,286 +1,255 @@
-import html2canvas from "html2canvas";
 import { jsPDF } from "jspdf";
 import { PG_LOGO_B64 } from "./pg-logo-b64";
 import type { NcrItemResponse } from "@nbins/shared";
 
 /**
- * 这是一个纯前端的 PDF 导出方案，能够保证“所见即所得”。
- * 它会渲染一个与 NcrEditor 预览完全相同的布局并导出为 A4 格式。
+ * NCR 高清矢量导出工具
+ * 放弃 html2canvas 截图模式，改用全矢量绘制，确保文字绝对清晰。
  */
+
+// PDF 颜色配置
+const COLORS = {
+  primary: [15, 118, 110] as [number, number, number], // #0f766e
+  dark: [15, 23, 42] as [number, number, number],    // #0f172a
+  muted: [148, 163, 184] as [number, number, number], // #94a3b8
+  border: [226, 232, 240] as [number, number, number], // #e2e8f0
+  bg: [248, 250, 252] as [number, number, number],    // #f8fafc
+  white: [255, 255, 255] as [number, number, number],
+  accent: [13, 148, 136] as [number, number, number],  // #0d9488
+};
+
+/**
+ * 文本自动换行处理
+ */
+function wrapText(doc: jsPDF, text: string, maxWidth: number): string[] {
+  return doc.splitTextToSize(text || "-", maxWidth);
+}
+
 export async function exportNcrToPdf(ncr: NcrItemResponse) {
-  // 1. 创建一个临时的、屏幕外渲染的容器
   const doc = new jsPDF({
     orientation: "p",
     unit: "mm",
     format: "a4"
   });
 
-  const container = document.createElement("div");
-  container.style.position = "absolute";
-  container.style.left = "-9999px";
-  container.style.top = "0";
-  container.style.width = "210mm";
-  // 不要限制高度，允许内容自然延伸
-  container.style.backgroundColor = "#fff";
-  container.style.fontFamily = "'Inter', sans-serif";
-  container.style.color = "#1e293b";
+  const margin = 15;
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const usableWidth = pageWidth - margin * 2;
+
+  // --- 第一页: 主报告 ---
   
-  // 注入样式
-  const style = document.createElement("style");
-  style.textContent = `
-    .pdf-page {
-      width: 210mm;
-      min-height: 297mm;
-      padding: 18mm 15mm;
-      box-sizing: border-box;
-      background: white;
-      position: relative;
-    }
-    .pdf-header {
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-end;
-      border-bottom: 2px solid #0f172a;
-      padding-bottom: 15px;
-      margin-bottom: 25px;
-    }
-    .pdf-meta-card {
-      background: #f8fafc;
-      padding: 14px 18px;
-      border-radius: 12px;
-      border: 1px solid #f1f5f9;
-      margin-bottom: 20px;
-    }
-    .pdf-section {
-      margin-bottom: 20px;
-    }
-    .pdf-section-title {
-      font-size: 10px;
-      font-weight: 900;
-      color: #0f172a;
-      text-transform: uppercase;
-      letter-spacing: 0.05em;
-      margin-bottom: 6px;
-      border-left: 3px solid #0d9488;
-      padding-left: 10px;
-    }
-    .pdf-content-box {
-      border: 1px solid #e2e8f0;
-      border-radius: 8px;
-      padding: 12px;
-      font-size: 13px;
-      line-height: 1.5;
-      white-space: pre-wrap;
-      word-break: break-word;
-      min-height: 40px;
-    }
-    .pdf-subject-text {
-      font-size: 16px;
-      font-weight: 800;
-      color: #0f172a;
-    }
-    .pdf-signature-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 1px;
-      background: #e2e8f0;
-      border: 1px solid #e2e8f0;
-      border-radius: 12px;
-      overflow: hidden;
-      margin-top: 25px;
-    }
-    .pdf-sig-cell {
-      background: white;
-      padding: 12px 15px;
-    }
-    .pdf-sig-label {
-      font-size: 8px;
-      font-weight: 900;
-      color: #94a3b8;
-      text-transform: uppercase;
-      margin-bottom: 8px;
-    }
-    .pdf-sig-value {
-      font-size: 13px;
-      font-weight: 900;
-      color: #0f172a;
-      margin-bottom: 18px;
-    }
-    .pdf-footer {
-       border-top: 1px solid #f1f5f9;
-       padding-top: 10px;
-       display: flex;
-       justify-content: space-between;
-       font-size: 7px;
-       font-weight: 900;
-       color: #cbd5e1;
-       margin-top: auto;
-    }
-    .photo-grid {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 10px;
-      margin-top: 10px;
-    }
-    .photo-item {
-      border: 1px solid #e2e8f0;
-      border-radius: 6px;
-      overflow: hidden;
-    }
-    .photo-img {
-      width: 100%;
-      height: 140px;
-      object-fit: cover;
-    }
-    .photo-remark {
-      padding: 6px;
-      font-size: 9px;
-      background: #f8fafc;
-      border-top: 1px solid #e2e8f0;
-    }
-  `;
-  document.head.appendChild(style);
-  document.body.appendChild(container);
+  // 1. Header (Logo & Title)
+  doc.setDrawColor(...COLORS.dark);
+  doc.setLineWidth(0.8);
+  doc.line(margin, 35, pageWidth - margin, 35); // 分割线
+
+  // Title
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(...COLORS.accent);
+  doc.text("PG SHIPMANAGEMENT", margin, 20);
+  
+  doc.setFontSize(26);
+  doc.setTextColor(...COLORS.dark);
+  doc.text("NON CONFORMITY REPORT", margin, 30);
+
+  // Logo
+  doc.addImage(PG_LOGO_B64, "JPEG", pageWidth - margin - 40, 10, 40, 15);
+
+  // Reference
+  doc.setFontSize(7);
+  doc.setTextColor(...COLORS.muted);
+  doc.text("REPORT REFERENCE", pageWidth - margin, 22, { align: "right" });
+  doc.setFontSize(12);
+  doc.setTextColor(185, 28, 28); // #b91c1c (Red)
+  doc.text(ncr.formattedSerial || String(ncr.serialNo), pageWidth - margin, 28, { align: "right" });
+
+  // 2. Metadata Cards (布局)
+  let y = 42;
+  
+  const drawCard = (x: number, title: string, data: { label: string; value: string }[]) => {
+    const cardWidth = usableWidth / 2 - 4;
+    doc.setFillColor(...COLORS.bg);
+    doc.roundedRect(x, y, cardWidth, 18, 2, 2, "F");
+    doc.setDrawColor(...COLORS.border);
+    doc.setLineWidth(0.1);
+    doc.roundedRect(x, y, cardWidth, 18, 2, 2, "S");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.accent);
+    doc.text(title, x + 4, y + 5);
+
+    data.forEach((item, i) => {
+      const itemX = x + 4 + (i * (cardWidth / 2 - 2));
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6);
+      doc.setTextColor(...COLORS.muted);
+      doc.text(item.label, itemX, y + 10);
+      
+      doc.setFontSize(9);
+      doc.setTextColor(...COLORS.dark);
+      doc.text(item.value || "-", itemX, y + 14);
+    });
+  };
 
   const dateStr = new Date(ncr.createdAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
-  const publishedDate = ncr.approvedAt ? new Date(ncr.approvedAt).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "-";
+  drawCard(margin, "VESSEL & PROJECT", [
+    { label: "PROJECT NAME", value: ncr.projectName || "-" },
+    { label: "HULL NUMBER", value: ncr.hullNumber || "-" }
+  ]);
+  drawCard(margin + usableWidth / 2 + 4, "REPORT METADATA", [
+    { label: "ISSUE DATE", value: dateStr },
+    { label: "STATUS", value: ncr.status.toUpperCase() }
+  ]);
 
-  // 2. 构造 HTML 内容 (Page 1: Main Report)
-  const page1 = document.createElement("div");
-  page1.className = "pdf-page";
-  page1.innerHTML = `
-    <div class="pdf-header">
-      <div>
-        <div style="font-size: 9px; font-weight: 900; color: #0d9488; letter-spacing: 0.2em; margin-bottom: 2px;">PG SHIPMANAGEMENT</div>
-        <h1 style="font-size: 26px; font-weight: 900; color: #0f172a; margin: 0; line-height: 1; text-transform: uppercase;">NON CONFORMITY REPORT</h1>
-      </div>
-      <div style="display: flex; align-items: center; gap: 20px;">
-        <div style="text-align: right;">
-          <div style="font-size: 8px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px;">Report Reference</div>
-          <div style="font-size: 13px; font-weight: 900; color: #b91c1c;">${ncr.formattedSerial || ncr.serialNo}</div>
-        </div>
-        <img src="${PG_LOGO_B64}" style="height: 60px;" />
-      </div>
-    </div>
+  y += 28;
 
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px;">
-      <div class="pdf-meta-card">
-        <div style="font-size: 8px; font-weight: 900; color: #0d9488; margin-bottom: 8px;">VESSEL & PROJECT</div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div><div style="font-size: 7px; color: #94a3b8;">PROJECT NAME</div><div style="font-size: 10px; font-weight: 900;">${ncr.projectName || "-"}</div></div>
-          <div><div style="font-size: 7px; color: #94a3b8;">HULL NUMBER</div><div style="font-size: 10px; font-weight: 900;">${ncr.hullNumber || "-"}</div></div>
-        </div>
-      </div>
-      <div class="pdf-meta-card">
-        <div style="font-size: 8px; font-weight: 900; color: #0d9488; margin-bottom: 8px;">REPORT METADATA</div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
-          <div><div style="font-size: 7px; color: #94a3b8;">ISSUE DATE</div><div style="font-size: 10px; font-weight: 900;">${dateStr}</div></div>
-          <div><div style="font-size: 7px; color: #94a3b8;">STATUS</div><div style="font-size: 10px; font-weight: 900; color: #16a34a;">${ncr.status.toUpperCase()}</div></div>
-        </div>
-      </div>
-    </div>
+  // 3. Section Drawing Function
+  const drawSection = (title: string, content: string, height: number, fontSize = 11, isBold = false) => {
+    doc.setDrawColor(...COLORS.accent);
+    doc.setLineWidth(1);
+    doc.line(margin, y - 4, margin, y); // Accent line
+    
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...COLORS.dark);
+    doc.text(title.toUpperCase(), margin + 4, y - 1);
 
-    <div class="pdf-section">
-      <div class="pdf-section-title">Report Subject</div>
-      <div class="pdf-content-box pdf-subject-text">${ncr.title}</div>
-    </div>
+    y += 2;
+    doc.setDrawColor(...COLORS.border);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(margin, y, usableWidth, height, 1, 1, "S");
 
-    <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 20px; margin-bottom: 15px;">
-      <div class="pdf-section">
-        <div class="pdf-section-title">To (Recipient)</div>
-        <div class="pdf-content-box" style="font-weight: 700;">${ncr.remark?.match(/To: (.*?) \|/)?.[1] || "-"}</div>
-      </div>
-      <div class="pdf-section">
-        <div class="pdf-section-title">Discipline</div>
-        <div class="pdf-content-box" style="font-weight: 700;">${ncr.discipline}</div>
-      </div>
-    </div>
+    doc.setFont("helvetica", isBold ? "bold" : "normal");
+    doc.setFontSize(fontSize);
+    doc.setTextColor(...COLORS.dark);
+    
+    const wrapped = wrapText(doc, content, usableWidth - 8);
+    doc.text(wrapped, margin + 4, y + 6);
+    
+    y += height + 10;
+  };
 
-    <div class="pdf-section">
-      <div class="pdf-section-title">Description of Non-Conformity</div>
-      <div class="pdf-content-box" style="min-height: 120px;">${ncr.content}</div>
-    </div>
+  // SUBJECT
+  drawSection("Report Subject", ncr.title, 14, 14, true);
 
-    <div class="pdf-section">
-      <div class="pdf-section-title">Requested Rectify</div>
-      <div class="pdf-content-box" style="min-height: 60px;">${ncr.rectifyRequest || "-"}</div>
-    </div>
+  // TO & DISCIPLINE (Split)
+  const recipient = ncr.remark?.match(/To: (.*?) \|/)?.[1] || "-";
+  
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("TO (RECIPIENT)", margin + 4, y - 1);
+  doc.text("DISCIPLINE", margin + usableWidth * 0.6 + 4, y - 1);
+  
+  doc.roundedRect(margin, y, usableWidth * 0.6 - 5, 12, 1, 1, "S");
+  doc.roundedRect(margin + usableWidth * 0.6, y, usableWidth * 0.4, 12, 1, 1, "S");
+  
+  doc.setFontSize(11);
+  doc.text(recipient, margin + 4, y + 7);
+  doc.text(ncr.discipline, margin + usableWidth * 0.6 + 4, y + 7);
+  
+  y += 22;
 
-    <div class="pdf-signature-grid">
-      <div class="pdf-sig-cell">
-        <div class="pdf-sig-label">Prepared By (Inspector)</div>
-        <div class="pdf-sig-value">${ncr.authorName || ncr.authorId}</div>
-        <div style="border-top: 1px solid #e2e8f0; padding-top: 4px; font-size: 8px; color: #94a3b8;">HANDWRITTEN SIGNATURE & TITLE</div>
-      </div>
-      <div class="pdf-sig-cell">
-        <div class="pdf-sig-label">Approved By (Manager)</div>
-        <div class="pdf-sig-value">${ncr.approvedByName || (ncr.status === 'approved' ? 'Verified' : 'Pending Review')}</div>
-        <div style="border-top: 1px solid #e2e8f0; padding-top: 4px; font-size: 8px; color: #94a3b8;">AUTHORIZED SIGNATURE & DATE (${publishedDate})</div>
-      </div>
-    </div>
+  // DESCRIPTION
+  drawSection("Description of Non-Conformity", ncr.content, 55);
 
-    <div class="pdf-footer">
-      <div>PG SHIPMANAGEMENT • NCR FORM • OFFICIAL DOCUMENT</div>
-      <div>Page 1</div>
-    </div>
-  `;
-  container.appendChild(page1);
+  // RECTIFY
+  drawSection("Requested Rectify", ncr.rectifyRequest || "-", 35);
 
-  // 3. 渲染页面到 Canvas 并添加到 PDF
-  const canvas1 = await html2canvas(page1, { scale: 2, useCORS: true, backgroundColor: "#fff" });
-  const imgData1 = canvas1.toDataURL("image/jpeg", 0.95);
-  doc.addImage(imgData1, "JPEG", 0, 0, 210, 297);
+  // 4. Signature Block
+  const sigHeight = 25;
+  doc.setDrawColor(...COLORS.border);
+  doc.setLineWidth(0.3);
+  doc.setFillColor(...COLORS.bg);
+  doc.roundedRect(margin, y, usableWidth, sigHeight, 3, 3, "F");
+  doc.roundedRect(margin, y, usableWidth, sigHeight, 3, 3, "S");
+  doc.line(margin + usableWidth / 2, y, margin + usableWidth / 2, y + sigHeight);
 
-  // 4. Page 2+: Photo Attachments (if exists)
+  const drawSig = (x: number, title: string, name: string, detail: string) => {
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.muted);
+    doc.text(title.toUpperCase(), x + 4, y + 5);
+    
+    doc.setFontSize(11);
+    doc.setTextColor(...COLORS.dark);
+    doc.text(name, x + 4, y + 12);
+    
+    doc.setDrawColor(...COLORS.border);
+    doc.line(x + 4, y + 18, x + usableWidth / 2 - 4, y + 18);
+    
+    doc.setFontSize(6);
+    doc.setTextColor(...COLORS.muted);
+    doc.text(detail.toUpperCase(), x + 4, y + 22);
+  };
+
+  const approvedName = ncr.approvedByName || (ncr.status === 'approved' ? 'VERIFIED' : 'PENDING REVIEW');
+  const approvedDate = ncr.approvedAt ? new Date(ncr.approvedAt).toLocaleDateString() : 'DATE TBD';
+
+  drawSig(margin, "Prepared By (Inspector)", ncr.authorName || ncr.authorId, "Handwritten Signature & Title");
+  drawSig(margin + usableWidth / 2, "Approved By (Manager)", approvedName, `Authorized Signature & Date (${approvedDate})`);
+
+  // Footer (Page 1)
+  doc.setFontSize(7);
+  doc.setTextColor(...COLORS.muted);
+  doc.text("PG SHIPMANAGEMENT • NCR FORM • OFFICIAL DOCUMENT", margin, pageHeight - 10);
+  doc.text("Page 1", pageWidth - margin, pageHeight - 10, { align: "right" });
+
+
+  // --- 后续页: 附件照片 ---
   if (ncr.imageAttachments && ncr.imageAttachments.length > 0) {
-    const imagesPerRow = 2;
-    const imagesPerPage = 6;
+    const imagesPerPage = 4; // 矢量模式下，放 4 张大图效果更好
     const totalPages = Math.ceil(ncr.imageAttachments.length / imagesPerPage);
 
     for (let p = 0; p < totalPages; p++) {
       doc.addPage();
-      const pageX = document.createElement("div");
-      pageX.className = "pdf-page";
       
-      const currentImages = ncr.imageAttachments.slice(p * imagesPerPage, (p + 1) * imagesPerPage);
-      
-      pageX.innerHTML = `
-        <div class="pdf-header">
-           <div>
-            <div style="font-size: 9px; font-weight: 900; color: #0d9488; letter-spacing: 0.2em; margin-bottom: 2px;">PG SHIPMANAGEMENT</div>
-            <h1 style="font-size: 22px; font-weight: 900; color: #0f172a; margin: 0;">PHOTO ATTACHMENTS</h1>
-          </div>
-          <div style="text-align: right;">
-            <div style="font-size: 8px; font-weight: 900; color: #94a3b8; text-transform: uppercase; margin-bottom: 4px;">Reference</div>
-            <div style="font-size: 13px; font-weight: 900; color: #1e293b;">${ncr.formattedSerial || ncr.serialNo}</div>
-          </div>
-        </div>
-        
-        <div class="photo-grid">
-          ${currentImages.map((imgUrl, i) => `
-            <div class="photo-item">
-              <img src="${imgUrl}" class="photo-img" />
-              <div class="photo-remark">Attachment Photo ${p * imagesPerPage + i + 1}</div>
-            </div>
-          `).join("")}
-        </div>
+      // Attachment Page Header
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(8);
+      doc.setTextColor(...COLORS.accent);
+      doc.text("PG SHIPMANAGEMENT", margin, 20);
+      doc.setFontSize(22);
+      doc.setTextColor(...COLORS.dark);
+      doc.text("PHOTO ATTACHMENTS", margin, 30);
+      doc.setDrawColor(...COLORS.dark);
+      doc.setLineWidth(0.8);
+      doc.line(margin, 35, pageWidth - margin, 35);
 
-        <div class="pdf-footer" style="position: absolute; bottom: 15mm; left: 15mm; right: 15mm;">
-          <div>PG SHIPMANAGEMENT • ATTACHMENT • ${ncr.hullNumber || '-'}</div>
-          <div>Page ${p + 2}</div>
-        </div>
-      `;
+      const pageAttachments = ncr.imageAttachments.slice(p * imagesPerPage, (p + 1) * imagesPerPage);
       
-      container.innerHTML = "";
-      container.appendChild(pageX);
-      const canvasX = await html2canvas(pageX, { scale: 2, useCORS: true, backgroundColor: "#fff" });
-      const imgDataX = canvasX.toDataURL("image/jpeg", 0.95);
-      doc.addImage(imgDataX, "JPEG", 0, 0, 210, 297);
+      let imgY = 45;
+      pageAttachments.forEach((url, i) => {
+        const row = Math.floor(i / 2);
+        const col = i % 2;
+        const imgX = margin + col * (usableWidth / 2 + 5);
+        const currentY = imgY + row * 95;
+        
+        // 绘制图片容器
+        doc.setDrawColor(...COLORS.border);
+        doc.roundedRect(imgX, currentY, usableWidth / 2 - 2, 75, 2, 2, "S");
+        
+        try {
+          doc.addImage(url, "JPEG", imgX + 1, currentY + 1, usableWidth / 2 - 4, 73);
+        } catch (e) {
+          doc.text("Image Load Error", imgX + 10, currentY + 30);
+        }
+
+        doc.setFontSize(8);
+        doc.setTextColor(...COLORS.dark);
+        doc.text(`Photo ${p * imagesPerPage + i + 1}`, imgX, currentY + 82);
+      });
+
+      // Footer
+      doc.setFontSize(7);
+      doc.setTextColor(...COLORS.muted);
+      doc.text(`PG SHIPMANAGEMENT • ATTACHMENT • ${ncr.hullNumber || '-'}`, margin, pageHeight - 10);
+      doc.text(`Page ${p + 2}`, pageWidth - margin, pageHeight - 10, { align: "right" });
     }
   }
 
-  // 5. 保存并清理
+  // 保存
   doc.save(`NCR-${ncr.formattedSerial || ncr.id}.pdf`);
-  document.body.removeChild(container);
-  style.remove();
 }
