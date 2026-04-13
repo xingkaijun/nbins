@@ -55,12 +55,8 @@ async function blobToBase64(blob: Blob): Promise<string> {
 async function downloadImageAsBase64(shipId: string, objectKey: string): Promise<string | null> {
   try {
     const filename = extractFilename(objectKey);
-    console.log(`Downloading image: ${filename} for ship ${shipId}`);
     const blob = await downloadMedia(shipId, filename);
-    console.log(`Downloaded blob size: ${blob.size}, type: ${blob.type}`);
-    const base64 = await blobToBase64(blob);
-    console.log(`Converted to base64, length: ${base64.length}`);
-    return base64;
+    return await blobToBase64(blob);
   } catch (error) {
     console.error(`Failed to download image ${objectKey}:`, error);
     return null;
@@ -86,26 +82,30 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   doc.setLineWidth(0.8);
   doc.line(margin, 35, pageWidth - margin, 35); // 分割线
 
-  // Title
+  // Title (左侧，下移对齐)
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(...COLORS.accent);
   doc.text("PG SHIPMANAGEMENT", margin, 20);
   
-  doc.setFontSize(26);
+  doc.setFontSize(18);
   doc.setTextColor(...COLORS.dark);
-  doc.text("NON CONFORMITY REPORT", margin, 30);
+  doc.text("NON CONFORMITY REPORT", margin, 28);
 
-  // Logo
-  doc.addImage(PG_LOGO_B64, "JPEG", pageWidth - margin - 40, 10, 40, 15);
+  // Logo (右侧，再放大1.2倍)
+  const logoWidth = 8.25 * 1.2 * 1.2;
+  const logoHeight = 8.25 * 1.2 * 1.2;
+  doc.addImage(PG_LOGO_B64, "JPEG", pageWidth - margin - logoWidth, 20, logoWidth, logoHeight);
 
-  // Reference
+  // Reference Number (logo左边，与PG SHIPMANAGEMENT对齐)
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(7);
   doc.setTextColor(...COLORS.muted);
-  doc.text("REPORT REFERENCE", pageWidth - margin, 22, { align: "right" });
-  doc.setFontSize(12);
+  doc.text("REPORT REFERENCE", pageWidth - margin - logoWidth - 35, 20);
+  
+  doc.setFontSize(11);
   doc.setTextColor(185, 28, 28); // #b91c1c (Red)
-  doc.text(ncr.formattedSerial || String(ncr.serialNo), pageWidth - margin, 28, { align: "right" });
+  doc.text(ncr.formattedSerial || String(ncr.serialNo), pageWidth - margin - logoWidth - 35, 28);
 
   // 2. Metadata Cards (布局)
   let y = 42;
@@ -242,9 +242,6 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
 
   // --- 后续页: 附件照片 ---
   if (ncr.imageAttachments && ncr.imageAttachments.length > 0) {
-    console.log(`Processing ${ncr.imageAttachments.length} image attachments for NCR ${ncr.id}`);
-    console.log('Image attachments:', ncr.imageAttachments);
-    
     // 先下载所有图片并转换为base64
     const imageBase64List: Array<{ base64: string; index: number }> = [];
     for (let i = 0; i < ncr.imageAttachments.length; i++) {
@@ -254,8 +251,6 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
       }
     }
 
-    console.log(`Successfully loaded ${imageBase64List.length} images out of ${ncr.imageAttachments.length}`);
-
     if (imageBase64List.length > 0) {
       const imagesPerPage = 4; // 矢量模式下，放 4 张大图效果更好
       const totalPages = Math.ceil(imageBase64List.length / imagesPerPage);
@@ -264,16 +259,34 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
         doc.addPage();
         
         // Attachment Page Header
+        doc.setDrawColor(...COLORS.dark);
+        doc.setLineWidth(0.8);
+        doc.line(margin, 35, pageWidth - margin, 35); // 分割线
+
+        // Title (左侧，下移对齐)
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8);
         doc.setTextColor(...COLORS.accent);
         doc.text("PG SHIPMANAGEMENT", margin, 20);
-        doc.setFontSize(22);
+        
+        doc.setFontSize(18);
         doc.setTextColor(...COLORS.dark);
-        doc.text("PHOTO ATTACHMENTS", margin, 30);
-        doc.setDrawColor(...COLORS.dark);
-        doc.setLineWidth(0.8);
-        doc.line(margin, 35, pageWidth - margin, 35);
+        doc.text("PHOTO ATTACHMENTS", margin, 28);
+
+        // Logo (右侧，再放大1.2倍)
+        const logoWidth = 8.25 * 1.2 * 1.2;
+        const logoHeight = 8.25 * 1.2 * 1.2;
+        doc.addImage(PG_LOGO_B64, "JPEG", pageWidth - margin - logoWidth, 20, logoWidth, logoHeight);
+
+        // Reference Number (logo左边，与PG SHIPMANAGEMENT对齐)
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(7);
+        doc.setTextColor(...COLORS.muted);
+        doc.text("REPORT REFERENCE", pageWidth - margin - logoWidth - 35, 20);
+        
+        doc.setFontSize(11);
+        doc.setTextColor(185, 28, 28); // #b91c1c (Red)
+        doc.text(ncr.formattedSerial || String(ncr.serialNo), pageWidth - margin - logoWidth - 35, 28);
 
         const pageImages = imageBase64List.slice(p * imagesPerPage, (p + 1) * imagesPerPage);
         
@@ -289,7 +302,6 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
           doc.roundedRect(imgX, currentY, usableWidth / 2 - 2, 75, 2, 2, "S");
           
           try {
-            console.log(`Adding image ${imgData.index + 1} to PDF at position (${imgX}, ${currentY})`);
             doc.addImage(imgData.base64, "JPEG", imgX + 1, currentY + 1, usableWidth / 2 - 4, 73);
           } catch (e) {
             console.error("Failed to add image to PDF:", e);
@@ -309,11 +321,7 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
         doc.text(`PG SHIPMANAGEMENT • ATTACHMENT • ${ncr.hullNumber || '-'}`, margin, pageHeight - 10);
         doc.text(`Page ${p + 2}`, pageWidth - margin, pageHeight - 10, { align: "right" });
       }
-    } else {
-      console.warn('No images were successfully loaded');
     }
-  } else {
-    console.log('No image attachments found');
   }
 
   // 保存

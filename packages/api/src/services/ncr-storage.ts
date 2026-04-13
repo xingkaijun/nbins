@@ -513,8 +513,10 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
   ));
 
   const shipIds = Array.from(new Set(records.map((record) => record.shipId)));
+  const projectIds = Array.from(new Set(records.map((record) => record.projectId)));
   const userMap = new Map<string, string>();
   const shipMap = new Map<string, ShipDisplayRow>();
+  const projectMap = new Map<string, string>();
 
   if (userIds.length > 0) {
     const users = await db.prepare(
@@ -536,6 +538,16 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
     }
   }
 
+  if (projectIds.length > 0) {
+    const projects = await db.prepare(
+      `SELECT "id", "name" FROM "projects" WHERE "id" IN (${projectIds.map(() => "?").join(",")})`
+    ).bind(...projectIds).all<{ id: string; name: string }>();
+
+    for (const project of projects.results ?? []) {
+      projectMap.set(project.id, project.name);
+    }
+  }
+
   return records.map((record) => {
     const ship = shipMap.get(record.shipId);
     const relatedFiles = record.relatedFiles.map((file) => ({
@@ -547,11 +559,15 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
       id: record.id,
       projectId: record.projectId,
       shipId: record.shipId,
+      projectName: projectMap.get(record.projectId),
       shipName: ship?.shipName,
       hullNumber: ship?.hullNumber,
       title: record.title,
       discipline: record.discipline,
       serialNo: record.serialNo,
+      formattedSerial: ship?.hullNumber 
+        ? `NCR-${ship.hullNumber}-${String(record.serialNo).padStart(3, "0")}`
+        : undefined,
       content: record.content,
       remark: record.remark,
       authorId: record.authorId,
