@@ -348,28 +348,23 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
       }
 
       if (loaded.record.status !== "pending_approval") {
-        return c.json({ ok: false, error: "Only NCRs pending approval can be published or rejected" }, 409);
+        return c.json({ ok: false, error: "Only NCRs pending approval can be published" }, 409);
+      }
+
+      if (body.approved !== true) {
+        return c.json({ ok: false, error: "Only publish is supported for NCR approval" }, 400);
       }
 
       const now = new Date().toISOString();
-      let nextRecord: StoredNcrRecord = {
+      const nextRecord = await generateNcrPdfForRecord(c.env, {
         ...loaded.record,
-        status: body.approved ? "approved" : "rejected",
-        approvedBy: body.approved ? authUser.id : null,
-        approvedAt: body.approved ? now : null,
+        status: "approved",
+        approvedBy: authUser.id,
+        approvedAt: now,
         updatedAt: now
-      };
+      });
 
-
-      if (body.approved) {
-        nextRecord = await generateNcrPdfForRecord(c.env, nextRecord);
-      } else {
-        await writeStoredNcr(c.env, nextRecord);
-        await upsertNcrIndex(c.env, nextRecord);
-      }
-
-      if (body.approved) {
-
+      try {
         c.executionCtx.waitUntil((async () => {
           const webhookUrl = c.env.N8N_WEBHOOK_URL;
           if (!webhookUrl) {
@@ -398,7 +393,10 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
             console.error("Failed to trigger NCR approval webhook", error);
           }
         })());
+      } catch {
+        // Some test environments do not provide an ExecutionContext.
       }
+
 
       return c.json({ ok: true, data: await respondWithHydrated(c, nextRecord) });
     } catch (error) {
@@ -406,6 +404,7 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
       return c.json({ ok: false, error: String(error) }, 500);
     }
   });
+
 
   routes.delete("/:id", async (c) => {
     try {

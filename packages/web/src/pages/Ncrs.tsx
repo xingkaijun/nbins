@@ -4,6 +4,7 @@ import {
   approveNcr,
   closeNcr,
   createNcr,
+  deleteNcr,
   fetchNcrList,
   fetchProjects,
   fetchShips,
@@ -12,6 +13,7 @@ import {
   type ProjectRecord,
   type ShipRecord
 } from "../api";
+
 
 import { useAuth } from "../auth-context";
 import { NcrEditor } from "../components/NcrEditor";
@@ -76,6 +78,7 @@ export function Ncrs() {
   const [savingReviewId, setSavingReviewId] = useState<string | null>(null);
   const [savingImagesId, setSavingImagesId] = useState<string | null>(null);
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -221,13 +224,41 @@ export function Ncrs() {
     alert("NCR 已提交，状态为待审批。请口头通知 manager 审核、修改并发布。");
   }
 
-  async function handleApprove(id: string, approved: boolean): Promise<void> {
+  async function handlePublish(id: string): Promise<void> {
     try {
-      const updated = await approveNcr(id, { approved });
+      const updated = await approveNcr(id, { approved: true });
       updateLocalItem(updated);
-      alert(approved ? "NCR 已发布，正式 PDF 已同步生成。" : "NCR 已拒绝。");
+      alert("NCR 已发布，正式 PDF 已同步生成。");
     } catch (approveError: any) {
-      alert(`Failed to ${approved ? "publish" : "reject"} NCR: ${approveError?.message || "Unknown error"}`);
+      alert(`Failed to publish NCR: ${approveError?.message || "Unknown error"}`);
+    }
+  }
+
+  async function handleDeleteNcr(item: NcrItemResponse): Promise<void> {
+    const reference = item.formattedSerial || `#${item.serialNo}`;
+    const confirmed = window.confirm(`确认删除 ${reference} 吗？此操作不可撤销。`);
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setDeletingId(item.id);
+      await deleteNcr(item.id);
+      setItems((current) => current.filter((entry) => entry.id !== item.id));
+      setReviewDrafts((current) => {
+        const next = { ...current };
+        delete next[item.id];
+        return next;
+      });
+      setExpandedId((current) => (current === item.id ? null : current));
+      setSavingReviewId((current) => (current === item.id ? null : current));
+      setSavingImagesId((current) => (current === item.id ? null : current));
+      setPdfBusyId((current) => (current === item.id ? null : current));
+      alert("NCR 已删除。");
+    } catch (deleteError: any) {
+      alert(`Failed to delete NCR: ${deleteError?.message || "Unknown error"}`);
+    } finally {
+      setDeletingId((current) => (current === item.id ? null : current));
     }
   }
 
@@ -359,8 +390,8 @@ export function Ncrs() {
             <option value="">All status</option>
             <option value="pending_approval">Pending approval</option>
             <option value="approved">Approved</option>
-            <option value="rejected">Rejected</option>
           </select>
+
         </label>
 
         <label style={labelInlineStyle}>
@@ -415,6 +446,8 @@ export function Ncrs() {
             const reviewDraft = reviewDrafts[item.id] ?? createReviewDraft(item);
             const canReviewEdit = canApprove && !item.closedAt && item.status === "pending_approval";
             const canDownloadPdf = item.status === "approved" || !!item.pdf;
+            const canDelete = canApprove || session?.user.id === item.authorId;
+
 
             return (
               <section key={item.id} style={panelStyle}>
@@ -479,14 +512,21 @@ export function Ncrs() {
                     ) : null}
 
                     {canApprove && item.status === "pending_approval" ? (
-                      <>
-                        <button type="button" style={btnStyle("primary")} onClick={() => void handleApprove(item.id, true)}>
-                          Publish
-                        </button>
-                        <button type="button" style={dangerStyle} onClick={() => void handleApprove(item.id, false)}>
-                          Reject
-                        </button>
-                      </>
+                      <button type="button" style={btnStyle("primary")} onClick={() => void handlePublish(item.id)}>
+                        Publish
+                      </button>
+                    ) : null}
+
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        style={dangerStyle}
+                        onClick={() => void handleDeleteNcr(item)}
+                        disabled={deletingId === item.id}
+                        aria-busy={deletingId === item.id}
+                      >
+                        {deletingId === item.id ? "Deleting..." : "Delete NCR"}
+                      </button>
                     ) : null}
 
                     {item.status === "approved" && (

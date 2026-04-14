@@ -81,5 +81,5 @@ export interface CloseNcrRequest {
 }
 
 export interface ApproveNcrRequest {
-  approved: boolean;
+  approved: true;
 }
