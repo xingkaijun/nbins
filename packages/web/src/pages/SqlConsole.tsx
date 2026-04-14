@@ -19,6 +19,26 @@ export function SqlConsole() {
   const [importMode, setImportMode] = useState<'none' | 'db' | 'project'>('none');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  const compactActionRowStyle: React.CSSProperties = {
+    display: 'flex',
+    flexWrap: 'wrap',
+    gap: 4
+  };
+
+  const compactActionButtonStyle: React.CSSProperties = {
+    padding: '4px 8px',
+    fontSize: 11,
+    justifyContent: 'center',
+    whiteSpace: 'nowrap'
+  };
+
+  const compactDangerButtonStyle: React.CSSProperties = {
+    ...compactActionButtonStyle,
+    borderColor: '#fca5a5',
+    color: '#991b1b'
+  };
+
+
   // 验证口令 — 用一个轻量 SQL 试探
   const verifySecret = async (s: string): Promise<boolean> => {
     try {
@@ -753,60 +773,61 @@ export function SqlConsole() {
         {/* Right Column: Data Management */}
         <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
           
-          {/* Export Database */}
-          <div style={{ border: '1px solid var(--nb-border)', borderRadius: '8px', padding: '14px', background: '#f8fafc' }}>
-             <h3 style={{ fontSize: 9, margin: '0 0 10px 0', fontWeight: 800, color: 'var(--nb-text-muted)', letterSpacing: '0.1em' }}>DATABASE</h3>
-             <div style={{ display: 'flex', gap: 6 }}>
-               <button className="admin-btn" style={{ flex: 1, fontSize: 10 }} onClick={handleExportDb} disabled={loading}>
+         {/* Export Database */}
+         <div style={{ border: '1px solid var(--nb-border)', borderRadius: '8px', padding: '14px', background: '#f8fafc' }}>
+            <h3 style={{ fontSize: 9, margin: '0 0 10px 0', fontWeight: 800, color: 'var(--nb-text-muted)', letterSpacing: '0.1em' }}>DATABASE</h3>
+            <div style={compactActionRowStyle}>
+              <button className="admin-btn" style={compactActionButtonStyle} onClick={handleExportDb} disabled={loading}>
+                <svg style={{marginRight:4,verticalAlign:'middle'}} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export
+              </button>
+              <button className="admin-btn" style={compactDangerButtonStyle} onClick={() => triggerImport('db')} disabled={loading}>
+                <svg style={{marginRight:4,verticalAlign:'middle'}} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+                Import
+              </button>
+            </div>
+         </div>
+
+         {/* Project Operations */}
+         <div style={{ border: '1px solid var(--nb-border)', borderRadius: '8px', padding: '14px', background: '#f8fafc' }}>
+            <h3 style={{ fontSize: 9, margin: '0 0 10px 0', fontWeight: 800, color: 'var(--nb-text-muted)', letterSpacing: '0.1em' }}>PROJECT DATA</h3>
+            <select 
+              className="filterSelect" 
+              style={{ width: '100%', marginBottom: 10 }}
+              value={selectedProjectId}
+              onChange={e => setSelectedProjectId(e.target.value)}
+            >
+              {projects.map(p => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
+            </select>
+            
+            <div style={{ ...compactActionRowStyle, marginBottom: 6 }}>
+               <button className="admin-btn" style={compactActionButtonStyle} onClick={handleExportProject} disabled={loading}>
                  <svg style={{marginRight:4,verticalAlign:'middle'}} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                  Export
                </button>
-               <button className="admin-btn" style={{ flex: 1, fontSize: 10, borderColor: '#fca5a5', color: '#991b1b' }} onClick={() => triggerImport('db')} disabled={loading}>
+               <button className="admin-btn" style={compactDangerButtonStyle} onClick={() => triggerImport('project')} disabled={loading}>
                  <svg style={{marginRight:4,verticalAlign:'middle'}} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
                  Import
                </button>
-             </div>
-          </div>
+            </div>
+            <button className="admin-btn danger" style={compactActionButtonStyle} onClick={handleDeleteProject} disabled={loading}>
+              <svg style={{marginRight:4,verticalAlign:'middle'}} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+              Delete Project
+            </button>
+         </div>
 
-          {/* Project Operations */}
-          <div style={{ border: '1px solid var(--nb-border)', borderRadius: '8px', padding: '14px', background: '#f8fafc' }}>
-             <h3 style={{ fontSize: 9, margin: '0 0 10px 0', fontWeight: 800, color: 'var(--nb-text-muted)', letterSpacing: '0.1em' }}>PROJECT DATA</h3>
-             <select 
-               className="filterSelect" 
-               style={{ width: '100%', marginBottom: 10 }}
-               value={selectedProjectId}
-               onChange={e => setSelectedProjectId(e.target.value)}
-             >
-               {projects.map(p => <option key={p.id} value={p.id}>{p.code} — {p.name}</option>)}
-             </select>
-             
-             <div style={{ display: 'flex', gap: 6, marginBottom: 6 }}>
-                <button className="admin-btn" style={{ flex: 1, fontSize: 10 }} onClick={handleExportProject} disabled={loading}>
-                  <svg style={{marginRight:4,verticalAlign:'middle'}} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                  Export
-                </button>
-                <button className="admin-btn" style={{ flex: 1, fontSize: 10, borderColor: '#fca5a5', color: '#991b1b' }} onClick={() => triggerImport('project')} disabled={loading}>
-                  <svg style={{marginRight:4,verticalAlign:'middle'}} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  Import
-                </button>
-             </div>
-             <button className="admin-btn danger" style={{ width: '100%', fontSize: 10 }} onClick={handleDeleteProject} disabled={loading}>
-               <svg style={{marginRight:4,verticalAlign:'middle'}} width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-               Delete Project
-             </button>
-          </div>
+         {/* Quick Reference */}
+         <div style={{ border: '1px solid var(--nb-border)', borderRadius: '8px', padding: '14px', background: '#fff' }}>
+            <h3 style={{ fontSize: 10, margin: '0 0 8px 0', fontWeight: 800, color: 'var(--nb-text-muted)', letterSpacing: '0.1em' }}>TABLES</h3>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+              {["users","projects","ships","inspection_items","inspection_rounds","comments","ncrs","observations","observation_types","project_members"].map(t => (
+                <button key={t} style={{ fontSize: 10, padding: '3px 7px', borderRadius: 4, border: '1px solid var(--nb-border)', background: '#f8fafc', cursor: 'pointer', fontFamily: 'monospace' }}
+                  onClick={() => setSql(`SELECT * FROM "${t}" LIMIT 20;`)}
+                >{t}</button>
+              ))}
+            </div>
+         </div>
 
-          {/* Quick Reference */}
-          <div style={{ border: '1px solid var(--nb-border)', borderRadius: '8px', padding: '14px', background: '#fff' }}>
-             <h3 style={{ fontSize: 9, margin: '0 0 8px 0', fontWeight: 800, color: 'var(--nb-text-muted)', letterSpacing: '0.1em' }}>TABLES</h3>
-             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-               {["users","projects","ships","inspection_items","inspection_rounds","comments","ncrs","observations","observation_types","project_members"].map(t => (
-                 <button key={t} style={{ fontSize: 9, padding: '2px 6px', borderRadius: 4, border: '1px solid var(--nb-border)', background: '#f8fafc', cursor: 'pointer', fontFamily: 'monospace' }}
-                   onClick={() => setSql(`SELECT * FROM "${t}" LIMIT 20;`)}
-                 >{t}</button>
-               ))}
-             </div>
-          </div>
 
         </div>
       </div>
