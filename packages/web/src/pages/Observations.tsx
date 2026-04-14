@@ -42,6 +42,9 @@ export function Observations() {
   const [filterStatus, setFilterStatus] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
 
+  // 手动加载控制
+  const [hasStarted, setHasStarted] = useState(false);
+
   // 新增表单
   const [showForm, setShowForm] = useState(false);
   const [formType, setFormType] = useState("");
@@ -147,7 +150,7 @@ export function Observations() {
 
   // ---- 加载数据 ----
   const loadData = useCallback(async () => {
-    if (!selectedProjectId) return;
+    if (!selectedProjectId || !hasStarted) return;
     setLoading(true);
     try {
       if (activeTab === "observations") {
@@ -167,9 +170,9 @@ export function Observations() {
         setComments(data);
       }
     } catch { /* ignore */ } finally { setLoading(false); }
-  }, [selectedProjectId, selectedShipId, activeTab, filterType, filterDiscipline, filterStatus]);
+  }, [selectedProjectId, selectedShipId, activeTab, filterType, filterDiscipline, filterStatus, hasStarted]);
 
-  useEffect(() => { void loadData(); }, [loadData]);
+  useEffect(() => { if (hasStarted) void loadData(); }, [loadData, hasStarted]);
 
   // ---- 新增单条 ----
   const handleSubmit = async (e: React.FormEvent) => {
@@ -438,6 +441,12 @@ export function Observations() {
             >✕</button>
           )}
         </div>
+        <button
+          onClick={() => setHasStarted(true)}
+          style={{ ...btnStyle("primary"), background: "var(--nb-accent)", color: "#fff" }}
+        >
+          {hasStarted ? "REFRESH" : "START"}
+        </button>
         <span style={{ fontSize: 12, color: "var(--nb-text-muted)", fontWeight: 600 }}>
           {activeTab === "observations" ? `${items.length} records` : `${comments.length} records`}
         </span>
@@ -548,7 +557,11 @@ export function Observations() {
       )}
 
       {/* 主内容区 */}
-      {loading ? (
+      {!hasStarted ? (
+        <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
+          <p style={{ fontSize: 14 }}>Select filters and click START to load data</p>
+        </div>
+      ) : loading ? (
         <p style={{ color: "var(--nb-text-muted)", textAlign: "center", padding: 40 }}>Loading...</p>
       ) : activeTab === "observations" ? (
         (() => {

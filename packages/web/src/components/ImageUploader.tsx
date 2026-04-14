@@ -77,7 +77,7 @@ async function renderVariant(file: File, maxDimension: number, quality: number):
 
 async function buildImageVariants(file: File): Promise<Record<MediaVariant, File>> {
   const [original, medium, thumb] = await Promise.all([
-    renderVariant(file, 1600, 0.82),
+    renderVariant(file, 800, 0.82),
     renderVariant(file, 800, 0.8),
     renderVariant(file, 240, 0.75)
   ]);

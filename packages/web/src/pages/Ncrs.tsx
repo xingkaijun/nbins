@@ -156,7 +156,7 @@ export function Ncrs() {
   }, [selectedProjectId]);
 
   const loadNcrs = useCallback(async () => {
-    if (!selectedProjectId) {
+    if (!selectedProjectId || !selectedShipId) {
       setItems([]);
       setLoading(false);
       setError(null);
@@ -168,7 +168,7 @@ export function Ncrs() {
     try {
       const data = await fetchNcrList({
         projectId: selectedProjectId,
-        shipId: selectedShipId || undefined,
+        shipId: selectedShipId,
         status: filterStatus || undefined,
         keyword: filterKeyword.trim() || undefined
       });

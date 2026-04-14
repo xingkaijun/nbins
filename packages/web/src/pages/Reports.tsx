@@ -268,7 +268,7 @@ export function Reports() {
   const [comments, setComments] = useState<InspectionCommentView[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const [timeRange, setTimeRange] = useState<number>(30);
+  const [timeRange, setTimeRange] = useState<number>(1);
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null);
   const [filterHull, setFilterHull] = useState<string>('ALL');
   const [filterDiscipline, setFilterDiscipline] = useState<string>('ALL');

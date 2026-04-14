@@ -63,7 +63,7 @@ export function NcrEditor({
     try {
       const newAttachments = await Promise.all(
         files.map(async (file) => {
-          const compressed = await compressImageToWebP(file, 1600, 0.82);
+          const compressed = await compressImageToWebP(file, 800, 0.82);
           return {
             id: crypto.randomUUID(),
             file: compressed,
