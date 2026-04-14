@@ -4,9 +4,7 @@ import {
   approveNcr,
   closeNcr,
   createNcr,
-  downloadNcrPdf,
   fetchNcrList,
-  fetchNcrs,
   fetchProjects,
   fetchShips,
   fetchNextNcrSerial,
@@ -22,21 +20,6 @@ import { ImageGallery } from "../components/ImageGallery";
 import { RelatedFileUploader } from "../components/RelatedFileUploader";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 
-function saveBlob(blob: Blob, filename: string): void {
-  const url = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = url;
-  anchor.download = filename;
-  anchor.click();
-  URL.revokeObjectURL(url);
-}
-
-function getNcrPdfFilename(item: Pick<NcrItemResponse, "id" | "hullNumber" | "serialNo" | "discipline">): string {
-  const hull = item.hullNumber?.trim() || "SHIP";
-  const serial = String(item.serialNo).padStart(3, "0");
-  const discipline = item.discipline?.trim() || "GENERAL";
-  return `NCR-${hull}-${serial}-${discipline}.pdf`;
-}
 
 function badgeColor(status: NcrItemResponse["status"]): string {
 
@@ -325,7 +308,10 @@ export function Ncrs() {
 
 
   return (
-    <main className="ncrs-page" style={{ padding: "24px 32px", maxWidth: 1280, margin: "0 auto" }}>
+    <>
+      <style>{spinnerKeyframes}</style>
+      <main className="ncrs-page" style={{ padding: "24px 32px", maxWidth: 1280, margin: "0 auto" }}>
+
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: "var(--nb-text)" }}>Non-Conformance Reports</h1>
@@ -476,11 +462,22 @@ export function Ncrs() {
                       {expanded ? "Hide Details" : "Show Details"}
                     </button>
                     {canDownloadPdf ? (
-                      <button type="button" style={btnStyle("secondary")} onClick={() => void handleDownloadPdf(item)} disabled={pdfBusyId === item.id}>
-                        {pdfBusyId === item.id ? "Downloading..." : "Download PDF"}
+                      <button
+                        type="button"
+                        style={btnStyle("secondary")}
+                        onClick={() => void handleDownloadPdf(item)}
+                        disabled={pdfBusyId === item.id}
+                        aria-busy={pdfBusyId === item.id}
+                      >
+                        {pdfBusyId === item.id ? (
+                          <span style={busyContentStyle}>
+                            <span style={spinnerStyle} aria-hidden="true" />
+                            Generating PDF...
+                          </span>
+                        ) : "Download PDF"}
                       </button>
-
                     ) : null}
+
                     {canApprove && item.status === "pending_approval" ? (
                       <>
                         <button type="button" style={btnStyle("primary")} onClick={() => void handleApprove(item.id, true)}>
@@ -688,9 +685,11 @@ export function Ncrs() {
           })}
         </div>
       )}
-    </main>
+      </main>
+    </>
   );
 }
+
 
 function btnStyle(variant: "primary" | "secondary"): React.CSSProperties {
   const base: React.CSSProperties = {
@@ -712,12 +711,37 @@ function btnStyle(variant: "primary" | "secondary"): React.CSSProperties {
   };
 }
 
+const spinnerKeyframes = `
+  @keyframes ncr-pdf-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+`;
+
+const busyContentStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 8
+};
+
+const spinnerStyle: React.CSSProperties = {
+  width: 14,
+  height: 14,
+  borderRadius: "50%",
+  border: "2px solid rgba(100, 116, 139, 0.25)",
+  borderTopColor: "#0f766e",
+  animation: "ncr-pdf-spin 0.8s linear infinite",
+  flexShrink: 0
+};
+
 const dangerStyle: React.CSSProperties = {
   ...btnStyle("secondary"),
   background: "#fef2f2",
   border: "1px solid #fecaca",
   color: "#b91c1c"
 };
+
 
 const panelStyle: React.CSSProperties = {
   background: "var(--nb-surface, #fff)",

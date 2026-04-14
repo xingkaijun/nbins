@@ -30,9 +30,11 @@ export interface NcrItemResponse {
   remark: string | null;
   authorId: string;
   authorName?: string;
+  authorTitle?: string;
   status: "draft" | "pending_approval" | "approved" | "rejected";
   approvedBy: string | null;
   approvedByName?: string;
+  approvedByTitle?: string;
   approvedAt: string | null;
   closedBy: string | null;
   closedByName?: string;

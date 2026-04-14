@@ -42,7 +42,9 @@ export interface ShipContext {
 interface UserDisplayRow {
   id: string;
   displayName: string;
+  title: string | null;
 }
+
 
 interface ShipDisplayRow {
   id: string;
@@ -514,19 +516,21 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
 
   const shipIds = Array.from(new Set(records.map((record) => record.shipId)));
   const projectIds = Array.from(new Set(records.map((record) => record.projectId)));
-  const userMap = new Map<string, string>();
+  const userMap = new Map<string, UserDisplayRow>();
   const shipMap = new Map<string, ShipDisplayRow>();
   const projectMap = new Map<string, string>();
 
+
   if (userIds.length > 0) {
     const users = await db.prepare(
-      `SELECT "id", "displayName" FROM "users" WHERE "id" IN (${userIds.map(() => "?").join(",")})`
+      `SELECT "id", "displayName", "title" FROM "users" WHERE "id" IN (${userIds.map(() => "?").join(",")})`
     ).bind(...userIds).all<UserDisplayRow>();
 
     for (const user of users.results ?? []) {
-      userMap.set(user.id, user.displayName);
+      userMap.set(user.id, user);
     }
   }
+
 
   if (shipIds.length > 0) {
     const ships = await db.prepare(
@@ -550,9 +554,12 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
 
   return records.map((record) => {
     const ship = shipMap.get(record.shipId);
+    const authorUser = userMap.get(record.authorId);
+    const approvedUser = record.approvedBy ? userMap.get(record.approvedBy) : undefined;
+    const closedUser = record.closedBy ? userMap.get(record.closedBy) : undefined;
     const relatedFiles = record.relatedFiles.map((file) => ({
       ...file,
-      uploadedByName: userMap.get(file.uploadedBy) ?? file.uploadedByName
+      uploadedByName: userMap.get(file.uploadedBy)?.displayName ?? file.uploadedByName
     }));
 
     return {
@@ -571,10 +578,12 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
       content: record.content,
       remark: record.remark,
       authorId: record.authorId,
-      authorName: userMap.get(record.authorId),
+      authorName: authorUser?.displayName,
+      authorTitle: authorUser?.title ?? undefined,
       status: record.status,
       approvedBy: record.approvedBy,
-      approvedByName: record.approvedBy ? userMap.get(record.approvedBy) : undefined,
+      approvedByName: approvedUser?.displayName,
+      approvedByTitle: approvedUser?.title ?? undefined,
       approvedAt: record.approvedAt,
       imageAttachments: record.imageAttachments,
       attachments: record.imageAttachments,
@@ -586,12 +595,13 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
       verifyDate: record.verifyDate,
       rectifyRequest: record.rectifyRequest,
       closedBy: record.closedBy,
-      closedByName: record.closedBy ? userMap.get(record.closedBy) : undefined,
+      closedByName: closedUser?.displayName,
       closedAt: record.closedAt,
       createdAt: record.createdAt,
       updatedAt: record.updatedAt
     } satisfies NcrItemResponse;
   });
+
 }
 
 export async function deleteNcrIndex(env: Bindings, id: string): Promise<void> {

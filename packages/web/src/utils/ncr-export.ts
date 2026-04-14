@@ -192,7 +192,40 @@ function getReportReference(ncr: NcrItemResponse): string {
   return `NCR-${paddedSerial}`;
 }
 
+function sanitizePdfFilename(value: string): string {
+  return value
+    .trim()
+    .replace(/[\\/:*?"<>|]+/g, "-")
+    .replace(/\s+/g, " ")
+    .replace(/-+/g, "-")
+    .replace(/^-|-$/g, "");
+}
+
+function getPdfFilename(ncr: NcrItemResponse, reportReference: string): string {
+  const normalizedReference = sanitizePdfFilename(reportReference);
+  if (normalizedReference) {
+    return `${normalizedReference}.pdf`;
+  }
+
+  const hullDisplayName = sanitizePdfFilename(normalizeText(ncr.hullNumber, normalizeText(ncr.shipName, "SHIP")));
+  const serial = String(ncr.serialNo).padStart(3, "0");
+  return `NCR-${hullDisplayName}-${serial}.pdf`;
+}
+
+function getPdfStatusLabel(ncr: NcrItemResponse): string {
+  if (ncr.closedAt) {
+    return "Closed";
+  }
+
+  if (ncr.status === "rejected") {
+    return "Rejected";
+  }
+
+  return "Pending";
+}
+
 function drawDocumentHeader(
+
   doc: jsPDF,
   margin: number,
   pageWidth: number,
@@ -252,8 +285,10 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   const pageHeight = doc.internal.pageSize.getHeight();
   const usableWidth = pageWidth - margin * 2;
   const reportReference = getReportReference(ncr);
-  const projectDisplayName = normalizeText(ncr.projectName, normalizeText(ncr.projectId));
+  const pdfFilename = getPdfFilename(ncr, reportReference);
+  const projectDisplayName = normalizeText(ncr.projectName);
   const hullDisplayName = normalizeText(ncr.hullNumber, normalizeText(ncr.shipName));
+
 
   // --- 第一页: 主报告 ---
 
@@ -316,8 +351,9 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   ]);
   drawCard(margin + usableWidth / 2 + 4, "REPORT METADATA", [
     { label: "ISSUE DATE", value: dateStr },
-    { label: "STATUS", value: normalizeText(ncr.status).toUpperCase() }
+    { label: "STATUS", value: getPdfStatusLabel(ncr) }
   ]);
+
 
   y += metadataCardHeight + 10;
 
@@ -394,7 +430,7 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   drawSection("Requested Rectify", normalizeText(ncr.rectifyRequest), 35);
 
   // 4. Signature Block
-  const sigHeight = 25;
+  const sigHeight = 30;
   doc.setDrawColor(...COLORS.border);
   doc.setLineWidth(0.3);
   doc.setFillColor(...COLORS.bg);
@@ -402,39 +438,71 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   doc.roundedRect(margin, y, usableWidth, sigHeight, 3, 3, "S");
   doc.line(margin + usableWidth / 2, y, margin + usableWidth / 2, y + sigHeight);
 
-  const drawSig = (x: number, title: string, name: string, detail: string) => {
+  const drawSig = (x: number, title: string, name: string, personTitle: string, detail: string) => {
+    const columnWidth = usableWidth / 2 - 8;
+
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(...COLORS.muted);
     doc.text(title.toUpperCase(), x + 4, y + 5);
 
-    doc.setFontSize(11);
+    doc.setFont("helvetica", "bold");
     doc.setTextColor(...COLORS.dark);
-    doc.text(name, x + 4, y + 12);
+    drawAdaptiveText(doc, {
+      text: name,
+      x: x + 4,
+      y: y + 11.5,
+      maxWidth: columnWidth,
+      fontSize: 10.5,
+      minFontSize: 8,
+      maxLines: 1,
+      lineHeight: 4,
+      align: "left"
+    });
+
+    doc.setFont("helvetica", "italic");
+    doc.setTextColor(...COLORS.dark);
+    drawAdaptiveText(doc, {
+      text: personTitle,
+      x: x + 4,
+      y: y + 16,
+      maxWidth: columnWidth,
+      fontSize: 8,
+      minFontSize: 6.5,
+      maxLines: 1,
+      lineHeight: 3.4,
+      align: "left"
+    });
 
     doc.setDrawColor(...COLORS.border);
-    doc.line(x + 4, y + 18, x + usableWidth / 2 - 4, y + 18);
+    doc.line(x + 4, y + 22, x + usableWidth / 2 - 4, y + 22);
 
+    doc.setFont("helvetica", "normal");
     doc.setFontSize(6);
     doc.setTextColor(...COLORS.muted);
-    doc.text(detail.toUpperCase(), x + 4, y + 22);
+    doc.text(detail.toUpperCase(), x + 4, y + 26);
   };
 
-  const approvedName = ncr.approvedByName || (ncr.status === "approved" ? "VERIFIED" : "PENDING REVIEW");
+  const inspectorTitle = normalizeText(ncr.authorTitle, "Inspector");
+  const approvedName = normalizeText(ncr.approvedByName, normalizeText(ncr.approvedBy, "Manager"));
+  const managerTitle = normalizeText(ncr.approvedByTitle, "Manager");
   const approvedDate = ncr.approvedAt ? new Date(ncr.approvedAt).toLocaleDateString() : "DATE TBD";
 
   drawSig(
     margin,
     "Prepared By (Inspector)",
     normalizeText(ncr.authorName, ncr.authorId),
-    "Handwritten Signature & Title"
+    inspectorTitle,
+    "Handwritten Signature"
   );
   drawSig(
     margin + usableWidth / 2,
     "Approved By (Manager)",
     approvedName,
+    managerTitle,
     `Authorized Signature & Date (${approvedDate})`
   );
+
 
   // Footer (Page 1)
   doc.setFontSize(7);
@@ -508,5 +576,6 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   }
 
   // 保存
-  doc.save(`NCR-${ncr.formattedSerial || ncr.id}.pdf`);
+  doc.save(pdfFilename);
 }
+
