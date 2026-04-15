@@ -635,22 +635,34 @@ export function Observations() {
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
                 <th style={thStyle}>S/N</th><th style={thStyle}>Ship</th><th style={thStyle}>Discipline</th>
                 <th style={thStyle}>Inspection Item</th><th style={thStyle}>Round</th><th style={thStyle}>Content</th>
-                <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Closed At</th>
+                <th style={thStyle}>Author</th><th style={thStyle}>Issued At</th><th style={thStyle}>Status</th><th style={thStyle}>Closed At</th>
               </tr></thead>
               <tbody>
-                {filteredComments.map(cm => (
-                  <tr key={cm.id} style={{ borderBottom: "1px solid var(--nb-border)" }}>
-                    <td style={tdStyle}>{cm.localId}</td>
-                    <td style={tdStyle}>{cm.hullNumber}</td>
-                    <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
-                    <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cm.inspectionItemName}</td>
-                    <td style={tdStyle}>R{cm.roundNumber}</td>
-                    <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{cm.content}</td>
-                    <td style={tdStyle}>{cm.authorName}</td>
-                    <td style={tdStyle}><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
-                    <td style={tdStyle}>{cm.closedAt ? cm.closedAt.slice(0, 10) : "—"}</td>
-                  </tr>
-                ))}
+                {filteredComments.map((cm, index) => {
+                  // 检查是否是新的inspection item（与上一条不同）
+                  const isNewItem = index > 0 && filteredComments[index - 1].inspectionItemId !== cm.inspectionItemId;
+                  
+                  return (
+                    <tr 
+                      key={cm.id} 
+                      style={{ 
+                        borderTop: isNewItem ? "3px solid #1e293b" : "none",
+                        borderBottom: "1px solid var(--nb-border)"
+                      }}
+                    >
+                      <td style={tdStyle}>{cm.localId}</td>
+                      <td style={tdStyle}>{cm.hullNumber}</td>
+                      <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
+                      <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cm.inspectionItemName}</td>
+                      <td style={tdStyle}>R{cm.roundNumber}</td>
+                      <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{cm.content}</td>
+                      <td style={tdStyle}>{cm.authorName}</td>
+                      <td style={tdStyle}>{cm.createdAt ? cm.createdAt.slice(0, 10) : "—"}</td>
+                      <td style={tdStyle}><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
+                      <td style={tdStyle}>{cm.closedAt ? cm.closedAt.slice(0, 10) : "—"}</td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

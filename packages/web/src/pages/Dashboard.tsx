@@ -394,6 +394,7 @@ export function Dashboard() {
 
   const localToday = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
   const [filterDate, setFilterDate] = useState<string>(localToday);
+  const [filterMode, setFilterMode] = useState<"date" | "pending" | "open-comments">("date");
   const [filterHull, setFilterHull] = useState<string>("ALL");
   const [filterDiscipline, setFilterDiscipline] = useState<string>("ALL");
   const [resolvingCommentId, setResolvingCommentId] = useState<string | null>(null);
@@ -454,8 +455,18 @@ export function Dashboard() {
   }, [currentProject, listItems]);
 
   const displayedItems = listItems.filter(item => {
-    // 搜索时忽略日期筛选，否则按日期过滤
-    if (!searchKeyword && filterDate && item.plannedDate !== filterDate) return false;
+    // 根据筛选模式应用不同的逻辑
+    if (filterMode === "pending") {
+      // 显示所有pending的项目（workflowStatus === "pending"）
+      if (item.workflowStatus !== "pending") return false;
+    } else if (filterMode === "open-comments") {
+      // 显示所有Comments列不是0的项目
+      if (item.openComments === 0) return false;
+    } else {
+      // date模式：搜索时忽略日期筛选，否则按日期过滤
+      if (!searchKeyword && filterDate && item.plannedDate !== filterDate) return false;
+    }
+    
     if (filterHull !== "ALL" && item.hullNumber !== filterHull) return false;
     if (filterDiscipline !== "ALL" && item.discipline !== filterDiscipline) return false;
     if (searchKeyword) {
@@ -761,11 +772,19 @@ export function Dashboard() {
           <div>
             <p className="eyebrow">INSPECTION WORKSPACE</p>
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <h2>{filterDate === localToday ? "TODAY QUEUE" : `HISTORY: ${filterDate}`}</h2>
+              <h2>
+                {filterMode === "pending" ? "ALL PENDING" 
+                  : filterMode === "open-comments" ? "ALL WITH OPEN COMMENTS"
+                  : filterDate === localToday ? "TODAY QUEUE" 
+                  : `HISTORY: ${filterDate}`}
+              </h2>
               <input
                 type="date"
                 value={filterDate}
-                onChange={(e) => setFilterDate(e.target.value)}
+                onChange={(e) => {
+                  setFilterDate(e.target.value);
+                  setFilterMode("date");
+                }}
                 style={{
                   padding: '6px 12px',
                   border: '1px solid var(--nb-border)',
@@ -777,6 +796,61 @@ export function Dashboard() {
                   color: 'var(--nb-text)'
                 }}
               />
+              <button
+                onClick={() => {
+                  setFilterDate(localToday);
+                  setFilterMode("date");
+                }}
+                style={{
+                  padding: '6px 14px',
+                  border: filterMode === "date" && filterDate === localToday ? '2px solid var(--nb-accent)' : '1px solid var(--nb-border)',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  background: filterMode === "date" && filterDate === localToday ? 'var(--nb-accent)' : '#fff',
+                  color: filterMode === "date" && filterDate === localToday ? '#fff' : 'var(--nb-text)',
+                  cursor: 'pointer',
+                  letterSpacing: '0.02em',
+                  transition: 'all 0.15s'
+                }}
+              >
+                TODAY
+              </button>
+              <button
+                onClick={() => setFilterMode("pending")}
+                style={{
+                  padding: '6px 14px',
+                  border: filterMode === "pending" ? '2px solid var(--nb-accent)' : '1px solid var(--nb-border)',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  background: filterMode === "pending" ? 'var(--nb-accent)' : '#fff',
+                  color: filterMode === "pending" ? '#fff' : 'var(--nb-text)',
+                  cursor: 'pointer',
+                  letterSpacing: '0.02em',
+                  transition: 'all 0.15s'
+                }}
+              >
+                ALL PENDING
+              </button>
+              <button
+                onClick={() => setFilterMode("open-comments")}
+                style={{
+                  padding: '6px 14px',
+                  border: filterMode === "open-comments" ? '2px solid var(--nb-accent)' : '1px solid var(--nb-border)',
+                  borderRadius: '8px',
+                  fontWeight: 700,
+                  fontSize: '11px',
+                  background: filterMode === "open-comments" ? 'var(--nb-accent)' : '#fff',
+                  color: filterMode === "open-comments" ? '#fff' : 'var(--nb-text)',
+                  cursor: 'pointer',
+                  letterSpacing: '0.02em',
+                  transition: 'all 0.15s',
+                  whiteSpace: 'nowrap'
+                }}
+              >
+                ALL WITH OPEN COMMENTS
+              </button>
             </div>
           </div>
           <div className="heroMeta">
