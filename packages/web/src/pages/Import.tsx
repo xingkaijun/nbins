@@ -26,7 +26,7 @@ export function Import() {
   const [selectedShip, setSelectedShip] = useState('');
 
   // 全局 Date 与 Discipline（仅用于 Parse 时默认值）
-  const [selectedDate, setSelectedDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(() => new Date().toLocaleDateString("en-CA"));
   const [selectedDiscipline, setSelectedDiscipline] = useState<string>('HULL');
 
   const [pastedData, setPastedData] = useState('');
