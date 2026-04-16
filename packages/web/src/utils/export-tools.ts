@@ -294,7 +294,7 @@ export function exportObservationsPdf(
     doc.text(`Project: ${projectName || '-'}`, pageWidth - margin, y + 1, { align: 'right' });
     doc.text(`Ship: ${shipInfo || '-'}`, pageWidth - margin, y + 5, { align: 'right' });
 
-    y += 16.5;
+    y += 13.5;
     doc.setDrawColor(...colors.primary);
     doc.setLineWidth(0.4);
     doc.line(margin, y, pageWidth - margin, y);
@@ -353,6 +353,11 @@ export function exportObservationsPdf(
   // Helper function to wrap text within a given width
   const wrapText = (text: string, maxWidth: number): string[] => {
     const normalized = (text || '-').replace(/\s+/g, ' ').trim() || '-';
+    
+    // Set font before measuring text width
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(6.3);
+    
     if (doc.getTextWidth(normalized) <= maxWidth) return [normalized];
     
     const words = normalized.split(' ');
@@ -365,7 +370,25 @@ export function exportObservationsPdf(
         currentLine = testLine;
       } else {
         if (currentLine) lines.push(currentLine);
-        currentLine = word;
+        // Handle very long words that exceed maxWidth
+        if (doc.getTextWidth(word) > maxWidth) {
+          let remainingWord = word;
+          while (doc.getTextWidth(remainingWord) > maxWidth) {
+            let splitPoint = remainingWord.length;
+            while (splitPoint > 0 && doc.getTextWidth(remainingWord.substring(0, splitPoint)) > maxWidth) {
+              splitPoint--;
+            }
+            if (splitPoint > 0) {
+              lines.push(remainingWord.substring(0, splitPoint));
+              remainingWord = remainingWord.substring(splitPoint);
+            } else {
+              break;
+            }
+          }
+          currentLine = remainingWord;
+        } else {
+          currentLine = word;
+        }
       }
     }
     if (currentLine) lines.push(currentLine);
