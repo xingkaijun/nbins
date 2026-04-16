@@ -291,10 +291,10 @@ export function exportObservationsPdf(
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
     doc.setTextColor(...colors.secondary);
-    doc.text(`Project: ${projectName || '-'}`, pageWidth - margin, y + 1, { align: 'right' });
-    doc.text(`Ship: ${shipInfo || '-'}`, pageWidth - margin, y + 5, { align: 'right' });
+    doc.text(`Project: ${projectName || '-'}`, pageWidth - margin, y + 9, { align: 'right' });
+    doc.text(`Ship: ${shipInfo || '-'}`, pageWidth - margin, y + 13, { align: 'right' });
 
-    y += 13.5;
+    y += 16.5;
     doc.setDrawColor(...colors.primary);
     doc.setLineWidth(0.4);
     doc.line(margin, y, pageWidth - margin, y);
@@ -315,9 +315,9 @@ export function exportObservationsPdf(
 
     doc.setTextColor(...colors.secondary);
     doc.setFont('helvetica', 'normal');
-    doc.text(`OWNER ${ownerInfo?.owner || '-'}`, margin + 88, y + 5.3);
-    doc.text(`SHIPYARD ${ownerInfo?.shipyard || '-'}`, margin + 150, y + 5.3);
-    doc.text(`GENERATED ${new Date().toLocaleDateString()}`, pageWidth - margin, y + 5.3, { align: 'right' });
+    doc.text(`OWNER: ${ownerInfo?.owner || '-'}`, margin + 88, y + 5.3);
+    doc.text(`SHIPYARD: ${ownerInfo?.shipyard || '-'}`, margin + 150, y + 5.3);
+    doc.text(`GENERATED: ${new Date().toLocaleDateString()}`, pageWidth - margin, y + 5.3, { align: 'right' });
 
     y += 11;
 
