@@ -44,19 +44,20 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
 
   let y = margin;
 
-  // Generate HASH CODE early for top right
+  // Generate HASH CODE early for top right (16 characters)
   const lastRound = detail.roundHistory.length > 0 
     ? detail.roundHistory.reduce((prev, current) => (prev.roundNumber > current.roundNumber) ? prev : current, detail.roundHistory[0])
     : null;
     
   const submitterName = lastRound?.inspectorDisplayName || lastRound?.submittedBy || 'SYSTEM';
-  let hashCode = 'PENDING-VERIFICATION';
+  let hashCode = 'PENDING-VERIFICA';
   if (lastRound?.submittedAt) {
     const text = `${submitterName}-${lastRound.submittedAt}`;
     const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
     const hashArray = Array.from(new Uint8Array(hash));
     const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-    hashCode = `IA-${new Date().getFullYear()}-` + hashHex.substring(0, 8).toUpperCase();
+    // 16 characters: IA-YYYY-XXXXXXXX (3+1+4+1+8=17, so use IA-YY-XXXXXXXXXX = 3+1+2+1+10=17, or just 16 chars)
+    hashCode = `IA-${new Date().getFullYear().toString().slice(-2)}-${hashHex.substring(0, 10).toUpperCase()}`;
   }
 
   // --- HEADER ---
@@ -73,25 +74,25 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
   doc.setTextColor(...colors.primary);
   doc.text('INSPECTION REPORT', margin + 52, y + 8);
 
-  // Right side: Document Hash only
+  // Right side: Document Hash only (grayed out, smaller font, 16 chars)
   const topY = margin;
   
-  doc.setFontSize(7);
+  doc.setFontSize(6);
   doc.setTextColor(...colors.secondary);
   doc.text('DOCUMENT HASH', pageWidth - margin, topY + 2, { align: 'right' });
   
-  doc.setFontSize(9);
-  doc.setFont('courier', 'bold');
-  doc.setTextColor(...colors.textMain);
-  doc.text(hashCode, pageWidth - margin, topY + 7, { align: 'right' });
+  doc.setFontSize(7);
+  doc.setFont('courier', 'normal');
+  doc.setTextColor(...colors.secondary);
+  doc.text(hashCode, pageWidth - margin, topY + 6, { align: 'right' });
 
-  y += 18;
-  // Divider
+  y += 14;
+  // Divider (moved up, closer to header)
   doc.setDrawColor(...colors.primary);
   doc.setLineWidth(0.5);
   doc.line(margin, y, pageWidth - margin, y);
 
-  y += 10;
+  y += 8;
 
   // --- INFO CARDS ---
   const cardHeight = 45;
@@ -256,15 +257,16 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
   }
 
   // --- DIGITAL SIGNATURE ---
-  if (y > pageHeight - 45) {
+  // Move up 2 rows (about 8mm) to avoid footer conflict
+  if (y > pageHeight - 55) {
     doc.addPage();
     y = margin;
   } else {
-    y = pageHeight - 40;
+    y = pageHeight - 48;
   }
   
+  // Signature block background - extend width to fully cover right side
   doc.setFillColor(...colors.surfaceLow);
-  // Remove border line
   doc.setDrawColor(255, 255, 255);
   doc.roundedRect(margin, y, pageWidth - margin * 2, 30, 1.5, 1.5, 'F');
   
