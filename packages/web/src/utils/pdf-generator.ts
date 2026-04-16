@@ -197,12 +197,12 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
   // Render comments
   if (totalComments > 0) {
     detail.comments.forEach((c, idx) => {
-      // Height calculation
+      // Height calculation - need more space for dates
       const contentWidth = pageWidth - margin * 2 - 35;
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       const splitContent = doc.splitTextToSize(c.message, contentWidth);
-      const cardH = Math.max(12, splitContent.length * 4 + 4);
+      const cardH = Math.max(18, splitContent.length * 4 + 10);
       
       if (y + cardH > pageHeight - 50) {
         doc.addPage();
@@ -235,7 +235,23 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...colors.textMain);
       const textH = splitContent.length * 4;
-      doc.text(splitContent, margin + 16, y + (cardH - textH) / 2 + 3);
+      doc.text(splitContent, margin + 16, y + 4);
+      
+      // Issue Date and Close Date below content
+      const dateY = y + 4 + textH + 3;
+      doc.setFontSize(6);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...colors.secondary);
+      doc.text('ISSUE:', margin + 16, dateY);
+      doc.setFont('helvetica', 'normal');
+      const issueDate = c.createdAt ? c.createdAt.slice(0, 10) : '-';
+      doc.text(issueDate, margin + 26, dateY);
+      
+      doc.setFont('helvetica', 'bold');
+      doc.text('CLOSE:', margin + 50, dateY);
+      doc.setFont('helvetica', 'normal');
+      const closeDate = c.resolvedAt ? c.resolvedAt.slice(0, 10) : '-';
+      doc.text(closeDate, margin + 60, dateY);
       
       // Status Badge right side
       const badgeW = 14;
@@ -329,41 +345,27 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
      doc.setFontSize(14);
      doc.setTextColor(...colors.textMain);
      doc.text(inspectorName, margin + 55, sy - 2);
-     
-     // Add inspector title below name
-     doc.setFont('helvetica', 'normal');
-     doc.setFontSize(7);
-     doc.setTextColor(...colors.secondary);
-     const inspectorTitle = 'Quality Inspector';
-     doc.text(inspectorTitle, margin + 55, sy - 7);
   }
-
-  // Middle sig - Issue Date and Close Date
-  const issueDate = lastRound?.actualDate || detail.plannedDate || '-';
-  const closeDate = detail.workflowStatus === 'closed' ? (lastRound?.actualDate || '-') : '-';
   
+  // Add inspector title below signature line
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7);
+  doc.setTextColor(...colors.secondary);
+  const inspectorTitle = 'Quality Inspector';
+  doc.text(inspectorTitle, margin + 55, sy + 8);
+
+  // Right sig - Inspection Date
   doc.line(margin + 125, sy, margin + 175, sy);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
   doc.setTextColor(...colors.primary);
-  doc.text('ISSUE DATE', margin + 125, sy + 4);
+  doc.text('INSPECTION DATE', margin + 125, sy + 4);
 
+  const inspectionDate = lastRound?.actualDate || detail.plannedDate || new Date().toLocaleDateString();
   doc.setFont('times', 'italic');
-  doc.setFontSize(12);
+  doc.setFontSize(14);
   doc.setTextColor(...colors.textMain);
-  doc.text(issueDate, margin + 125, sy - 2);
-  
-  // Close Date below Issue Date
-  doc.line(margin + 125, sy + 8, margin + 175, sy + 8);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(6);
-  doc.setTextColor(...colors.primary);
-  doc.text('CLOSE DATE', margin + 125, sy + 12);
-  
-  doc.setFont('times', 'italic');
-  doc.setFontSize(12);
-  doc.setTextColor(...colors.textMain);
-  doc.text(closeDate, margin + 125, sy + 6);
+  doc.text(inspectionDate, margin + 125, sy - 2);
 
   // Footer on all pages
   const totalPages = doc.getNumberOfPages();
