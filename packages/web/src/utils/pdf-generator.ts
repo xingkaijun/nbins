@@ -265,16 +265,16 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
     y = pageHeight - 48;
   }
   
-  // Signature block background - extend width to fully cover right side
+  // Signature block background - full page width
   doc.setFillColor(...colors.surfaceLow);
   doc.setDrawColor(255, 255, 255);
-  doc.roundedRect(margin, y, pageWidth - margin * 2, 30, 1.5, 1.5, 'F');
+  doc.rect(0, y, pageWidth, 30, 'F');
   
   let sy = y + 6;
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   doc.setTextColor(...colors.primary);
-  doc.text('OVERALL INSPECTION RESULT & SIGNATURE', margin + 8, sy);
+  doc.text('INSPECTION RESULT & SIGNATURE', margin + 8, sy);
   
   // --- RESULT BLOCK (NEW prominent placement) ---
   const resultText = detail.lastRoundResult || 'PENDING';
@@ -313,7 +313,7 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
   doc.setFont('helvetica', 'bold');
   doc.text(resultFull, margin + 8 + 17.5, sy + 11.5, { align: 'center' });
 
-  // Left sig
+  // Left sig - Inspector
   sy += 18;
   doc.setDrawColor(...colors.outline);
   doc.setLineWidth(0.3);
@@ -321,7 +321,7 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
   
   doc.setFontSize(6);
   doc.setTextColor(...colors.primary);
-  doc.text('AUTHORIZED INSPECTOR', margin + 55, sy + 4);
+  doc.text('INSPECTOR', margin + 55, sy + 4);
   
   let inspectorName = lastRound?.inspectorDisplayName || lastRound?.submittedBy || '';
   if (inspectorName) {
@@ -329,20 +329,41 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
      doc.setFontSize(14);
      doc.setTextColor(...colors.textMain);
      doc.text(inspectorName, margin + 55, sy - 2);
+     
+     // Add inspector title below name
+     doc.setFont('helvetica', 'normal');
+     doc.setFontSize(7);
+     doc.setTextColor(...colors.secondary);
+     const inspectorTitle = 'Quality Inspector';
+     doc.text(inspectorTitle, margin + 55, sy - 7);
   }
 
-  // Middle sig (Date)
+  // Middle sig - Issue Date and Close Date
+  const issueDate = lastRound?.actualDate || detail.plannedDate || '-';
+  const closeDate = detail.workflowStatus === 'closed' ? (lastRound?.actualDate || '-') : '-';
+  
   doc.line(margin + 125, sy, margin + 175, sy);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(6);
   doc.setTextColor(...colors.primary);
-  doc.text('DATE RECORDED', margin + 125, sy + 4);
+  doc.text('ISSUE DATE', margin + 125, sy + 4);
 
-  const sigDate = lastRound?.actualDate || new Date().toLocaleDateString();
   doc.setFont('times', 'italic');
-  doc.setFontSize(14);
+  doc.setFontSize(12);
   doc.setTextColor(...colors.textMain);
-  doc.text(sigDate, margin + 125, sy - 2);
+  doc.text(issueDate, margin + 125, sy - 2);
+  
+  // Close Date below Issue Date
+  doc.line(margin + 125, sy + 8, margin + 175, sy + 8);
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(6);
+  doc.setTextColor(...colors.primary);
+  doc.text('CLOSE DATE', margin + 125, sy + 12);
+  
+  doc.setFont('times', 'italic');
+  doc.setFontSize(12);
+  doc.setTextColor(...colors.textMain);
+  doc.text(closeDate, margin + 125, sy + 6);
 
   // Footer on all pages
   const totalPages = doc.getNumberOfPages();
@@ -358,7 +379,7 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
     doc.text('|', margin + 22, pageHeight - 10);
     doc.text(`PAGE ${String(i).padStart(2, '0')} OF ${String(totalPages).padStart(2, '0')}`, margin + 26, pageHeight - 10);
     
-    doc.text('© 2026 NBINS INSPECTION SYSTEM. ALL RIGHTS RESERVED.', pageWidth - margin, pageHeight - 10, { align: 'right' });
+    doc.text('© 2026 PG NEWBUILDING. ALL RIGHTS RESERVED.', pageWidth - margin, pageHeight - 10, { align: 'right' });
   }
 
   const hullNum = detail.hullNumber || 'UNKNOWN';
