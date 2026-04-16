@@ -197,12 +197,12 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
   // Render comments
   if (totalComments > 0) {
     detail.comments.forEach((c, idx) => {
-      // Height calculation - need more space for dates
-      const contentWidth = pageWidth - margin * 2 - 35;
+      // Height calculation - keep original height for content only
+      const contentWidth = pageWidth - margin * 2 - 50; // Reserve space on right for status/dates
       doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       const splitContent = doc.splitTextToSize(c.message, contentWidth);
-      const cardH = Math.max(18, splitContent.length * 4 + 10);
+      const cardH = Math.max(12, splitContent.length * 4 + 4);
       
       if (y + cardH > pageHeight - 50) {
         doc.addPage();
@@ -235,38 +235,34 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
       doc.setFont('helvetica', 'normal');
       doc.setTextColor(...colors.textMain);
       const textH = splitContent.length * 4;
-      doc.text(splitContent, margin + 16, y + 4);
+      doc.text(splitContent, margin + 16, y + (cardH - textH) / 2 + 3);
       
-      // Issue Date and Close Date below content
-      const dateY = y + 4 + textH + 3;
+      // Right side: Status, Issue Date, Close Date (stacked, no background)
+      const rightX = pageWidth - margin - 30;
+      let rightY = y + 3;
+      
+      // Status (no background box)
       doc.setFontSize(6);
       doc.setFont('helvetica', 'bold');
+      doc.setTextColor(...indicatorColor);
+      doc.text(c.status.toUpperCase(), rightX, rightY, { align: 'right' });
+      
+      rightY += 4;
+      // Issue Date
+      doc.setFontSize(5);
       doc.setTextColor(...colors.secondary);
-      doc.text('ISSUE:', margin + 16, dateY);
+      doc.text('ISSUE:', rightX - 20, rightY);
       doc.setFont('helvetica', 'normal');
       const issueDate = c.createdAt ? c.createdAt.slice(0, 10) : '-';
-      doc.text(issueDate, margin + 26, dateY);
+      doc.text(issueDate, rightX, rightY, { align: 'right' });
       
+      rightY += 3.5;
+      // Close Date
       doc.setFont('helvetica', 'bold');
-      doc.text('CLOSE:', margin + 50, dateY);
+      doc.text('CLOSE:', rightX - 20, rightY);
       doc.setFont('helvetica', 'normal');
       const closeDate = c.resolvedAt ? c.resolvedAt.slice(0, 10) : '-';
-      doc.text(closeDate, margin + 60, dateY);
-      
-      // Status Badge right side
-      const badgeW = 14;
-      const badgeX = pageWidth - margin - badgeW - 2;
-      const badgeY = y + (cardH - 5) / 2;
-      
-      doc.setFillColor(...indicatorLight);
-      doc.setDrawColor(...indicatorColor);
-      doc.setLineWidth(0.1);
-      doc.roundedRect(badgeX, badgeY, badgeW, 5, 0.5, 0.5, 'FD');
-      
-      doc.setFontSize(5);
-      doc.setFont('helvetica', 'bold');
-      doc.setTextColor(...indicatorColor);
-      doc.text(c.status.toUpperCase(), badgeX + (badgeW / 2), badgeY + 3.5, { align: 'center' });
+      doc.text(closeDate, rightX, rightY, { align: 'right' });
       
       y += cardH + 2;
     });
@@ -329,8 +325,26 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
   doc.setFont('helvetica', 'bold');
   doc.text(resultFull, margin + 8 + 17.5, sy + 11.5, { align: 'center' });
 
-  // Left sig - Inspector
+  // Left sig - Inspector (name and title above the line)
   sy += 18;
+  
+  let inspectorName = lastRound?.inspectorDisplayName || lastRound?.submittedBy || '';
+  if (inspectorName) {
+     // Name above the line
+     doc.setFont('times', 'italic');
+     doc.setFontSize(14);
+     doc.setTextColor(...colors.textMain);
+     doc.text(inspectorName, margin + 55, sy - 8);
+     
+     // Title below name, above line
+     doc.setFont('helvetica', 'normal');
+     doc.setFontSize(7);
+     doc.setTextColor(...colors.secondary);
+     const inspectorTitle = 'Quality Inspector';
+     doc.text(inspectorTitle, margin + 55, sy - 3);
+  }
+  
+  // Signature line
   doc.setDrawColor(...colors.outline);
   doc.setLineWidth(0.3);
   doc.line(margin + 55, sy, margin + 115, sy);
@@ -338,21 +352,6 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
   doc.setFontSize(6);
   doc.setTextColor(...colors.primary);
   doc.text('INSPECTOR', margin + 55, sy + 4);
-  
-  let inspectorName = lastRound?.inspectorDisplayName || lastRound?.submittedBy || '';
-  if (inspectorName) {
-     doc.setFont('times', 'italic');
-     doc.setFontSize(14);
-     doc.setTextColor(...colors.textMain);
-     doc.text(inspectorName, margin + 55, sy - 2);
-  }
-  
-  // Add inspector title below signature line
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(7);
-  doc.setTextColor(...colors.secondary);
-  const inspectorTitle = 'Quality Inspector';
-  doc.text(inspectorTitle, margin + 55, sy + 8);
 
   // Right sig - Inspection Date
   doc.line(margin + 125, sy, margin + 175, sy);
