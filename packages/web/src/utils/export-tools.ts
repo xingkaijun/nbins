@@ -187,7 +187,8 @@ export function exportObservationsPdf(
   projectName: string,
   mode: "observations" | "inspection-comments",
   shipInfo?: string,
-  ownerInfo?: { owner?: string; shipyard?: string; classification?: string }
+  ownerInfo?: { owner?: string; shipyard?: string; classification?: string },
+  filters?: { shipId?: string; discipline?: string; hullNumber?: string }
 ) {
   const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
@@ -209,8 +210,9 @@ export function exportObservationsPdf(
     white: [255, 255, 255] as [number, number, number],
   };
 
-  const hashText = `OB-${new Date().getFullYear()}-${Date.now().toString(36).toUpperCase().substring(0, 8)}`;
-  const reportTitle = mode === "observations" ? 'PUNCH LIST REPORT' : 'INSPECTION COMMENTS REPORT';
+  // Generate 16-character hash
+  const hashText = `${Date.now().toString(36).toUpperCase()}${Math.random().toString(36).substring(2, 8).toUpperCase()}`.substring(0, 16);
+  const reportTitle = mode === "observations" ? 'PUNCH LIST' : 'INSPECTION COMMENTS';
   const totalCount = mode === "observations" ? items.length : comments.length;
   const openCount = mode === "observations"
     ? items.filter((item) => item.status === 'open').length
@@ -278,12 +280,13 @@ export function exportObservationsPdf(
 
   const drawHeader = () => {
     let y = margin;
-    drawPdfLogo(doc, margin, y - 3, 11);
+    // PG logo 1.5x size (original 11, now 16.5)
+    drawPdfLogo(doc, margin, y - 3, 16.5);
 
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(16);
     doc.setTextColor(...colors.primary);
-    doc.text(reportTitle, margin + 26, y + 4);
+    doc.text(reportTitle, margin + 40, y + 6);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(7);
@@ -291,7 +294,7 @@ export function exportObservationsPdf(
     doc.text(`Project: ${projectName || '-'}`, pageWidth - margin, y + 1, { align: 'right' });
     doc.text(`Ship: ${shipInfo || '-'}`, pageWidth - margin, y + 5, { align: 'right' });
 
-    y += 11;
+    y += 16.5;
     doc.setDrawColor(...colors.primary);
     doc.setLineWidth(0.4);
     doc.line(margin, y, pageWidth - margin, y);
@@ -342,25 +345,52 @@ export function exportObservationsPdf(
     doc.setTextColor(...colors.secondary);
     doc.text(`HASH: ${hashText}`, margin, footerY);
     doc.text(`PAGE ${pageNumber}/${totalPages}`, pageWidth / 2, footerY, { align: 'center' });
-    doc.text('© NBINS', pageWidth - margin, footerY, { align: 'right' });
+    doc.text('PG newbuilding', pageWidth - margin, footerY, { align: 'right' });
   };
 
   let y = drawHeader();
 
+  // Helper function to wrap text within a given width
+  const wrapText = (text: string, maxWidth: number): string[] => {
+    const normalized = (text || '-').replace(/\s+/g, ' ').trim() || '-';
+    if (doc.getTextWidth(normalized) <= maxWidth) return [normalized];
+    
+    const words = normalized.split(' ');
+    const lines: string[] = [];
+    let currentLine = '';
+    
+    for (const word of words) {
+      const testLine = currentLine ? `${currentLine} ${word}` : word;
+      if (doc.getTextWidth(testLine) <= maxWidth) {
+        currentLine = testLine;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    return lines.length > 0 ? lines : ['-'];
+  };
+
   const renderObservationRow = (item: ObservationItem, idx: number) => {
-    if (y + bodyRowHeight > pageHeight - 14) {
+    // Calculate required height based on content
+    const contentWidth = columns[5].width - 4;
+    const contentLines = wrapText(item.content || '-', contentWidth);
+    const requiredHeight = Math.max(bodyRowHeight, contentLines.length * 3.5 + 2);
+
+    if (y + requiredHeight > pageHeight - 14) {
       doc.addPage();
       y = drawHeader();
     }
 
     if (idx % 2 === 0) {
       doc.setFillColor(...colors.surfaceLow);
-      doc.rect(margin, y, usableWidth, bodyRowHeight, 'F');
+      doc.rect(margin, y, usableWidth, requiredHeight, 'F');
     }
 
     doc.setDrawColor(...colors.outline);
     doc.setLineWidth(0.15);
-    doc.line(margin, y + bodyRowHeight, pageWidth - margin, y + bodyRowHeight);
+    doc.line(margin, y + requiredHeight, pageWidth - margin, y + requiredHeight);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.3);
@@ -376,33 +406,54 @@ export function exportObservationsPdf(
       item.authorName || '-',
       item.location || '-',
       item.type || '-',
-      item.content || '-',
     ];
 
+    // Draw non-content columns
     values.forEach((value, index) => {
       const cellX = getColumnX(index);
       const text = fitText(value, columns[index].width - 4);
       doc.text(text, cellX + 2, y + 4.2);
     });
 
-    drawStatusIcon(pageWidth - margin - (columns[columns.length - 1].width / 2), y + bodyRowHeight / 2, item.status === 'closed');
-    y += bodyRowHeight;
+    // Draw content with wrapping
+    const contentX = getColumnX(5);
+    contentLines.forEach((line, lineIdx) => {
+      doc.text(line, contentX + 2, y + 4.2 + lineIdx * 3.5);
+    });
+
+    // Draw status as text instead of icon
+    const statusX = getColumnX(6);
+    const statusText = (item.status || 'open').toUpperCase();
+    if (statusText === 'OPEN') {
+      doc.setTextColor(156, 0, 6);
+    } else {
+      doc.setTextColor(0, 97, 0);
+    }
+    doc.text(statusText, statusX + 2, y + 4.2);
+    doc.setTextColor(...colors.textMain);
+
+    y += requiredHeight;
   };
 
   const renderCommentRow = (comment: InspectionCommentView, idx: number) => {
-    if (y + bodyRowHeight > pageHeight - 14) {
+    // Calculate required height based on content
+    const contentWidth = columns[5].width - 4;
+    const contentLines = wrapText(comment.content || '-', contentWidth);
+    const requiredHeight = Math.max(bodyRowHeight, contentLines.length * 3.5 + 2);
+
+    if (y + requiredHeight > pageHeight - 14) {
       doc.addPage();
       y = drawHeader();
     }
 
     if (idx % 2 === 0) {
       doc.setFillColor(...colors.surfaceLow);
-      doc.rect(margin, y, usableWidth, bodyRowHeight, 'F');
+      doc.rect(margin, y, usableWidth, requiredHeight, 'F');
     }
 
     doc.setDrawColor(...colors.outline);
     doc.setLineWidth(0.15);
-    doc.line(margin, y + bodyRowHeight, pageWidth - margin, y + bodyRowHeight);
+    doc.line(margin, y + requiredHeight, pageWidth - margin, y + requiredHeight);
 
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(6.3);
@@ -414,7 +465,6 @@ export function exportObservationsPdf(
       comment.authorName || '-',
       comment.hullNumber || '-',
       comment.inspectionItemName || '-',
-      comment.content || '-',
     ];
 
     values.forEach((value, index) => {
@@ -423,8 +473,24 @@ export function exportObservationsPdf(
       doc.text(text, cellX + 2, y + 4.2);
     });
 
-    drawStatusIcon(pageWidth - margin - (columns[columns.length - 1].width / 2), y + bodyRowHeight / 2, comment.status === 'closed');
-    y += bodyRowHeight;
+    // Draw content with wrapping
+    const contentX = getColumnX(5);
+    contentLines.forEach((line, lineIdx) => {
+      doc.text(line, contentX + 2, y + 4.2 + lineIdx * 3.5);
+    });
+
+    // Draw status as text instead of icon
+    const statusX = getColumnX(6);
+    const statusText = (comment.status || 'open').toUpperCase();
+    if (statusText === 'OPEN') {
+      doc.setTextColor(156, 0, 6);
+    } else {
+      doc.setTextColor(0, 97, 0);
+    }
+    doc.text(statusText, statusX + 2, y + 4.2);
+    doc.setTextColor(...colors.textMain);
+
+    y += requiredHeight;
   };
 
   if (mode === 'observations') {
@@ -438,8 +504,16 @@ export function exportObservationsPdf(
     drawFooter(i, totalPages);
   }
 
-  const prefix = mode === 'observations' ? 'PunchList' : 'InspectionComments';
-  doc.save(`NBINS_${prefix}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  // Build filename with ship number and discipline if filtered
+  let fileName = `NBINS_PunchList`;
+  if (filters?.hullNumber) {
+    fileName += `_${filters.hullNumber}`;
+  }
+  if (filters?.discipline) {
+    fileName += `_${filters.discipline}`;
+  }
+  fileName += `_${new Date().toISOString().slice(0, 10)}.pdf`;
+  doc.save(fileName);
 }
 
 async function buildExcelWorkbook(

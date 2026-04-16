@@ -259,7 +259,12 @@ export function Observations() {
       shipyard: selectedProject?.shipyard || undefined,
       classification: selectedProject?.class || undefined
     };
-    exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab, shipInfo, projectInfo);
+    const exportFilters = {
+      shipId: selectedShipId || undefined,
+      hullNumber: selectedShip?.hullNumber || undefined,
+      discipline: filterDiscipline || undefined
+    };
+    exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab, shipInfo, projectInfo, exportFilters);
   };
 
   const handleExportAsciiPdf = () => {
