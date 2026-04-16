@@ -237,8 +237,8 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
       const textH = splitContent.length * 4;
       doc.text(splitContent, margin + 16, y + (cardH - textH) / 2 + 3);
       
-      // Right side: Status, Issue Date, Close Date (stacked, no background)
-      const rightX = pageWidth - margin - 30;
+      // Right side: Status, Issue Date, Close Date (stacked, all right-aligned)
+      const rightX = pageWidth - margin - 2;
       let rightY = y + 3;
       
       // Status (no background box)
@@ -248,21 +248,17 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
       doc.text(c.status.toUpperCase(), rightX, rightY, { align: 'right' });
       
       rightY += 4;
-      // Issue Date
+      // Issue Date (label and value together, right-aligned)
       doc.setFontSize(5);
+      doc.setFont('helvetica', 'bold');
       doc.setTextColor(...colors.secondary);
-      doc.text('ISSUE:', rightX - 20, rightY);
-      doc.setFont('helvetica', 'normal');
       const issueDate = c.createdAt ? c.createdAt.slice(0, 10) : '-';
-      doc.text(issueDate, rightX, rightY, { align: 'right' });
+      doc.text(`ISSUE: ${issueDate}`, rightX, rightY, { align: 'right' });
       
       rightY += 3.5;
-      // Close Date
-      doc.setFont('helvetica', 'bold');
-      doc.text('CLOSE:', rightX - 20, rightY);
-      doc.setFont('helvetica', 'normal');
+      // Close Date (label and value together, right-aligned)
       const closeDate = c.resolvedAt ? c.resolvedAt.slice(0, 10) : '-';
-      doc.text(closeDate, rightX, rightY, { align: 'right' });
+      doc.text(`CLOSE: ${closeDate}`, rightX, rightY, { align: 'right' });
       
       y += cardH + 2;
     });
