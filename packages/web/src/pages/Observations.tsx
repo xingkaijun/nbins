@@ -662,9 +662,9 @@ export function Observations() {
                       <td style={tdStyle}>R{cm.roundNumber}</td>
                       <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{cm.content}</td>
                       <td style={tdStyle}>{cm.authorName}</td>
-                      <td style={tdStyle}>{cm.createdAt ? cm.createdAt.slice(0, 10) : "—"}</td>
+                      <td style={tdStyle}>{cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—"}</td>
                       <td style={tdStyle}><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
-                      <td style={tdStyle}>{cm.closedAt ? cm.closedAt.slice(0, 10) : "—"}</td>
+                      <td style={tdStyle}>{cm.closedAt ? new Date(cm.closedAt).toLocaleDateString("en-CA") : "—"}</td>
                     </tr>
                   );
                 })}
