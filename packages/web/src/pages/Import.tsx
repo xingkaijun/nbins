@@ -80,6 +80,10 @@ export function Import() {
     const lines = pastedData.trim().split('\n');
     const newRows: StagingRow[] = [];
 
+    // 获取当前选中船只的hull号
+    const currentShip = ships.find(s => s.id === selectedShip);
+    const currentHullLabel = currentShip?.hullNumber || '-';
+
     lines.forEach((line) => {
       let cols: string[];
       if (line.includes('\t')) {
@@ -101,6 +105,8 @@ export function Import() {
         date: selectedDate,
         qc: qc || '-',
         startAtRound,
+        shipId: selectedShip,
+        hullLabel: currentHullLabel,
       });
     });
 
