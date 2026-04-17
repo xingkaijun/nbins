@@ -382,12 +382,6 @@ export function Observations() {
       {/* 项目/船号筛选 */}
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         <label style={inlineLabelStyle}>
-          <span>Project</span>
-          <select value={selectedProjectId} onChange={e => setSelectedProjectId(e.target.value)} style={selectStyle}>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name} ({p.code})</option>)}
-          </select>
-        </label>
-        <label style={inlineLabelStyle}>
           <span>Ship</span>
           <select value={selectedShipId} onChange={e => setSelectedShipId(e.target.value)} style={selectStyle}>
             <option value="">All ships</option>

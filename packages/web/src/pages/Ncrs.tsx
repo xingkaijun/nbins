@@ -362,17 +362,6 @@ export function Ncrs() {
 
       <div style={filterBarStyle}>
         <label style={labelInlineStyle}>
-          <span>Project</span>
-          <select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} style={inputStyle}>
-            {projects.map((project) => (
-              <option key={project.id} value={project.id}>
-                {project.name} ({project.code})
-              </option>
-            ))}
-          </select>
-        </label>
-
-        <label style={labelInlineStyle}>
           <span>Ship</span>
           <select value={selectedShipId} onChange={(event) => setSelectedShipId(event.target.value)} style={inputStyle} disabled={ships.length === 0}>
             <option value="">All ships</option>

@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { DISCIPLINES } from '@nbins/shared';
 import { fetchProjects, fetchShips, batchImportInspections } from '../api.ts';
+import { useProjectContext } from '../project-context';
 
 /** A single staging row — parsed from text but NOT yet in DB */
 interface StagingRow {
@@ -19,10 +20,10 @@ let _uid = 0;
 function nextUid() { return `stg-${Date.now()}-${++_uid}`; }
 
 export function Import() {
+  const { selectedProjectId } = useProjectContext();
   const [projects, setProjects] = useState<any[]>([]);
   const [ships, setShips] = useState<any[]>([]);
 
-  const [selectedProject, setSelectedProject] = useState('');
   const [selectedShip, setSelectedShip] = useState('');
 
   // 全局 Date 与 Discipline（仅用于 Parse 时默认值）
@@ -48,16 +49,13 @@ export function Import() {
   useEffect(() => {
     fetchProjects().then(data => {
       setProjects(data);
-      if (data.length > 0) {
-        setSelectedProject(data[0].id);
-      }
     });
   }, []);
 
   useEffect(() => {
-    if (selectedProject) {
+    if (selectedProjectId) {
       fetchShips().then(data => {
-        const projectShips = data.filter(s => s.projectId === selectedProject);
+        const projectShips = data.filter(s => s.projectId === selectedProjectId);
         setShips(projectShips);
         if (projectShips.length > 0) {
           setSelectedShip(projectShips[0].id);
@@ -66,11 +64,11 @@ export function Import() {
         }
       });
     }
-  }, [selectedProject]);
+  }, [selectedProjectId]);
 
   /** Get effective disciplines for the currently selected project (empty = all presets) */
   const projectDisciplines: readonly string[] = (() => {
-    const proj = projects.find((p: any) => p.id === selectedProject);
+    const proj = projects.find((p: any) => p.id === selectedProjectId);
     return proj && proj.disciplines && proj.disciplines.length > 0 ? proj.disciplines : DISCIPLINES;
   })();
 
@@ -280,7 +278,7 @@ export function Import() {
 
   // ── 最终提交入库 ──
   const handleImport = async () => {
-    if (staging.length === 0 || !selectedProject) return;
+    if (staging.length === 0 || !selectedProjectId) return;
     if (!confirm(`确认提交 ${staging.length} 条报检记录至数据库？`)) return;
 
     setIsImporting(true);
@@ -296,7 +294,7 @@ export function Import() {
       for (const [sId, items] of Object.entries(groupedByShip)) {
         if (!sId) continue;
         const resp = await batchImportInspections({
-          projectId: selectedProject,
+          projectId: selectedProjectId,
           shipId: sId,
           items: items.map(r => ({
             itemName: r.item,
@@ -363,26 +361,20 @@ export function Import() {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div className="field">
-                <span>Project</span>
-                <select className="filterSelect" value={selectedProject} onChange={e => { setSelectedProject(e.target.value); }}>
-                  {projects.map(p => <option key={p.id} value={p.id}>{p.code} - {p.name}</option>)}
-                </select>
-              </div>
-              <div className="field">
                 <span>Ship / Hull No.</span>
                 <select className="filterSelect" value={selectedShip} onChange={e => setSelectedShip(e.target.value)}>
                   {ships.map(s => <option key={s.id} value={s.id}>{s.hullNumber} ({s.shipName})</option>)}
                 </select>
               </div>
               <div className="field">
-                <span>Date</span>
-                <input type="date" className="filterSelect" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
-              </div>
-              <div className="field">
                 <span>Discipline</span>
                 <select className="filterSelect" value={selectedDiscipline} onChange={e => setSelectedDiscipline(e.target.value)}>
                   {projectDisciplines.map(d => <option key={d} value={d}>{d}</option>)}
                 </select>
+              </div>
+              <div className="field">
+                <span>Date</span>
+                <input type="date" className="filterSelect" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
               </div>
             </div>
           </section>
