@@ -68,6 +68,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
         "/api/ships/:shipId/observations",
         "/api/observations/:id",
         "/api/observations/:id/close",
+        "/api/observations/:id/reopen",
         "/api/projects",
         "/api/projects/:id",
         "/api/ships",

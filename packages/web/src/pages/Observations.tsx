@@ -9,6 +9,7 @@ import {
   createObservationType,
   updateObservation,
   closeObservation,
+  reopenObservation,
   batchImportObservations,
   fetchProjects,
   fetchShips,
@@ -247,6 +248,12 @@ export function Observations() {
   const handleClose = async (id: string) => {
     try { await closeObservation(id); void loadData(); }
     catch (err: any) { alert("Close failed: " + (err.message || "Unknown error")); }
+  };
+
+  // ---- 重新打开意见 ----
+  const handleReopen = async (id: string) => {
+    try { await reopenObservation(id); void loadData(); }
+    catch (err: any) { alert("Reopen failed: " + (err.message || "Unknown error")); }
   };
 
   // ---- 导出相关 ----
@@ -602,6 +609,7 @@ export function Observations() {
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => handleEditClick(item)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px" }}>Edit</button>
                         {item.status === "open" && <button onClick={() => handleClose(item.id)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px", color: "#166534" }}>Close</button>}
+                        {item.status === "closed" && <button onClick={() => handleReopen(item.id)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px", color: "#b45309" }}>Reopen</button>}
                       </div>
                     </td>
                   </tr>

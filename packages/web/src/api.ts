@@ -502,6 +502,15 @@ export async function closeObservation(
   );
 }
 
+export async function reopenObservation(
+  observationId: string
+): Promise<{ id: string; status: string }> {
+  return requestJson<{ id: string; status: string }>(
+    `/observations/${observationId}/reopen`,
+    { method: "PUT", body: JSON.stringify({}) }
+  );
+}
+
 export async function fetchProjects(status?: ProjectRecord["status"]): Promise<ProjectRecord[]> {
   return requestJson<ProjectRecord[]>(withQuery("/projects", { status }));
 }
