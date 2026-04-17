@@ -13,15 +13,20 @@ import {
   batchImportObservations,
   fetchProjects,
   fetchShips,
+  resolveInspectionComment,
+  reopenInspectionComment,
 } from "../api";
 import type { ProjectRecord, ShipRecord } from "../api";
 import { exportObservationsPdf, exportObservationsExcel, exportObservationsAsciiPdf } from "../utils/export-tools";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
+import { useAuth } from "../auth-context";
 
 type ActiveTab = "observations" | "inspection-comments";
 
 export function Observations() {
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
+  const { session } = useAuth();
+  const currentUserId = session?.user.id || "admin";
 
   // 项目与船号级联
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
@@ -92,6 +97,31 @@ export function Observations() {
       }
       return newSet;
     });
+  };
+
+  // ---- 关闭inspection comment (resolve) ----
+  const handleCloseComment = async (comment: InspectionCommentView) => {
+    try {
+      await resolveInspectionComment(comment.inspectionItemId, comment.id, {
+        resolvedBy: currentUserId,
+        expectedVersion: 1 // 简化版本，实际应该从detail获取
+      });
+      void loadData();
+    } catch (err: any) {
+      alert("Close comment failed: " + (err.message || "Unknown error"));
+    }
+  };
+
+  // ---- 重新打开inspection comment ----
+  const handleReopenComment = async (comment: InspectionCommentView) => {
+    try {
+      await reopenInspectionComment(comment.inspectionItemId, comment.id, {
+        expectedVersion: 1 // 简化版本，实际应该从detail获取
+      });
+      void loadData();
+    } catch (err: any) {
+      alert("Reopen comment failed: " + (err.message || "Unknown error"));
+    }
   };
 
   /** Get effective disciplines for the currently selected project (empty = all presets) */
@@ -684,19 +714,21 @@ export function Observations() {
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
                 <th style={thStyle}>S/N</th><th style={thStyle}>Ship</th><th style={thStyle}>Discipline</th>
                 <th style={thStyle}>Inspection Item</th><th style={thStyle}>Round</th><th style={thStyle}>Content</th>
-                <th style={thStyle}>Author</th><th style={thStyle}>Issued At</th><th style={thStyle}>Status</th><th style={thStyle}>Closed At</th>
+                <th style={thStyle}>Author</th><th style={thStyle}>Issued At</th><th style={thStyle}>Status</th><th style={thStyle}>Closed At</th><th style={thStyle}>Action</th>
               </tr></thead>
               <tbody>
                 {filteredComments.map((cm, index) => {
                   // 检查是否是新的inspection item（与上一条不同）
                   const isNewItem = index > 0 && filteredComments[index - 1].inspectionItemId !== cm.inspectionItemId;
+                  const isHighlighted = highlightedIds.has(cm.id);
                   
                   return (
                     <tr 
                       key={cm.id} 
                       style={{ 
                         borderTop: isNewItem ? "3px solid #1e293b" : "none",
-                        borderBottom: "1px solid var(--nb-border)"
+                        borderBottom: "1px solid var(--nb-border)",
+                        background: isHighlighted ? "#dbeafe" : "transparent"
                       }}
                     >
                       <td style={tdStyle}>{cm.localId}</td>
@@ -709,6 +741,24 @@ export function Observations() {
                       <td style={tdStyle}>{cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—"}</td>
                       <td style={tdStyle}><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
                       <td style={tdStyle}>{cm.closedAt ? new Date(cm.closedAt).toLocaleDateString("en-CA") : "—"}</td>
+                      <td style={tdStyle}>
+                        <div style={{ display: "flex", gap: 4 }}>
+                          <button 
+                            onClick={() => handleToggleHighlight(cm.id)} 
+                            style={{ 
+                              ...btnStyle("secondary"), 
+                              fontSize: 10, 
+                              padding: "3px 6px", 
+                              color: isHighlighted ? "#fff" : "#2563eb",
+                              background: isHighlighted ? "#2563eb" : "transparent"
+                            }}
+                          >
+                            {isHighlighted ? "★" : "☆"}
+                          </button>
+                          {cm.status === "open" && <button onClick={() => handleCloseComment(cm)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px", color: "#166534" }}>Close</button>}
+                          {cm.status === "closed" && <button onClick={() => handleReopenComment(cm)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px", color: "#b45309" }}>Reopen</button>}
+                        </div>
+                      </td>
                     </tr>
                   );
                 })}
