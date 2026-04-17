@@ -22,7 +22,7 @@ import { exportObservationsPdf, exportObservationsExcel, exportObservationsAscii
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 import { useAuth } from "../auth-context";
 
-type ActiveTab = "observations" | "inspection-comments";
+type ActiveTab = "observations" | "inspection-comments" | "highlighted";
 
 export function Observations() {
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
@@ -472,6 +472,7 @@ export function Observations() {
         <div style={{ display: "flex", gap: 0 }}>
           <button onClick={() => setActiveTab("observations")} style={tabStyle(activeTab === "observations")}>Punch List</button>
           <button onClick={() => setActiveTab("inspection-comments")} style={tabStyle(activeTab === "inspection-comments")}>Inspection Comments</button>
+          <button onClick={() => setActiveTab("highlighted")} style={tabStyle(activeTab === "highlighted")}>Highlight Comments</button>
         </div>
         {activeTab === "observations" && (
           <div style={{ paddingBottom: 6 }}>
@@ -481,6 +482,7 @@ export function Observations() {
       </div>
 
       {/* 筛选栏 */}
+      {activeTab !== "highlighted" && (
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
         {activeTab === "observations" && (
           <select value={filterType} onChange={e => setFilterType(e.target.value)} style={selectStyle}>
@@ -527,6 +529,7 @@ export function Observations() {
           {activeTab === "observations" ? `${items.length} records` : `${comments.length} records`}
         </span>
       </div>
+      )}
 
       {/* 新增类型 */}
       {showTypeForm && (
@@ -791,7 +794,91 @@ export function Observations() {
           </div>
         );
         })()
-      )}
+      ) : activeTab === "highlighted" ? (
+        (() => {
+          // 合并高亮的observations和comments
+          const highlightedObservations = items.filter(item => highlightedIds.has(item.id));
+          const highlightedComments = comments.filter(cm => highlightedIds.has(cm.id));
+          
+          // 创建统一的数据结构
+          type UnifiedHighlightItem = {
+            id: string;
+            serialNo: string;
+            typeOrItem: string;
+            discipline: string;
+            content: string;
+            author: string;
+            issuedAt: string;
+            status: string;
+            source: 'observation' | 'comment';
+          };
+          
+          const unifiedItems: UnifiedHighlightItem[] = [
+            ...highlightedObservations.map(item => ({
+              id: item.id,
+              serialNo: item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : String(item.serialNo),
+              typeOrItem: getTypeLabel(item.type),
+              discipline: item.discipline,
+              content: item.content,
+              author: item.authorName ?? item.authorId,
+              issuedAt: item.date,
+              status: item.status,
+              source: 'observation' as const
+            })),
+            ...highlightedComments.map(cm => ({
+              id: cm.id,
+              serialNo: String(cm.localId),
+              typeOrItem: cm.inspectionItemName,
+              discipline: cm.discipline,
+              content: cm.content,
+              author: cm.authorName,
+              issuedAt: cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—",
+              status: cm.status,
+              source: 'comment' as const
+            }))
+          ];
+          
+          return unifiedItems.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
+              <p style={{ fontSize: 14 }}>No highlighted items</p>
+              <p style={{ fontSize: 12 }}>Click the star icon (☆) on any item in Punch List or Inspection Comments to highlight it.</p>
+            </div>
+          ) : (
+            <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
+              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
+                  <th style={thStyle}>S/N</th>
+                  <th style={thStyle}>Type / Item</th>
+                  <th style={thStyle}>Discipline</th>
+                  <th style={thStyle}>Content</th>
+                  <th style={thStyle}>Author</th>
+                  <th style={thStyle}>Issued At</th>
+                  <th style={thStyle}>Status</th>
+                </tr></thead>
+                <tbody>
+                  {unifiedItems.map(item => (
+                    <tr key={item.id} style={{ borderBottom: "1px solid var(--nb-border)", background: "#dbeafe" }}>
+                      <td style={tdStyle}>{item.serialNo}</td>
+                      <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {item.source === 'observation' ? (
+                          <span style={tagStyle("#6366f1")}>{item.typeOrItem}</span>
+                        ) : (
+                          item.typeOrItem
+                        )}
+                      </td>
+                      <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
+                      <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{item.content}</td>
+                      <td style={tdStyle}>{item.author}</td>
+                      <td style={tdStyle}>{item.issuedAt}</td>
+                      <td style={tdStyle}><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()
+      ) : null}
 
       {/* 编辑弹窗 */}
       {editingItem && (
