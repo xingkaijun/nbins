@@ -361,7 +361,7 @@ export function Observations() {
         <div>
           <p className="eyebrow">PUNCH LIST MANAGEMENT</p>
           <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <h2 style={{ fontSize: "1.25rem", margin: 0 }}>
+            <h2 style={{ fontSize: "1.5rem", margin: 0, fontWeight: 800 }}>
               {getProjectName() ? `Project: ${getProjectName()}` : "ALL PROJECTS"}
             </h2>
           </div>

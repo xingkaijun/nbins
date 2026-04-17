@@ -771,6 +771,11 @@ export function Dashboard() {
         <section className="hero">
           <div>
             <p className="eyebrow">INSPECTION WORKSPACE</p>
+            {currentProject && (
+              <p style={{ fontSize: '16px', color: 'var(--nb-text)', margin: '4px 0 8px', fontWeight: 600 }}>
+                Project: {currentProject.name} ({currentProject.code})
+              </p>
+            )}
             <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
               <h2>
                 {filterMode === "pending" ? "ALL PENDING" 

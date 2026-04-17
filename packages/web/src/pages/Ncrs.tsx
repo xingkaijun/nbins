@@ -346,7 +346,7 @@ export function Ncrs() {
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
         <div>
           <h1 style={{ fontSize: 24, fontWeight: 700, margin: 0, color: "var(--nb-text)" }}>Non-Conformance Reports</h1>
-          <p style={{ fontSize: 13, color: "var(--nb-text-muted)", margin: "4px 0 0" }}>
+          <p style={{ fontSize: 16, color: "var(--nb-text)", margin: "8px 0 0", fontWeight: 600 }}>
             NCR MANAGEMENT · {selectedProject ? `${selectedProject.name} (${selectedProject.code})` : "NO PROJECT SELECTED"}
           </p>
         </div>

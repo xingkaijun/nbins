@@ -332,12 +332,20 @@ export function Import() {
     <span style={{ background: 'var(--nb-accent)', color: '#fff', width: '20px', height: '20px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', flexShrink: 0 }}>{n}</span>
   );
 
+  const currentProject = projects.find((p: any) => p.id === selectedProjectId);
+  const projectName = currentProject ? `${currentProject.name} (${currentProject.code})` : '';
+
   return (
     <main className="workspace">
       <section className="hero" style={{ paddingBottom: '16px', borderBottom: '1px solid var(--nb-border)' }}>
         <div>
           <p className="eyebrow">NBINS CORE MODULE</p>
           <h2>MANUAL DATA IMPORT</h2>
+          {projectName && (
+            <p style={{ fontSize: '16px', color: 'var(--nb-text)', margin: '8px 0 0', fontWeight: 600 }}>
+              Project: {projectName}
+            </p>
+          )}
         </div>
       </section>
 
