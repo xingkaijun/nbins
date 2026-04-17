@@ -87,9 +87,13 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
       }
 
       let sql = `
-        SELECT o.*, u."displayName" AS "authorName", s."hullNumber"
+        SELECT o.*, 
+               u."displayName" AS "authorName", 
+               s."hullNumber",
+               u2."displayName" AS "closedByName"
         FROM "observations" o
         LEFT JOIN "users" u ON u."id" = o."authorId"
+        LEFT JOIN "users" u2 ON u2."id" = o."closedBy"
         INNER JOIN "ships" s ON s."id" = o."shipId"
         WHERE 1=1
       `;

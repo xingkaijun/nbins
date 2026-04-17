@@ -119,6 +119,7 @@ export interface ObservationItem {
   remark: string | null;
   status: "open" | "closed";
   closedBy: string | null;
+  closedByName?: string | null;
   closedAt: string | null;
   createdAt: string;
   updatedAt: string;

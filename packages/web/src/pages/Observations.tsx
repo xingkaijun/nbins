@@ -592,7 +592,7 @@ export function Observations() {
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
                 <th style={thStyle}>S/N</th><th style={thStyle}>Type</th><th style={thStyle}>Discipline</th>
                 <th style={thStyle}>Location</th><th style={thStyle}>Date</th><th style={thStyle}>Content</th>
-                <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Action</th>
+                <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Closed By</th><th style={thStyle}>Action</th>
               </tr></thead>
               <tbody>
                 {filteredItems.map(item => (
@@ -605,6 +605,14 @@ export function Observations() {
                     <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{item.content}</td>
                     <td style={tdStyle}>{item.authorName ?? item.authorId}</td>
                     <td style={tdStyle}><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
+                    <td style={tdStyle}>
+                      {item.closedBy && item.closedAt ? (
+                        <div style={{ fontSize: 11 }}>
+                          <div style={{ fontWeight: 600 }}>{item.closedByName ?? item.closedBy}</div>
+                          <div style={{ color: 'var(--nb-text-muted)', fontSize: 10 }}>{new Date(item.closedAt).toLocaleDateString("en-CA")}</div>
+                        </div>
+                      ) : "—"}
+                    </td>
                     <td style={tdStyle}>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => handleEditClick(item)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px" }}>Edit</button>
