@@ -796,6 +796,15 @@ export function Observations() {
         })()
       ) : activeTab === "highlighted" ? (
         (() => {
+          // 确保数据已加载
+          if (!hasStarted) {
+            return (
+              <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
+                <p style={{ fontSize: 14 }}>Please click START to load data first</p>
+              </div>
+            );
+          }
+          
           // 合并高亮的observations和comments
           const highlightedObservations = items.filter(item => highlightedIds.has(item.id));
           const highlightedComments = comments.filter(cm => highlightedIds.has(cm.id));
