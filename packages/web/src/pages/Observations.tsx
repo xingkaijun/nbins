@@ -78,6 +78,22 @@ export function Observations() {
   const [editRemark, setEditRemark] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
 
+  // 高亮状态
+  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
+
+  // ---- 切换高亮 ----
+  const handleToggleHighlight = (id: string) => {
+    setHighlightedIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(id)) {
+        newSet.delete(id);
+      } else {
+        newSet.add(id);
+      }
+      return newSet;
+    });
+  };
+
   /** Get effective disciplines for the currently selected project (empty = all presets) */
   const projectDisciplines: readonly string[] = (() => {
     const proj = projects.find(p => p.id === selectedProjectId);
@@ -595,8 +611,13 @@ export function Observations() {
                 <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Closed By</th><th style={thStyle}>Action</th>
               </tr></thead>
               <tbody>
-                {filteredItems.map(item => (
-                  <tr key={item.id} style={{ borderBottom: "1px solid var(--nb-border)" }}>
+                {filteredItems.map(item => {
+                  const isHighlighted = highlightedIds.has(item.id);
+                  return (
+                  <tr key={item.id} style={{ 
+                    borderBottom: "1px solid var(--nb-border)",
+                    background: isHighlighted ? "#dbeafe" : "transparent"
+                  }}>
                     <td style={tdStyle}>{item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : item.serialNo}</td>
                     <td style={tdStyle}><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
                     <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
@@ -616,12 +637,25 @@ export function Observations() {
                     <td style={tdStyle}>
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => handleEditClick(item)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px" }}>Edit</button>
+                        <button 
+                          onClick={() => handleToggleHighlight(item.id)} 
+                          style={{ 
+                            ...btnStyle("secondary"), 
+                            fontSize: 10, 
+                            padding: "3px 6px", 
+                            color: isHighlighted ? "#fff" : "#2563eb",
+                            background: isHighlighted ? "#2563eb" : "transparent"
+                          }}
+                        >
+                          {isHighlighted ? "★" : "☆"}
+                        </button>
                         {item.status === "open" && <button onClick={() => handleClose(item.id)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px", color: "#166534" }}>Close</button>}
                         {item.status === "closed" && <button onClick={() => handleReopen(item.id)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px", color: "#b45309" }}>Reopen</button>}
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
