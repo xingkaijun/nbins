@@ -232,7 +232,8 @@ export function Observations() {
         if (filterStatus) filters.status = filterStatus;
         const data = await fetchObservations(filters);
         setItems(data);
-      } else {
+      }
+      if (activeTab === "inspection-comments" || activeTab === "highlighted") {
         const filters: Record<string, string> = { projectId: selectedProjectId };
         if (selectedShipId) filters.shipId = selectedShipId;
         if (filterDiscipline) filters.discipline = filterDiscipline;
@@ -797,11 +798,12 @@ export function Observations() {
           </div>
         ) : (() => {
           const highlightedItems = items.filter(item => highlightedIds.has(item.id));
+          const highlightedComments = comments.filter(cm => highlightedIds.has(cm.id));
           
-          return highlightedItems.length === 0 ? (
+          return (highlightedItems.length === 0 && highlightedComments.length === 0) ? (
             <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
               <p style={{ fontSize: 14 }}>No highlighted items</p>
-              <p style={{ fontSize: 12 }}>Click the star icon (☆) on any item in Punch List to highlight it.</p>
+              <p style={{ fontSize: 12 }}>Click the star icon (☆) on any item in Punch List or Inspection Comments to highlight it.</p>
             </div>
           ) : (
             <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
@@ -827,6 +829,18 @@ export function Observations() {
                       <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{item.content}</td>
                       <td style={tdStyle}>{item.authorName ?? item.authorId}</td>
                       <td style={tdStyle}><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
+                    </tr>
+                  ))}
+                  {highlightedComments.map(cm => (
+                    <tr key={cm.id} style={{ borderBottom: "1px solid var(--nb-border)", background: "#dbeafe" }}>
+                      <td style={tdStyle}>{cm.localId}</td>
+                      <td style={tdStyle}>{cm.inspectionItemName}</td>
+                      <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
+                      <td style={tdStyle}>—</td>
+                      <td style={tdStyle}>{cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—"}</td>
+                      <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{cm.content}</td>
+                      <td style={tdStyle}>{cm.authorName}</td>
+                      <td style={tdStyle}><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
                     </tr>
                   ))}
                 </tbody>
