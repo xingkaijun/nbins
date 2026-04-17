@@ -224,7 +224,7 @@ export function Observations() {
     if (!selectedProjectId || !hasStarted) return;
     setLoading(true);
     try {
-      if (activeTab === "observations") {
+      if (activeTab === "observations" || activeTab === "highlighted") {
         const filters: Record<string, string> = { projectId: selectedProjectId };
         if (selectedShipId) filters.shipId = selectedShipId;
         if (filterType) filters.type = filterType;
