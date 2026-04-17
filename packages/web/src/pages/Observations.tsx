@@ -660,7 +660,7 @@ export function Observations() {
             <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
                 <th style={thStyle}>S/N</th><th style={thStyle}>Type</th><th style={thStyle}>Discipline</th>
-                <th style={thStyle}>Location</th><th style={thStyle}>Date</th><th style={thStyle}>Content</th>
+                <th style={thStyle}>Location</th><th style={thStyle}>Issued At</th><th style={thStyle}>Content</th>
                 <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Closed By</th><th style={thStyle}>Action</th>
               </tr></thead>
               <tbody>
@@ -791,10 +791,49 @@ export function Observations() {
         );
         })()
       ) : activeTab === "highlighted" ? (
-        <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
-          <p style={{ fontSize: 14 }}>Highlight Comments</p>
-          <p style={{ fontSize: 12 }}>This tab will show all highlighted items from Punch List and Inspection Comments.</p>
-        </div>
+        !hasStarted ? (
+          <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
+            <p style={{ fontSize: 14 }}>Please click START to load data first</p>
+          </div>
+        ) : (() => {
+          const highlightedItems = items.filter(item => highlightedIds.has(item.id));
+          
+          return highlightedItems.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
+              <p style={{ fontSize: 14 }}>No highlighted items</p>
+              <p style={{ fontSize: 12 }}>Click the star icon (☆) on any item in Punch List to highlight it.</p>
+            </div>
+          ) : (
+            <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
+              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+                <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
+                  <th style={thStyle}>S/N</th>
+                  <th style={thStyle}>Type / Inspection Item</th>
+                  <th style={thStyle}>Discipline</th>
+                  <th style={thStyle}>Location</th>
+                  <th style={thStyle}>Issued At</th>
+                  <th style={thStyle}>Content</th>
+                  <th style={thStyle}>Author</th>
+                  <th style={thStyle}>Status</th>
+                </tr></thead>
+                <tbody>
+                  {highlightedItems.map(item => (
+                    <tr key={item.id} style={{ borderBottom: "1px solid var(--nb-border)", background: "#dbeafe" }}>
+                      <td style={tdStyle}>{item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : item.serialNo}</td>
+                      <td style={tdStyle}><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
+                      <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
+                      <td style={tdStyle}>{item.location || "—"}</td>
+                      <td style={tdStyle}>{item.date}</td>
+                      <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{item.content}</td>
+                      <td style={tdStyle}>{item.authorName ?? item.authorId}</td>
+                      <td style={tdStyle}><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          );
+        })()
       ) : null}
 
       {/* 编辑弹窗 */}
