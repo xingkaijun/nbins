@@ -84,8 +84,27 @@ export function Observations() {
   const [editRemark, setEditRemark] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
 
-  // 高亮状态
-  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(new Set());
+  // 高亮状态 - 从localStorage加载
+  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(() => {
+    try {
+      const saved = localStorage.getItem('nbins-highlighted-ids');
+      if (saved) {
+        return new Set(JSON.parse(saved));
+      }
+    } catch (e) {
+      console.error('Failed to load highlighted IDs from localStorage:', e);
+    }
+    return new Set();
+  });
+
+  // 保存高亮状态到localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem('nbins-highlighted-ids', JSON.stringify(Array.from(highlightedIds)));
+    } catch (e) {
+      console.error('Failed to save highlighted IDs to localStorage:', e);
+    }
+  }, [highlightedIds]);
 
   // ---- 切换高亮 ----
   const handleToggleHighlight = (id: string) => {
