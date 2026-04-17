@@ -15,6 +15,7 @@ import {
   fetchShips,
   resolveInspectionComment,
   reopenInspectionComment,
+  fetchInspectionDetail,
 } from "../api";
 import type { ProjectRecord, ShipRecord } from "../api";
 import { exportObservationsPdf, exportObservationsExcel, exportObservationsAsciiPdf } from "../utils/export-tools";
@@ -102,9 +103,11 @@ export function Observations() {
   // ---- 关闭inspection comment (resolve) ----
   const handleCloseComment = async (comment: InspectionCommentView) => {
     try {
+      // 先获取inspection item的详细信息以获得正确的版本号
+      const detail = await fetchInspectionDetail(comment.inspectionItemId);
       await resolveInspectionComment(comment.inspectionItemId, comment.id, {
         resolvedBy: currentUserId,
-        expectedVersion: 1 // 简化版本，实际应该从detail获取
+        expectedVersion: detail.version
       });
       void loadData();
     } catch (err: any) {
@@ -115,8 +118,10 @@ export function Observations() {
   // ---- 重新打开inspection comment ----
   const handleReopenComment = async (comment: InspectionCommentView) => {
     try {
+      // 先获取inspection item的详细信息以获得正确的版本号
+      const detail = await fetchInspectionDetail(comment.inspectionItemId);
       await reopenInspectionComment(comment.inspectionItemId, comment.id, {
-        expectedVersion: 1 // 简化版本，实际应该从detail获取
+        expectedVersion: detail.version
       });
       void loadData();
     } catch (err: any) {
