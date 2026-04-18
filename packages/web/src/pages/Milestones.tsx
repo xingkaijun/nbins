@@ -14,6 +14,7 @@ export function Milestones() {
   const [milestones, setMilestones] = useState<ShipMilestone[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pxPerDay, setPxPerDay] = useState(12);
 
   useEffect(() => {
     if (!selectedProjectId) return;
@@ -108,10 +109,10 @@ export function Milestones() {
   const today = new Date().toISOString().slice(0, 10);
 
   // Gantt chart - SVG with absolute pixel positioning (6px per day)
-  const PX_PER_DAY = 6;
   const ROW_H = 40;
   const HDR_H = 28;
   const NAME_W = 140;
+  const PX_PER_DAY = pxPerDay;
   const allDates = milestones.flatMap(m => [m.plannedDate, m.actualDate].filter(Boolean) as string[]);
   const minDate = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : today;
   const maxDate = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : today;
@@ -184,7 +185,11 @@ export function Milestones() {
 
           {/* Gantt Chart - SVG */}
           <div style={{ border: '1px solid #cbd5e1', borderRadius: 12, overflow: 'hidden', background: '#fff', marginBottom: 20 }}>
-            <div style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontWeight: 700, fontSize: 13, color: '#334155' }}>Timeline</div>
+            <div style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontWeight: 700, fontSize: 13, color: '#334155', display: 'flex', alignItems: 'center', gap: 12 }}>
+              Timeline
+              <button onClick={() => setPxPerDay(p => Math.max(2, p - 1))} disabled={pxPerDay <= 2} style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #cbd5e1', background: pxPerDay <= 2 ? '#f1f5f9' : '#fff', color: pxPerDay <= 2 ? '#94a3b8' : '#334155', fontWeight: 700, cursor: pxPerDay <= 2 ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: '24px', padding: 0 }}>-</button>
+              <button onClick={() => setPxPerDay(p => Math.min(18, p + 1))} disabled={pxPerDay >= 18} style={{ width: 24, height: 24, borderRadius: 6, border: '1px solid #cbd5e1', background: pxPerDay >= 18 ? '#f1f5f9' : '#fff', color: pxPerDay >= 18 ? '#94a3b8' : '#334155', fontWeight: 700, cursor: pxPerDay >= 18 ? 'not-allowed' : 'pointer', fontSize: 14, lineHeight: '24px', padding: 0 }}>+</button>
+            </div>
             {allDates.length > 0 ? (
               <div style={{ display: 'flex' }}>
                 {/* Left: milestone names */}
