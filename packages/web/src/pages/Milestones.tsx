@@ -233,21 +233,26 @@ export function Milestones() {
                       const els: React.ReactNode[] = [];
                       // Row separator
                       els.push(<line key={`rs-${idx}`} x1={0} y1={rowY + ROW_H} x2={svgW} y2={rowY + ROW_H} stroke="#f1f5f9" strokeWidth={1} />);
+                      // Determine the rightmost icon position for name label
+                      let nameX = 4;
                       // Bar planned->actual
                       if (m.plannedDate && m.actualDate) {
                         const x1 = toX(m.plannedDate);
                         const x2 = toX(m.actualDate);
                         els.push(<rect key={`bar-${idx}`} x={x1} y={rowY + 12} width={Math.max(x2 - x1, 2)} height={16} rx={4} fill={isComplete ? '#bbf7d0' : '#fef9c3'} stroke={isComplete ? '#86efac' : '#fde68a'} strokeWidth={1} />);
+                        nameX = x2 + 14;
                       }
                       // Planned marker (no actual yet)
                       if (m.plannedDate && !m.actualDate) {
                         els.push(<rect key={`pm-${idx}`} x={toX(m.plannedDate)} y={rowY + 12} width={8} height={16} rx={4} fill={isOverdue ? '#fecaca' : '#fef9c3'} stroke={isOverdue ? '#fca5a5' : '#fde68a'} strokeWidth={1} />);
+                        nameX = toX(m.plannedDate) + 14;
                       }
                       // Actual circle
                       if (m.actualDate) {
                         const ax = toX(m.actualDate);
                         els.push(<circle key={`ac-${idx}`} cx={ax} cy={rowY + 20} r={10} fill="#22c55e" />);
                         els.push(<text key={`at-${idx}`} x={ax} y={rowY + 24} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fff">✓</text>);
+                        nameX = ax + 14;
                       }
                       // Planned date label (above icon)
                       if (m.plannedDate) {
@@ -257,6 +262,8 @@ export function Milestones() {
                       if (m.actualDate) {
                         els.push(<text key={`adl-${idx}`} x={toX(m.actualDate)} y={rowY + 38} textAnchor="middle" fontSize={9} fill="#16a34a">{m.actualDate.slice(5)}</text>);
                       }
+                      // Milestone name next to the icon
+                      els.push(<text key={`name-${idx}`} x={nameX} y={rowY + 24} fontSize={9} fontWeight={700} fill={isComplete ? '#16a34a' : isOverdue ? '#dc2626' : '#64748b'}>{m.name}</text>);
                       return <g key={`row-${idx}`}>{els}</g>;
                     })}
                   </svg>
