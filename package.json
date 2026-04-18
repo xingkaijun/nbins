@@ -15,7 +15,10 @@
     "d1:bootstrap": "pnpm d1:gen && pnpm --filter @nbins/api exec node scripts/bootstrap-local-d1.mjs",
     "test:api": "pnpm --filter @nbins/api test",
     "qa": "pnpm typecheck && pnpm build && pnpm test:api",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "deploy:api": "pnpm --filter @nbins/api exec wrangler deploy",
+    "deploy:web": "pnpm --filter @nbins/web run deploy",
+    "deploy:all": "pnpm deploy:api && pnpm deploy:web"
   },
   "devDependencies": {
     "cross-env": "^10.1.0"

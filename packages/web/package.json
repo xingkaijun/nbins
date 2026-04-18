@@ -6,7 +6,9 @@
   "scripts": {
     "build": "tsc -p tsconfig.app.json && vite build",
     "dev": "vite",
-    "typecheck": "tsc -p tsconfig.app.json"
+    "typecheck": "tsc -p tsconfig.app.json",
+    "deploy": "pnpm build && wrangler pages deploy dist --project-name=nbins-web",
+    "deploy:preview": "pnpm build && wrangler pages deploy dist --project-name=nbins-web --branch=preview"
   },
   "dependencies": {
     "@nbins/shared": "workspace:*",
