@@ -182,7 +182,8 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
           cm."createdAt",
           cm."closedAt",
           cm."closedBy",
-          cm."resolveRemark"
+          cm."resolveRemark",
+          cm."isHighlighted"
         FROM "comments" cm
         INNER JOIN "inspection_items" ii ON ii."id" = cm."inspectionItemId"
         INNER JOIN "inspection_rounds" ir ON ir."id" = cm."createdInRoundId"
@@ -608,6 +609,45 @@ function createObservationRoutes(): Hono<ObsRouteEnv> {
       return c.json({ ok: true, data: { id, status: "open" } });
     } catch (e: any) {
       console.error("PUT /observations/:id/reopen error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
+  // Toggle highlight
+  routes.put("/observations/:id/highlight", async (c) => {
+    try {
+      const authUser = c.get("authUser");
+      const id = c.req.param("id");
+      const body = await c.req.json<{ isHighlighted: number }>();
+      const now = new Date().toISOString();
+
+      // 校验项目权限
+      const projectId = await getProjectIdByObservationId(c.env.DB!, id);
+      if (!projectId) {
+        return c.json({ ok: false, error: "意见不存在" }, 404);
+      }
+      
+      const hasAccess = await checkProjectAccess(c.env.DB!, authUser, projectId);
+      if (!hasAccess) {
+        return c.json({ ok: false, error: "无权访问该意见所在项目" }, 403);
+      }
+
+      const info = await c.env.DB!
+        .prepare(
+          `UPDATE "observations"
+           SET "isHighlighted" = ?, "updatedAt" = ?
+           WHERE "id" = ?`
+        )
+        .bind(body.isHighlighted, now, id)
+        .run();
+
+      if (info.meta?.changes === 0) {
+        return c.json({ ok: false, error: "Observation not found" }, 404);
+      }
+
+      return c.json({ ok: true, data: { id, isHighlighted: body.isHighlighted } });
+    } catch (e: any) {
+      console.error("PUT /observations/:id/highlight error:", e);
       return c.json({ ok: false, error: String(e) }, 500);
     }
   });

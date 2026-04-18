@@ -511,6 +511,27 @@ export async function reopenObservation(
   );
 }
 
+export async function toggleObservationHighlight(
+  observationId: string,
+  isHighlighted: number
+): Promise<{ id: string; isHighlighted: number }> {
+  return requestJson<{ id: string; isHighlighted: number }>(
+    `/observations/${observationId}/highlight`,
+    { method: "PUT", body: JSON.stringify({ isHighlighted }) }
+  );
+}
+
+export async function toggleCommentHighlight(
+  inspectionItemId: string,
+  commentId: string,
+  isHighlighted: number
+): Promise<{ id: string; isHighlighted: number }> {
+  return requestJson<{ id: string; isHighlighted: number }>(
+    `/inspections/${inspectionItemId}/comments/${commentId}/highlight`,
+    { method: "PUT", body: JSON.stringify({ isHighlighted }) }
+  );
+}
+
 export async function fetchProjects(status?: ProjectRecord["status"]): Promise<ProjectRecord[]> {
   return requestJson<ProjectRecord[]>(withQuery("/projects", { status }));
 }

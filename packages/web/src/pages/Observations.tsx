@@ -16,6 +16,8 @@ import {
   resolveInspectionComment,
   reopenInspectionComment,
   fetchInspectionDetail,
+  toggleObservationHighlight,
+  toggleCommentHighlight,
 } from "../api";
 import type { ProjectRecord, ShipRecord } from "../api";
 import { exportObservationsPdf, exportObservationsExcel, exportObservationsAsciiPdf } from "../utils/export-tools";
@@ -84,39 +86,37 @@ export function Observations() {
   const [editRemark, setEditRemark] = useState("");
   const [editSubmitting, setEditSubmitting] = useState(false);
 
-  // 高亮状态 - 从localStorage加载
-  const [highlightedIds, setHighlightedIds] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('nbins-highlighted-ids');
-      if (saved) {
-        return new Set(JSON.parse(saved));
-      }
-    } catch (e) {
-      console.error('Failed to load highlighted IDs from localStorage:', e);
-    }
-    return new Set();
-  });
-
-  // 保存高亮状态到localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('nbins-highlighted-ids', JSON.stringify(Array.from(highlightedIds)));
-    } catch (e) {
-      console.error('Failed to save highlighted IDs to localStorage:', e);
-    }
-  }, [highlightedIds]);
-
   // ---- 切换高亮 ----
-  const handleToggleHighlight = (id: string) => {
-    setHighlightedIds(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(id)) {
-        newSet.delete(id);
+  const handleToggleHighlight = async (id: string, isObservation: boolean) => {
+    try {
+      const item = isObservation 
+        ? items.find(i => i.id === id)
+        : comments.find(c => c.id === id);
+      
+      if (!item) return;
+
+      const newHighlightValue = item.isHighlighted === 1 ? 0 : 1;
+
+      if (isObservation) {
+        await toggleObservationHighlight(id, newHighlightValue);
+        // 更新本地状态
+        setItems(prev => prev.map(i => 
+          i.id === id ? { ...i, isHighlighted: newHighlightValue } : i
+        ));
       } else {
-        newSet.add(id);
+        const comment = comments.find(c => c.id === id);
+        if (comment) {
+          await toggleCommentHighlight(comment.inspectionItemId, id, newHighlightValue);
+          // 更新本地状态
+          setComments(prev => prev.map(c => 
+            c.id === id ? { ...c, isHighlighted: newHighlightValue } : c
+          ));
+        }
       }
-      return newSet;
-    });
+    } catch (err: any) {
+      alert("Toggle highlight failed: " + (err.message || String(err)));
+      console.error(err);
+    }
   };
 
   // ---- 关闭inspection comment (resolve) ----
@@ -342,7 +342,9 @@ export function Observations() {
       hullNumber: selectedShip?.hullNumber || undefined,
       discipline: filterDiscipline || undefined
     };
-    exportObservationsPdf(items, comments, getProjectName() || "All Projects", activeTab, shipInfo, projectInfo, exportFilters);
+    // 当在 highlighted 标签页时，默认使用 observations 模式
+    const exportMode: "observations" | "inspection-comments" = activeTab === "highlighted" ? "observations" : activeTab;
+    exportObservationsPdf(items, comments, getProjectName() || "All Projects", exportMode, shipInfo, projectInfo, exportFilters);
   };
 
   const handleExportAsciiPdf = () => {
@@ -354,7 +356,9 @@ export function Observations() {
       shipyard: selectedProject?.shipyard || undefined,
       classification: selectedProject?.class || undefined
     };
-    exportObservationsAsciiPdf(items, comments, getProjectName() || "All Projects", activeTab, shipInfo, projectInfo);
+    // 当在 highlighted 标签页时，默认使用 observations 模式
+    const exportMode: "observations" | "inspection-comments" = activeTab === "highlighted" ? "observations" : activeTab;
+    exportObservationsAsciiPdf(items, comments, getProjectName() || "All Projects", exportMode, shipInfo, projectInfo);
   };
 
   const handleExportExcel = async () => {
@@ -367,7 +371,9 @@ export function Observations() {
         shipyard: selectedProject?.shipyard || undefined,
         classification: selectedProject?.class || undefined
       };
-      await exportObservationsExcel(items, comments, getProjectName() || "All Projects", activeTab, shipInfo, projectInfo);
+      // 当在 highlighted 标签页时，默认使用 observations 模式
+      const exportMode: "observations" | "inspection-comments" = activeTab === "highlighted" ? "observations" : activeTab;
+      await exportObservationsExcel(items, comments, getProjectName() || "All Projects", exportMode, shipInfo, projectInfo);
     } catch (err: any) {
       alert("Export Excel failed: " + (err.message || String(err)));
       console.error(err);
@@ -666,7 +672,7 @@ export function Observations() {
               </tr></thead>
               <tbody>
                 {filteredItems.map(item => {
-                  const isHighlighted = highlightedIds.has(item.id);
+                  const isHighlighted = item.isHighlighted === 1;
                   return (
                   <tr key={item.id} style={{ 
                     borderBottom: "1px solid var(--nb-border)",
@@ -692,7 +698,7 @@ export function Observations() {
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => handleEditClick(item)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px" }}>Edit</button>
                         <button 
-                          onClick={() => handleToggleHighlight(item.id)} 
+                          onClick={() => handleToggleHighlight(item.id, true)} 
                           style={{ 
                             ...btnStyle("secondary"), 
                             fontSize: 10, 
@@ -744,7 +750,7 @@ export function Observations() {
                 {filteredComments.map((cm, index) => {
                   // 检查是否是新的inspection item（与上一条不同）
                   const isNewItem = index > 0 && filteredComments[index - 1].inspectionItemId !== cm.inspectionItemId;
-                  const isHighlighted = highlightedIds.has(cm.id);
+                  const isHighlighted = cm.isHighlighted === 1;
                   
                   return (
                     <tr 
@@ -768,7 +774,7 @@ export function Observations() {
                       <td style={tdStyle}>
                         <div style={{ display: "flex", gap: 4 }}>
                           <button 
-                            onClick={() => handleToggleHighlight(cm.id)} 
+                            onClick={() => handleToggleHighlight(cm.id, false)} 
                             style={{ 
                               ...btnStyle("secondary"), 
                               fontSize: 10, 
@@ -797,8 +803,8 @@ export function Observations() {
             <p style={{ fontSize: 14 }}>Please click START to load data first</p>
           </div>
         ) : (() => {
-          const highlightedItems = items.filter(item => highlightedIds.has(item.id));
-          const highlightedComments = comments.filter(cm => highlightedIds.has(cm.id));
+          const highlightedItems = items.filter(item => item.isHighlighted === 1);
+          const highlightedComments = comments.filter(cm => cm.isHighlighted === 1);
           
           return (highlightedItems.length === 0 && highlightedComments.length === 0) ? (
             <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>

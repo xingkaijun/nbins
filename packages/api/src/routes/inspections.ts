@@ -398,6 +398,58 @@ function createInspectionRoutes(
     }
   });
 
+  inspectionRoutes.put("/:id/comments/:commentId/highlight", async (c) => {
+    try {
+      const authUser = c.get("authUser");
+      const commentId = c.req.param("commentId");
+      const body = await c.req.json<{ isHighlighted: number }>();
+      const now = new Date().toISOString();
+
+      const storage = resolveStorage(c.env);
+      const db = storage.db;
+
+      // 获取 comment 所属的 inspection item 和 project
+      const comment = await db
+        .prepare(
+          `SELECT ii."shipId", s."projectId"
+           FROM "comments" cm
+           INNER JOIN "inspection_items" ii ON ii."id" = cm."inspectionItemId"
+           INNER JOIN "ships" s ON s."id" = ii."shipId"
+           WHERE cm."id" = ?`
+        )
+        .bind(commentId)
+        .first<{ shipId: string; projectId: string }>();
+
+      if (!comment) {
+        return c.json({ ok: false, error: "Comment not found" }, 404);
+      }
+
+      // 检查项目权限
+      const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(storage, authUser);
+      if (!allowedProjectIds.includes(comment.projectId)) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
+
+      const info = await db
+        .prepare(
+          `UPDATE "comments"
+           SET "isHighlighted" = ?, "updatedAt" = ?
+           WHERE "id" = ?`
+        )
+        .bind(body.isHighlighted, now, commentId)
+        .run();
+
+      if (info.meta?.changes === 0) {
+        return c.json({ ok: false, error: "Comment not found" }, 404);
+      }
+
+      return c.json({ ok: true, data: { id: commentId, isHighlighted: body.isHighlighted } });
+    } catch (e: any) {
+      console.error("PUT /:id/comments/:commentId/highlight error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
   inspectionRoutes.put("/:id/rounds/current/result", async (c) => {
     const inspectionService = new InspectionService(
       new InspectionRepository(resolveStorage(c.env))

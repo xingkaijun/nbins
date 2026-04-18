@@ -121,6 +121,7 @@ export interface ObservationItem {
   closedBy: string | null;
   closedByName?: string | null;
   closedAt: string | null;
+  isHighlighted: number; // 0 = not highlighted, 1 = highlighted
   createdAt: string;
   updatedAt: string;
 }
@@ -144,6 +145,7 @@ export interface InspectionCommentView {
   closedAt: string | null;
   closedBy: string | null;
   resolveRemark: string | null;
+  isHighlighted: number; // 0 = not highlighted, 1 = highlighted
 }
 
 /** 预置的默认意见类型编码 */
