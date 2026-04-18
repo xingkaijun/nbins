@@ -42,6 +42,45 @@ export function Milestones() {
     setMilestones(prev => [...prev, { name: name.trim(), sortOrder: maxSort + 1, plannedDate: null, actualDate: null }]);
   };
 
+  const handleAddMilestoneForAllShips = async () => {
+    const name = prompt('Enter milestone name to add for ALL ships:');
+    if (!name?.trim()) return;
+    setIsSaving(true);
+    setNotice(null);
+    try {
+      for (const ship of ships) {
+        const existing = parseMilestones(ship.shipType);
+        const ms = existing.length > 0
+          ? existing
+          : DEFAULT_MILESTONES.map(m => ({ ...m, plannedDate: null, actualDate: null }));
+        // Skip if milestone with same name already exists
+        if (ms.some(m => m.name === name.trim())) continue;
+        const maxSort = ms.reduce((max, m) => Math.max(max, m.sortOrder), 0);
+        const updated = [...ms, { name: name.trim(), sortOrder: maxSort + 1, plannedDate: null, actualDate: null }];
+        await saveShipMilestones(ship.id, updated, ship.shipType);
+        const newShipType = serializeMilestones(updated, ship.shipType);
+        setShips(prev => prev.map(s => s.id === ship.id ? { ...s, shipType: newShipType } : s));
+      }
+      // Refresh current milestones if a ship is selected
+      if (selectedShipId) {
+        const ship = ships.find(s => s.id === selectedShipId);
+        if (ship) {
+          const existing = parseMilestones(ship.shipType);
+          setMilestones(existing.length > 0
+            ? existing
+            : DEFAULT_MILESTONES.map(m => ({ ...m, plannedDate: null, actualDate: null }))
+          );
+        }
+      }
+      setNotice(`"${name.trim()}" added to all ships.`);
+      setTimeout(() => setNotice(null), 3000);
+    } catch (e: any) {
+      setNotice('Failed: ' + String(e));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   const handleRemoveMilestone = (idx: number) => {
     setMilestones(prev => prev.filter((_, i) => i !== idx));
   };
@@ -284,12 +323,21 @@ export function Milestones() {
           </div>
 
           <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <button
-              onClick={handleAddCustomMilestone}
-              style={{ background: '#fff', color: '#3b82f6', border: '1px dashed #93c5fd', borderRadius: 8, padding: '6px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
-            >
-              + Add Custom Milestone
-            </button>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                onClick={handleAddCustomMilestone}
+                style={{ background: '#fff', color: '#3b82f6', border: '1px dashed #93c5fd', borderRadius: 8, padding: '6px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+              >
+                + Add Custom Milestone
+              </button>
+              <button
+                onClick={handleAddMilestoneForAllShips}
+                disabled={isSaving || ships.length === 0}
+                style={{ background: '#fff', color: '#8b5cf6', border: '1px dashed #c4b5fd', borderRadius: 8, padding: '6px 14px', fontSize: 11, fontWeight: 700, cursor: isSaving ? 'wait' : 'pointer', opacity: isSaving || ships.length === 0 ? 0.5 : 1 }}
+              >
+                + Add for All Ships
+              </button>
+            </div>
             <button className="submitButton" onClick={handleSave} disabled={isSaving} style={{ padding: '8px 20px' }}>
               {isSaving ? 'Saving...' : 'Save Milestones'}
             </button>
