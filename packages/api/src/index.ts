@@ -34,8 +34,8 @@ function createApp(): Hono<{ Bindings: Bindings }> {
         "http://localhost:4173",
         "https://ins.6666996.xyz",
         "https://nbins-six.vercel.app",
-        // Cloudflare Pages 域名（部署后添加）
-        "https://nbins-web.pages.dev",
+        // Cloudflare Pages 域名
+        "https://nbins.pages.dev",
       ],
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     })
