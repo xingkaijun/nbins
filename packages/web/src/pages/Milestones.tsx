@@ -14,7 +14,7 @@ export function Milestones() {
   const [milestones, setMilestones] = useState<ShipMilestone[]>([]);
   const [isSaving, setIsSaving] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
-  const [pxPerDay, setPxPerDay] = useState(12);
+  const [pxPerDay, setPxPerDay] = useState(6);
 
   useEffect(() => {
     if (!selectedProjectId) return;
@@ -230,6 +230,8 @@ export function Milestones() {
                     <line x1={0} y1={HDR_H} x2={svgW} y2={HDR_H} stroke="#cbd5e1" strokeWidth={1} />
                     {/* Today line */}
                     <line x1={toX(today)} y1={0} x2={toX(today)} y2={svgH} stroke="#ef4444" strokeWidth={2} opacity={0.6} />
+                    <rect x={toX(today) - 18} y={0} width={36} height={14} rx={3} fill="#ef4444" opacity={0.9} />
+                    <text x={toX(today)} y={11} textAnchor="middle" fontSize={9} fontWeight={700} fill="#fff">TODAY</text>
                     {/* Milestone rows */}
                     {milestones.map((m, idx) => {
                       const isComplete = !!m.actualDate;
