@@ -57,22 +57,45 @@ export function Milestones() {
   const completed = milestones.filter(m => !!m.actualDate).length;
   const today = new Date().toISOString().slice(0, 10);
 
-  // Gantt chart calculations
+  // Gantt chart - SVG with absolute pixel positioning (6px per day)
+  const PX_PER_DAY = 6;
+  const ROW_H = 40;
+  const HDR_H = 28;
+  const NAME_W = 140;
   const allDates = milestones.flatMap(m => [m.plannedDate, m.actualDate].filter(Boolean) as string[]);
   const minDate = allDates.length > 0 ? allDates.reduce((a, b) => a < b ? a : b) : today;
   const maxDate = allDates.length > 0 ? allDates.reduce((a, b) => a > b ? a : b) : today;
-  const startDate = new Date(minDate);
-  startDate.setMonth(startDate.getMonth() - 1);
-  const endDate = new Date(maxDate);
-  endDate.setMonth(endDate.getMonth() + 1);
-  const totalDays = Math.max((endDate.getTime() - startDate.getTime()) / 86400000, 30);
-  const toX = (dateStr: string) => ((new Date(dateStr).getTime() - startDate.getTime()) / 86400000 / totalDays) * 100;
 
-  const monthTicks: { label: string; x: number }[] = [];
-  const cur = new Date(startDate);
-  while (cur <= endDate) {
-    monthTicks.push({ label: cur.toLocaleString('en', { month: 'short', year: '2-digit' }), x: ((cur.getTime() - startDate.getTime()) / 86400000 / totalDays) * 100 });
-    cur.setMonth(cur.getMonth() + 1);
+  // Parse "YYYY-MM-DD" as day number (UTC, no timezone issues)
+  const dayNum = (s: string) => {
+    const [y, m, d] = s.split('-').map(Number);
+    return Date.UTC(y, m - 1, d) / 86400000;
+  };
+
+  // Range: 1st of month before min -> 1st of month after max
+  const [minY, minM] = minDate.split('-').map(Number);
+  const sY = minM === 1 ? minY - 1 : minY;
+  const sM = minM === 1 ? 12 : minM - 1;
+  const startDay = dayNum(`${sY}-${String(sM).padStart(2, '0')}-01`);
+  const [maxY, maxM] = maxDate.split('-').map(Number);
+  const eY = maxM === 12 ? maxY + 1 : maxY;
+  const eM = maxM === 12 ? 1 : maxM + 1;
+  const endDay = dayNum(`${eY}-${String(eM).padStart(2, '0')}-01`);
+  const totalDays = Math.max(endDay - startDay, 30);
+  const svgW = totalDays * PX_PER_DAY;
+  const svgH = HDR_H + milestones.length * ROW_H;
+
+  // Absolute pixel position for any date
+  const toX = (dateStr: string) => (dayNum(dateStr) - startDay) * PX_PER_DAY;
+
+  // Month ticks at 1st of each month
+  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const monthTicks: { label: string; px: number }[] = [];
+  let ty = sY, tm = sM;
+  while (dayNum(`${ty}-${String(tm).padStart(2, '0')}-01`) <= endDay) {
+    const td = dayNum(`${ty}-${String(tm).padStart(2, '0')}-01`);
+    monthTicks.push({ label: `${monthNames[tm - 1]} ${ty}`, px: (td - startDay) * PX_PER_DAY });
+    tm++; if (tm > 12) { tm = 1; ty++; }
   }
 
   if (!selectedProjectId) {
@@ -109,42 +132,85 @@ export function Milestones() {
             <span style={{ fontSize: 11, color: '#64748b', fontWeight: 700 }}>{completed}/{milestones.length} completed</span>
           </div>
 
-          {/* Gantt Chart */}
+          {/* Gantt Chart - SVG */}
           <div style={{ border: '1px solid #cbd5e1', borderRadius: 12, overflow: 'hidden', background: '#fff', marginBottom: 20 }}>
             <div style={{ padding: '12px 16px', background: '#f8fafc', borderBottom: '1px solid #e2e8f0', fontWeight: 700, fontSize: 13, color: '#334155' }}>Timeline</div>
             {allDates.length > 0 ? (
-              <div style={{ padding: '16px', overflowX: 'auto' }}>
-                <div style={{ position: 'relative', height: 20, marginBottom: 8 }}>
-                  {monthTicks.map((m, i) => (
-                    <span key={i} style={{ position: 'absolute', left: `${m.x}%`, transform: 'translateX(-50%)', fontSize: 10, color: '#94a3b8', fontWeight: 600 }}>{m.label}</span>
-                  ))}
+              <div style={{ display: 'flex' }}>
+                {/* Left: milestone names */}
+                <div style={{ width: NAME_W, flexShrink: 0, borderRight: '1px solid #e2e8f0', background: '#fafbfc' }}>
+                  <div style={{ height: HDR_H, borderBottom: '1px solid #e2e8f0' }} />
+                  {milestones.map((m, idx) => {
+                    const isComplete = !!m.actualDate;
+                    const isOverdue = !isComplete && !!m.plannedDate && m.plannedDate < today;
+                    return (
+                      <div key={idx} style={{ height: ROW_H, display: 'flex', alignItems: 'center', borderBottom: '1px solid #f1f5f9', padding: '0 12px' }}>
+                        <span style={{ fontSize: 11, fontWeight: 700, color: isComplete ? '#16a34a' : isOverdue ? '#dc2626' : '#334155', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {isComplete ? '✓ ' : isOverdue ? '! ' : '○ '}{m.name}
+                        </span>
+                      </div>
+                    );
+                  })}
                 </div>
-                {milestones.map((m, idx) => {
-                  const isComplete = !!m.actualDate;
-                  const isOverdue = !isComplete && !!m.plannedDate && m.plannedDate < today;
-                  return (
-                    <div key={idx} style={{ display: 'flex', alignItems: 'center', height: 40, borderBottom: '1px solid #f1f5f9' }}>
-                      <div style={{ width: 120, flexShrink: 0, fontSize: 11, fontWeight: 700, color: isComplete ? '#16a34a' : isOverdue ? '#dc2626' : '#334155', paddingRight: 8, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {isComplete ? '✓ ' : isOverdue ? '! ' : '○ '}{m.name}
-                      </div>
-                      <div style={{ flex: 1, position: 'relative', height: 24 }}>
-                        <div style={{ position: 'absolute', left: `${toX(today)}%`, top: -4, bottom: -4, width: 2, background: '#ef4444', opacity: 0.5, zIndex: 1 }} />
-                        {m.plannedDate && m.actualDate && (
-                          <div style={{ position: 'absolute', left: `${toX(m.plannedDate)}%`, width: `${Math.max(toX(m.actualDate) - toX(m.plannedDate), 1)}%`, top: 4, height: 16, background: isComplete ? '#bbf7d0' : '#fef9c3', borderRadius: 4, border: `1px solid ${isComplete ? '#86efac' : '#fde68a'}`, zIndex: 0 }} />
-                        )}
-                        {m.plannedDate && !m.actualDate && (
-                          <div style={{ position: 'absolute', left: `${toX(m.plannedDate)}%`, top: 4, height: 16, width: 8, background: isOverdue ? '#fecaca' : '#fef9c3', borderRadius: 4, border: `1px solid ${isOverdue ? '#fca5a5' : '#fde68a'}`, zIndex: 0 }} />
-                        )}
-                        {m.actualDate && (
-                          <div style={{ position: 'absolute', left: `${toX(m.actualDate)}%`, top: 2, width: 20, height: 20, background: '#22c55e', borderRadius: '50%', transform: 'translateX(-50%)', zIndex: 2, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: 10, fontWeight: 700 }}>✓</div>
-                        )}
-                        {m.plannedDate && (
-                          <span style={{ position: 'absolute', left: `${toX(m.plannedDate)}%`, top: 22, transform: 'translateX(-50%)', fontSize: 9, color: '#94a3b8', whiteSpace: 'nowrap' }}>{m.plannedDate.slice(5)}</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
+                {/* Right: SVG timeline */}
+                <div style={{ flex: 1, overflowX: 'auto' }}>
+                  <svg width={svgW} height={svgH} style={{ display: 'block' }}>
+                    {/* Daily grid lines */}
+                    {Array.from({ length: totalDays + 1 }, (_, i) => {
+                      const x = i * PX_PER_DAY;
+                      // Check if this day is the 1st of a month (thicker line)
+                      const isMonthStart = monthTicks.some(t => Math.abs(t.px - x) < 0.5);
+                      return (
+                        <line key={`day-${i}`} x1={x} y1={0} x2={x} y2={svgH}
+                          stroke={isMonthStart ? '#cbd5e1' : '#f1f5f9'}
+                          strokeWidth={isMonthStart ? 1 : 0.5}
+                        />
+                      );
+                    })}
+                    {/* Month labels */}
+                    {monthTicks.map((t, i) => (
+                      <text key={`ml-${i}`} x={t.px + 4} y={18} fontSize={10} fill="#64748b" fontWeight={600}>{t.label}</text>
+                    ))}
+                    {/* Header bottom line */}
+                    <line x1={0} y1={HDR_H} x2={svgW} y2={HDR_H} stroke="#cbd5e1" strokeWidth={1} />
+                    {/* Today line */}
+                    <line x1={toX(today)} y1={0} x2={toX(today)} y2={svgH} stroke="#ef4444" strokeWidth={2} opacity={0.6} />
+                    {/* Milestone rows */}
+                    {milestones.map((m, idx) => {
+                      const isComplete = !!m.actualDate;
+                      const isOverdue = !isComplete && !!m.plannedDate && m.plannedDate < today;
+                      const rowY = HDR_H + idx * ROW_H;
+                      const els: React.ReactNode[] = [];
+                      // Row separator
+                      els.push(<line key={`rs-${idx}`} x1={0} y1={rowY + ROW_H} x2={svgW} y2={rowY + ROW_H} stroke="#f1f5f9" strokeWidth={1} />);
+                      // Bar planned->actual
+                      if (m.plannedDate && m.actualDate) {
+                        const x1 = toX(m.plannedDate);
+                        const x2 = toX(m.actualDate);
+                        els.push(<rect key={`bar-${idx}`} x={x1} y={rowY + 12} width={Math.max(x2 - x1, 2)} height={16} rx={4} fill={isComplete ? '#bbf7d0' : '#fef9c3'} stroke={isComplete ? '#86efac' : '#fde68a'} strokeWidth={1} />);
+                      }
+                      // Planned marker (no actual yet)
+                      if (m.plannedDate && !m.actualDate) {
+                        els.push(<rect key={`pm-${idx}`} x={toX(m.plannedDate)} y={rowY + 12} width={8} height={16} rx={4} fill={isOverdue ? '#fecaca' : '#fef9c3'} stroke={isOverdue ? '#fca5a5' : '#fde68a'} strokeWidth={1} />);
+                      }
+                      // Actual circle
+                      if (m.actualDate) {
+                        const ax = toX(m.actualDate);
+                        els.push(<circle key={`ac-${idx}`} cx={ax} cy={rowY + 20} r={10} fill="#22c55e" />);
+                        els.push(<text key={`at-${idx}`} x={ax} y={rowY + 24} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fff">✓</text>);
+                      }
+                      // Planned date label (above icon)
+                      if (m.plannedDate) {
+                        els.push(<text key={`dl-${idx}`} x={toX(m.plannedDate)} y={rowY + 8} textAnchor="middle" fontSize={9} fill="#94a3b8">{m.plannedDate.slice(5)}</text>);
+                      }
+                      // Actual date label (below icon)
+                      if (m.actualDate) {
+                        els.push(<text key={`adl-${idx}`} x={toX(m.actualDate)} y={rowY + 38} textAnchor="middle" fontSize={9} fill="#16a34a">{m.actualDate.slice(5)}</text>);
+                      }
+                      return <g key={`row-${idx}`}>{els}</g>;
+                    })}
+                  </svg>
+                </div>
               </div>
             ) : (
               <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>No dates set yet. Use the table below to enter planned and actual dates.</div>
