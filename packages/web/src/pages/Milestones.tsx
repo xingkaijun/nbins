@@ -35,6 +35,17 @@ export function Milestones() {
     setMilestones(prev => prev.map((m, i) => i === idx ? { ...m, [field]: value || null } : m));
   };
 
+  const handleAddCustomMilestone = () => {
+    const maxSort = milestones.reduce((max, m) => Math.max(max, m.sortOrder), 0);
+    const name = prompt('Enter milestone name:');
+    if (!name?.trim()) return;
+    setMilestones(prev => [...prev, { name: name.trim(), sortOrder: maxSort + 1, plannedDate: null, actualDate: null }]);
+  };
+
+  const handleRemoveMilestone = (idx: number) => {
+    setMilestones(prev => prev.filter((_, i) => i !== idx));
+  };
+
   const handleSave = async () => {
     if (!selectedShipId) return;
     setIsSaving(true);
@@ -230,6 +241,7 @@ export function Milestones() {
                   <th style={thS}>Planned Date</th>
                   <th style={thS}>Actual Date</th>
                   <th style={thS}>Status</th>
+                  <th style={{ ...thS, width: 48, textAlign: 'center' }}></th>
                 </tr>
               </thead>
               <tbody>
@@ -259,6 +271,11 @@ export function Milestones() {
                           <span style={{ fontSize: 9, fontWeight: 800, padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' }}>PENDING</span>
                         )}
                       </td>
+                      <td style={{ ...tdS, textAlign: 'center' }}>
+                        {!DEFAULT_MILESTONES.some(dm => dm.name === m.name) && (
+                          <button onClick={() => handleRemoveMilestone(idx)} style={{ background: 'none', border: 'none', color: '#dc2626', fontSize: 11, cursor: 'pointer', fontWeight: 700 }} title="Remove milestone">✕</button>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -266,7 +283,13 @@ export function Milestones() {
             </table>
           </div>
 
-          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <button
+              onClick={handleAddCustomMilestone}
+              style={{ background: '#fff', color: '#3b82f6', border: '1px dashed #93c5fd', borderRadius: 8, padding: '6px 14px', fontSize: 11, fontWeight: 700, cursor: 'pointer' }}
+            >
+              + Add Custom Milestone
+            </button>
             <button className="submitButton" onClick={handleSave} disabled={isSaving} style={{ padding: '8px 20px' }}>
               {isSaving ? 'Saving...' : 'Save Milestones'}
             </button>
