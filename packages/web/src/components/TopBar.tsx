@@ -9,7 +9,8 @@ const navItems = [
   { path: "/observations", label: "Punch List" },
   { path: "/ncrs", label: "NCRs" },
   { path: "/reports", label: "Reports" },
-  { path: "/import", label: "Import" }
+  { path: "/import", label: "Import" },
+  { path: "/milestones", label: "Milestones" }
 ];
 
 export function TopBar() {

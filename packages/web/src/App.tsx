@@ -12,6 +12,7 @@ import { Admin } from "./pages/Admin";
 import { Login } from "./pages/Login";
 import { Observations } from "./pages/Observations";
 import { Ncrs } from "./pages/Ncrs";
+import { Milestones } from "./pages/Milestones";
 
 function AdminGuard() {
   const { session } = useAuth();
@@ -36,6 +37,7 @@ export function App() {
                 <Route path="import" element={<Import />} />
                 <Route path="observations" element={<Observations />} />
                 <Route path="ncrs" element={<Ncrs />} />
+                <Route path="milestones" element={<Milestones />} />
                 <Route path="admin" element={<AdminGuard />} />
                 <Route path="admin/sql" element={<SqlConsole />} />
               </Route>
