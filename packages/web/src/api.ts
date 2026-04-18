@@ -62,6 +62,62 @@ export interface ShipRecord {
   updatedAt: string;
 }
 
+// ---- Ship Milestones ----
+// Milestones are stored as JSON in the shipType field to avoid API redeployment.
+// Format: { "__milestones": [{ name, sortOrder, plannedDate, actualDate }] }
+
+export interface ShipMilestone {
+  name: string;
+  sortOrder: number;
+  plannedDate: string | null;
+  actualDate: string | null;
+}
+
+/** Default milestone templates for new ships */
+export const DEFAULT_MILESTONES: Omit<ShipMilestone, "plannedDate" | "actualDate">[] = [
+  { name: "Steel Cutting", sortOrder: 1 },
+  { name: "Keel Laying", sortOrder: 2 },
+  { name: "Launching", sortOrder: 3 },
+  { name: "Sea Trial", sortOrder: 4 },
+  { name: "Delivery", sortOrder: 5 },
+];
+
+/** Parse milestones from shipType JSON string */
+export function parseMilestones(shipType: string | null): ShipMilestone[] {
+  if (!shipType) return [];
+  try {
+    const parsed = JSON.parse(shipType);
+    if (parsed && Array.isArray(parsed.__milestones)) {
+      return parsed.__milestones as ShipMilestone[];
+    }
+  } catch { /* not JSON — shipType may contain plain text */ }
+  return [];
+}
+
+/** Serialize milestones back into shipType JSON string (preserves existing JSON keys) */
+export function serializeMilestones(milestones: ShipMilestone[], originalShipType?: string | null): string {
+  let base: Record<string, unknown> = {};
+  if (originalShipType) {
+    try {
+      const parsed = JSON.parse(originalShipType);
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) {
+        base = parsed as Record<string, unknown>;
+      }
+    } catch { /* original shipType is not valid JSON, start fresh */ }
+  }
+  return JSON.stringify({ ...base, __milestones: milestones });
+}
+
+/** Save milestones for a ship via the existing updateShip API */
+export async function saveShipMilestones(
+  shipId: string,
+  milestones: ShipMilestone[],
+  originalShipType?: string | null
+): Promise<{ id: string; updatedAt: string }> {
+  const shipType = serializeMilestones(milestones, originalShipType);
+  return updateShip(shipId, { shipType } as Partial<Pick<ShipRecord, "projectId" | "hullNumber" | "shipName" | "shipType" | "status">>);
+}
+
 export interface UserRecord {
   id: string;
   username: string;

@@ -1,6 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { DISCIPLINES } from '@nbins/shared';
-import { fetchProjects, fetchShips, batchImportInspections } from '../api.ts';
+import { fetchProjects, fetchShips, batchImportInspections, parseMilestones, saveShipMilestones, serializeMilestones, DEFAULT_MILESTONES } from '../api.ts';
+import type { ShipMilestone } from '../api.ts';
 import { useProjectContext } from '../project-context';
 
 /** A single staging row — parsed from text but NOT yet in DB */
@@ -44,6 +45,36 @@ export function Import() {
   // ── Drag & Drop ──
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
+
+  // ── Milestone 状态 ──
+  const [milestoneShip, setMilestoneShip] = useState('');
+  const [milestones, setMilestones] = useState<ShipMilestone[]>([]);
+  const [isSavingMilestones, setIsSavingMilestones] = useState(false);
+  const [milestoneNotice, setMilestoneNotice] = useState<string | null>(null);
+
+  // 当 milestoneShip 变化时，从 ship.shipType 加载 milestones
+  useEffect(() => {
+    if (!milestoneShip) {
+      setMilestones([]);
+      return;
+    }
+    const ship = ships.find((s: any) => s.id === milestoneShip);
+    if (ship) {
+      const existing = parseMilestones(ship.shipType);
+      if (existing.length > 0) {
+        setMilestones(existing);
+      } else {
+        setMilestones(DEFAULT_MILESTONES.map(m => ({ ...m, plannedDate: null, actualDate: null })));
+      }
+    }
+  }, [milestoneShip, ships]);
+
+  // 当 selectedShip 变化时同步 milestoneShip（仅首次）
+  useEffect(() => {
+    if (!milestoneShip && selectedShip) {
+      setMilestoneShip(selectedShip);
+    }
+  }, [selectedShip]);
 
   // Load backend data
   useEffect(() => {
@@ -275,6 +306,43 @@ export function Import() {
     staging.forEach(r => map.set(r.discipline, (map.get(r.discipline) || 0) + 1));
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [staging]);
+
+  // ── Milestone 操作 ──
+  const handleMilestoneChange = useCallback((index: number, field: 'plannedDate' | 'actualDate', value: string) => {
+    setMilestones(prev => prev.map((m, i) => i === index ? { ...m, [field]: value || null } : m));
+  }, []);
+
+  const handleAddCustomMilestone = useCallback(() => {
+    const maxSort = milestones.reduce((max, m) => Math.max(max, m.sortOrder), 0);
+    const name = prompt('Enter milestone name:');
+    if (!name?.trim()) return;
+    setMilestones(prev => [...prev, { name: name.trim(), sortOrder: maxSort + 1, plannedDate: null, actualDate: null }]);
+  }, [milestones]);
+
+  const handleRemoveMilestone = useCallback((index: number) => {
+    setMilestones(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const handleSaveMilestones = async () => {
+    if (!milestoneShip) return;
+    setIsSavingMilestones(true);
+    setMilestoneNotice(null);
+    try {
+      const ship = ships.find((s: any) => s.id === milestoneShip);
+      await saveShipMilestones(milestoneShip, milestones, ship?.shipType);
+      // 安全更新本地 ships 数据中的 shipType（try-catch 防止 JSON.parse 崩溃导致白屏）
+      const newShipType = serializeMilestones(milestones, ship?.shipType);
+      setShips(prev => prev.map((s: any) =>
+        s.id === milestoneShip ? { ...s, shipType: newShipType } : s
+      ));
+      setMilestoneNotice('Milestones saved.');
+      setTimeout(() => setMilestoneNotice(null), 3000);
+    } catch (e: any) {
+      setMilestoneNotice('Failed to save milestones: ' + String(e));
+    } finally {
+      setIsSavingMilestones(false);
+    }
+  };
 
   // ── 最终提交入库 ──
   const handleImport = async () => {
@@ -590,6 +658,147 @@ export function Import() {
         </div>
 
       </div>
+
+      {/* ═══════  Milestone 生产进度区域  ═══════ */}
+      <section style={{
+        marginTop: '32px',
+        padding: '24px',
+        background: 'linear-gradient(135deg, #f8fafc 0%, #f0f9ff 100%)',
+        border: '2px solid #bfdbfe',
+        borderRadius: '16px',
+        position: 'relative',
+        overflow: 'hidden'
+      }}>
+        <div style={{ position: 'absolute', top: 0, left: 0, right: 0, height: '4px', background: 'linear-gradient(90deg, #3b82f6, #06b6d4, #3b82f6)' }} />
+
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <span style={{ fontSize: '20px' }}>&#9981;</span>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '14px', fontWeight: 800, color: '#1e3a5f' }}>PRODUCTION MILESTONES</h3>
+              <p style={{ margin: '2px 0 0', fontSize: '10px', color: '#64748b' }}>Define key production dates for each ship</p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <select
+              className="filterSelect"
+              value={milestoneShip}
+              onChange={e => setMilestoneShip(e.target.value)}
+              style={{ minWidth: '200px', fontWeight: 600 }}
+            >
+              <option value="">-- Select Ship --</option>
+              {ships.map((s: any) => <option key={s.id} value={s.id}>{s.hullNumber} ({s.shipName})</option>)}
+            </select>
+          </div>
+        </div>
+
+        {milestoneShip ? (
+          <>
+            {milestoneNotice && (
+              <div className={`alert ${milestoneNotice.includes('Failed') ? 'warning' : 'success'}`} style={{ marginBottom: '12px' }}>
+                {milestoneNotice}
+              </div>
+            )}
+
+            <div style={{ border: '1px solid #cbd5e1', borderRadius: '10px', overflow: 'hidden', background: '#fff' }}>
+              <table style={{ width: '100%', fontSize: 12, borderCollapse: 'collapse' }}>
+                <thead>
+                  <tr style={{ background: '#e0f2fe', borderBottom: '2px solid #93c5fd' }}>
+                    <th style={{ ...thS, width: '32px' }}></th>
+                    <th style={thS}>Milestone</th>
+                    <th style={thS}>Planned Date</th>
+                    <th style={thS}>Actual Date</th>
+                    <th style={thS}>Status</th>
+                    <th style={{ ...thS, width: '48px', textAlign: 'center' }}></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {milestones.map((m, idx) => {
+                    const today = new Date().toLocaleDateString("en-CA");
+                    const isComplete = !!m.actualDate;
+                    const isOverdue = !isComplete && !!m.plannedDate && m.plannedDate < today;
+                    return (
+                      <tr key={idx} style={{
+                        borderBottom: '1px solid #e2e8f0',
+                        background: isComplete ? '#f0fdf4' : isOverdue ? '#fef2f2' : 'transparent'
+                      }}>
+                        <td style={{ ...tdS, textAlign: 'center', color: isComplete ? '#16a34a' : isOverdue ? '#dc2626' : '#94a3b8', fontWeight: 'bold', fontSize: 14 }}>
+                          {isComplete ? '✓' : isOverdue ? '!' : '○'}
+                        </td>
+                        <td style={{ ...tdS, fontWeight: 700, color: '#1e3a5f' }}>{m.name}</td>
+                        <td style={tdS}>
+                          <input
+                            type="date"
+                            value={m.plannedDate || ''}
+                            onChange={e => handleMilestoneChange(idx, 'plannedDate', e.target.value)}
+                            style={{ ...cellInput, borderColor: isOverdue ? '#fca5a5' : undefined }}
+                          />
+                        </td>
+                        <td style={tdS}>
+                          <input
+                            type="date"
+                            value={m.actualDate || ''}
+                            onChange={e => handleMilestoneChange(idx, 'actualDate', e.target.value)}
+                            style={cellInput}
+                          />
+                        </td>
+                        <td style={tdS}>
+                          {isComplete ? (
+                            <span style={{ fontSize: '9px', fontWeight: 800, padding: '2px 8px', borderRadius: '999px', background: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' }}>COMPLETED</span>
+                          ) : isOverdue ? (
+                            <span style={{ fontSize: '9px', fontWeight: 800, padding: '2px 8px', borderRadius: '999px', background: '#fef2f2', color: '#991b1b', border: '1px solid #fecaca' }}>OVERDUE</span>
+                          ) : m.plannedDate ? (
+                            <span style={{ fontSize: '9px', fontWeight: 800, padding: '2px 8px', borderRadius: '999px', background: '#fef9c3', color: '#854d0e', border: '1px solid #fde68a' }}>PLANNED</span>
+                          ) : (
+                            <span style={{ fontSize: '9px', fontWeight: 800, padding: '2px 8px', borderRadius: '999px', background: '#f1f5f9', color: '#64748b', border: '1px solid #e2e8f0' }}>PENDING</span>
+                          )}
+                        </td>
+                        <td style={{ ...tdS, textAlign: 'center' }}>
+                          {!DEFAULT_MILESTONES.some(dm => dm.name === m.name) && (
+                            <button onClick={() => handleRemoveMilestone(idx)} style={{ ...actionBtn, color: '#dc2626', fontSize: 11 }} title="Remove milestone">✕</button>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ marginTop: '12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <button
+                onClick={handleAddCustomMilestone}
+                style={{
+                  background: '#fff', color: '#3b82f6', border: '1px dashed #93c5fd', borderRadius: '8px',
+                  padding: '6px 14px', fontSize: '11px', fontWeight: 700, cursor: 'pointer'
+                }}
+              >
+                + Add Custom Milestone
+              </button>
+              <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+                <span style={{ fontSize: '10px', color: 'var(--nb-text-muted)' }}>
+                  {milestones.filter(m => !!m.actualDate).length}/{milestones.length} completed
+                </span>
+                <button
+                  className="submitButton"
+                  onClick={handleSaveMilestones}
+                  disabled={isSavingMilestones || !milestoneShip}
+                  style={{ padding: '8px 20px' }}
+                >
+                  {isSavingMilestones ? 'Saving...' : 'Save Milestones'}
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            minHeight: '80px', color: '#94a3b8', fontSize: 12, fontWeight: 600
+          }}>
+            Please select a ship above to manage milestones
+          </div>
+        )}
+      </section>
     </main>
   );
 }
