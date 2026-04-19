@@ -285,19 +285,11 @@ export function NcrEditor({
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 1, background: "#e2e8f0", border: "1px solid #e2e8f0", borderRadius: 12, overflow: "hidden" }}>
               <div style={{ background: "#fff", padding: 15 }}>
                 <div style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>Prepared By (Inspector)</div>
-                <div style={{ fontSize: 13, fontWeight: 900, color: "#0f172a", marginBottom: 25 }}>{authorName}</div>
-                <div style={{ display: "flex", gap: 20 }}>
-                  <div style={{ flex: 1, borderTop: "1px solid #e2e8f0", paddingTop: 4, fontSize: 8, fontWeight: 800, color: "#94a3b8" }}>HANDWRITTEN SIGNATURE</div>
-                  <div style={{ flex: 0.6, borderTop: "1px solid #e2e8f0", paddingTop: 4, fontSize: 8, fontWeight: 800, color: "#94a3b8" }}>TITLE</div>
-                </div>
+                <div style={{ fontSize: 13, fontWeight: 900, color: "#0f172a" }}>{authorName}</div>
               </div>
               <div style={{ background: "#fff", padding: 15 }}>
                 <div style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.1em", marginBottom: 12 }}>Approved By (Authorized Manager)</div>
-                <div style={{ fontSize: 13, fontWeight: 900, color: "#94a3b8", marginBottom: 25 }}>Pending manager review</div>
-                <div style={{ display: "flex", gap: 20 }}>
-                  <div style={{ flex: 1, borderTop: "1px solid #e2e8f0", paddingTop: 4, fontSize: 8, fontWeight: 800, color: "#94a3b8" }}>AUTHORIZED SIGNATURE</div>
-                  <div style={{ flex: 0.6, borderTop: "1px solid #e2e8f0", paddingTop: 4, fontSize: 8, fontWeight: 800, color: "#94a3b8" }}>DATE</div>
-                </div>
+                <div style={{ fontSize: 13, fontWeight: 900, color: "#94a3b8" }}>Pending manager review</div>
               </div>
             </div>
           </div>

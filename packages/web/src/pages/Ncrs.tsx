@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import type { NcrItemResponse } from "@nbins/shared";
+import { DISCIPLINES } from "@nbins/shared";
 import {
   approveNcr,
   closeNcr,
@@ -552,12 +553,16 @@ export function Ncrs() {
                           </label>
                           <label style={labelStyle}>
                             DISCIPLINE
-                            <input
+                            <select
                               value={reviewDraft.discipline}
                               onChange={(event) => setReviewDrafts((current) => ({ ...current, [item.id]: { ...reviewDraft, discipline: event.target.value } }))}
                               style={inputStyle}
                               disabled={!canReviewEdit}
-                            />
+                            >
+                              {(DISCIPLINES as readonly string[]).map((d) => (
+                                <option key={d} value={d}>{d}</option>
+                              ))}
+                            </select>
                           </label>
                           <label style={labelStyle}>
                             DESCRIPTION OF NON-CONFORMITY
