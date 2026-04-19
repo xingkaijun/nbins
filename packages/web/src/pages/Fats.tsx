@@ -27,6 +27,7 @@ function resultColor(result: string | null): string {
     case "FAIL":
       return "#dc2626";
     case "CONDITIONAL":
+    case "COMMENTS":
       return "#d97706";
     default:
       return "#64748b";
@@ -39,6 +40,7 @@ interface FatEditDraft {
   content: string;
   result: string;
   remark: string;
+  maker: string;
 }
 
 function createEditDraft(item: FatItemResponse): FatEditDraft {
@@ -47,7 +49,8 @@ function createEditDraft(item: FatItemResponse): FatEditDraft {
     discipline: item.discipline,
     content: item.content,
     result: item.result || "",
-    remark: item.remark || ""
+    remark: item.remark || "",
+    maker: item.maker || ""
   };
 }
 
@@ -168,6 +171,7 @@ export function Fats() {
     discipline: string;
     serialNo: number;
     imageAttachments: string[];
+    maker: string;
   }) {
     if (!selectedShipId) return;
     const created = await createFat(selectedShipId, {
@@ -178,7 +182,8 @@ export function Fats() {
       remark: data.remark || undefined,
       discipline: data.discipline,
       serialNo: data.serialNo,
-      imageAttachments: data.imageAttachments
+      imageAttachments: data.imageAttachments,
+      maker: data.maker || undefined
     });
     setItems((current) => [created, ...current]);
     setEditDrafts((current) => ({ ...current, [created.id]: createEditDraft(created) }));
@@ -219,7 +224,8 @@ export function Fats() {
         discipline: draft.discipline.trim(),
         content: draft.content.trim(),
         result: draft.result.trim() || null,
-        remark: draft.remark.trim() || null
+        remark: draft.remark.trim() || null,
+        maker: draft.maker.trim() || null
       });
       updateLocalItem(updated);
     } catch (reviewError: any) {
@@ -375,8 +381,9 @@ export function Fats() {
                             {item.content.length > 180 && !expanded ? `${item.content.slice(0, 180)}...` : item.content}
                           </div>
                           <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12, color: "var(--nb-text-muted)" }}>
-                            <span style={{ wordBreak: "break-word" }}>Remark: {item.remark || "-"}</span>
+                            <span style={{ wordBreak: "break-word" }}>Comments: {item.remark || "-"}</span>
                             <span>Discipline: {item.discipline}</span>
+                            {item.maker ? <span>Maker: {item.maker}</span> : null}
                             <span>Images: {item.imageAttachments.length}</span>
                           </div>
                         </div>
@@ -431,6 +438,16 @@ export function Fats() {
                                   />
                                 </label>
                                 <label style={labelStyle}>
+                                  MAKER
+                                  <input
+                                    value={editDraft.maker}
+                                    onChange={(event) => setEditDrafts((current) => ({ ...current, [item.id]: { ...editDraft, maker: event.target.value } }))}
+                                    style={inputStyle}
+                                    disabled={!canEdit}
+                                    placeholder="Enter maker/manufacturer..."
+                                  />
+                                </label>
+                                <label style={labelStyle}>
                                   DISCIPLINE
                                   <select
                                     value={editDraft.discipline}
@@ -456,7 +473,7 @@ export function Fats() {
                                 <label style={labelStyle}>
                                   RESULT
                                   <div style={{ display: "flex", gap: 16, alignItems: "center", marginTop: 4 }}>
-                                    {["PASS", "FAIL", "CONDITIONAL"].map((r) => (
+                                    {["PASS", "FAIL", "COMMENTS"].map((r) => (
                                       <label key={r} style={{ display: "flex", alignItems: "center", cursor: canEdit ? "pointer" : "not-allowed", fontSize: 12, fontWeight: 700 }}>
                                         <input
                                           type="radio"
@@ -471,7 +488,7 @@ export function Fats() {
                                   </div>
                                 </label>
                                 <label style={labelStyle}>
-                                  REMARK
+                                  COMMENTS
                                   <textarea
                                     value={editDraft.remark}
                                     onChange={(event) => setEditDrafts((current) => ({ ...current, [item.id]: { ...editDraft, remark: event.target.value } }))}
@@ -511,6 +528,7 @@ export function Fats() {
                                 <div><strong>Reference:</strong> {item.formattedSerial || `#${item.serialNo}`}</div>
                                 <div><strong>Ship:</strong> {item.shipName} ({item.hullNumber})</div>
                                 <div><strong>Discipline:</strong> {item.discipline}</div>
+                                <div><strong>Maker:</strong> {item.maker || "-"}</div>
                                 <div><strong>Result:</strong> <span style={{ color: resultColor(item.result), fontWeight: 700 }}>{item.result || "PENDING"}</span></div>
                                 <div><strong>Created:</strong> {new Date(item.createdAt).toLocaleString()}</div>
                                 <div><strong>Author:</strong> {item.authorName ?? item.authorId}</div>

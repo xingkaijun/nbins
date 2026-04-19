@@ -14,6 +14,7 @@ export interface FatItemResponse {
   content: string;
   result: string | null;
   remark: string | null;
+  maker: string | null;
   authorId: string;
   authorName?: string;
   authorTitle?: string;
@@ -30,6 +31,7 @@ export interface CreateFatRequest {
   content: string;
   result?: string;
   remark?: string;
+  maker?: string;
   imageAttachments?: string[];
 }
 
@@ -39,5 +41,6 @@ export interface UpdateFatRequest {
   content?: string;
   result?: string | null;
   remark?: string | null;
+  maker?: string | null;
   imageAttachments?: string[];
 }

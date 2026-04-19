@@ -15,6 +15,7 @@ export interface StoredFatRecord {
   content: string;
   result: string | null;
   remark: string | null;
+  maker: string | null;
   authorId: string;
   imageAttachments: string[];
   createdAt: string;
@@ -119,6 +120,7 @@ export function normalizeStoredFatRecord(raw: Record<string, unknown>): StoredFa
     content: String(raw.content),
     result: typeof raw.result === "string" ? raw.result : null,
     remark: typeof raw.remark === "string" ? raw.remark : null,
+    maker: typeof raw.maker === "string" ? raw.maker : null,
     authorId: String(raw.authorId),
     imageAttachments,
     createdAt: String(raw.createdAt),
@@ -182,6 +184,7 @@ export function mapFatIndexRecord(row: Record<string, unknown>): FatIndexRecord 
     serialNo: typeof row.serialNo === "number" ? row.serialNo : Number(row.serialNo ?? 0),
     result: typeof row.result === "string" ? row.result : null,
     remark: typeof row.remark === "string" ? row.remark : null,
+    maker: typeof row.maker === "string" ? row.maker : null,
     authorId: String(row.authorId),
     createdAt: String(row.createdAt),
     updatedAt: String(row.updatedAt)
@@ -192,8 +195,8 @@ export async function upsertFatIndex(env: Bindings, record: StoredFatRecord): Pr
   const db = assertDb(env);
   await db.prepare(
     `INSERT INTO "fat_index" (
-      "id", "projectId", "shipId", "title", "discipline", "serialNo", "result", "remark", "authorId", "createdAt", "updatedAt"
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      "id", "projectId", "shipId", "title", "discipline", "serialNo", "result", "remark", "maker", "authorId", "createdAt", "updatedAt"
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT("id") DO UPDATE SET
       "projectId" = excluded."projectId",
       "shipId" = excluded."shipId",
@@ -202,6 +205,7 @@ export async function upsertFatIndex(env: Bindings, record: StoredFatRecord): Pr
       "serialNo" = excluded."serialNo",
       "result" = excluded."result",
       "remark" = excluded."remark",
+      "maker" = excluded."maker",
       "authorId" = excluded."authorId",
       "createdAt" = excluded."createdAt",
       "updatedAt" = excluded."updatedAt"`
@@ -214,6 +218,7 @@ export async function upsertFatIndex(env: Bindings, record: StoredFatRecord): Pr
     record.serialNo,
     record.result,
     record.remark,
+    record.maker,
     record.authorId,
     record.createdAt,
     record.updatedAt
@@ -347,6 +352,7 @@ export async function hydrateFatResponses(env: Bindings, records: StoredFatRecor
       content: record.content,
       result: record.result,
       remark: record.remark,
+      maker: record.maker,
       authorId: record.authorId,
       authorName: authorUser?.displayName,
       authorTitle: authorUser?.title ?? undefined,

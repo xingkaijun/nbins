@@ -177,6 +177,7 @@ CREATE TABLE IF NOT EXISTS "fat_index" (
   "serialNo" INTEGER NOT NULL DEFAULT 0,
   "result" TEXT,
   "remark" TEXT,
+  "maker" TEXT,
   "authorId" TEXT NOT NULL REFERENCES "users"("id"),
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL

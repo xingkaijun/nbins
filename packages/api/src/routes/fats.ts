@@ -161,6 +161,7 @@ export function createFatRoutes(): Hono<FatRouteEnv> {
         content,
         result: body.result?.trim() || null,
         remark: body.remark?.trim() || null,
+        maker: body.maker?.trim() || null,
         authorId: authUser.id,
         imageAttachments: Array.isArray(body.imageAttachments)
           ? body.imageAttachments.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
@@ -198,6 +199,7 @@ export function createFatRoutes(): Hono<FatRouteEnv> {
         content: body.content !== undefined ? body.content.trim() || loaded.record.content : loaded.record.content,
         result: body.result !== undefined ? (body.result?.trim() || null) : loaded.record.result,
         remark: body.remark !== undefined ? (body.remark?.trim() || null) : loaded.record.remark,
+        maker: body.maker !== undefined ? (body.maker?.trim() || null) : loaded.record.maker,
         imageAttachments: body.imageAttachments !== undefined
           ? body.imageAttachments.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
           : loaded.record.imageAttachments,

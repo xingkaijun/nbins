@@ -180,7 +180,8 @@ function getResultColor(result: string | null): [number, number, number] {
   switch (result) {
     case "PASS": return COLORS.pass;
     case "FAIL": return COLORS.fail;
-    case "CONDITIONAL": return COLORS.conditional;
+    case "CONDITIONAL":
+    case "COMMENTS": return COLORS.conditional;
     default: return COLORS.muted;
   }
 }
@@ -310,24 +311,44 @@ export async function exportFatToPdf(fat: FatItemResponse) {
     doc.text(item.value || "-", itemX, itemY + 5.5);
   });
 
-  // 3. Test Subject (left accent bar, same as NCR Report Subject)
+  // 3. Equipment (left accent bar)
   y = 72;
   doc.setDrawColor(...COLORS.accent);
   doc.setLineWidth(1.5);
-  const subjLines = wrapText(doc, normalizeText(fat.title), usableWidth - 12);
-  const subjHeight = Math.max(14, subjLines.length * 7 + 6);
-  doc.line(margin, y - 4, margin, y + subjHeight - 4);
+  const eqLines = wrapText(doc, normalizeText(fat.title), usableWidth - 12);
+  const eqHeight = Math.max(14, eqLines.length * 7 + 6);
+  doc.line(margin, y - 4, margin, y + eqHeight - 4);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...COLORS.muted);
-  doc.text("TEST SUBJECT", margin + 6, y - 1);
+  doc.text("EQUIPMENT", margin + 6, y - 1);
 
   doc.setFontSize(13);
   doc.setTextColor(...COLORS.dark);
-  doc.text(subjLines, margin + 6, y + 5);
+  doc.text(eqLines, margin + 6, y + 5);
 
-  y += subjHeight + 10;
+  y += eqHeight + 10;
+
+  // 3b. Maker (left accent bar)
+  if (fat.maker) {
+    doc.setDrawColor(...COLORS.accent);
+    doc.setLineWidth(1.5);
+    const makerLines = wrapText(doc, normalizeText(fat.maker), usableWidth - 12);
+    const makerHeight = Math.max(14, makerLines.length * 7 + 6);
+    doc.line(margin, y - 4, margin, y + makerHeight - 4);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...COLORS.muted);
+    doc.text("MAKER", margin + 6, y - 1);
+
+    doc.setFontSize(13);
+    doc.setTextColor(...COLORS.dark);
+    doc.text(makerLines, margin + 6, y + 5);
+
+    y += makerHeight + 10;
+  }
 
   // 4. Test Description section
   const drawSection = (title: string, content: string, height: number) => {
@@ -386,12 +407,12 @@ export async function exportFatToPdf(fat: FatItemResponse) {
   doc.setTextColor(...COLORS.white);
   doc.text(resultValue, badgeX + 22.5, badgeY + 7, { align: "center" });
 
-  // Remark
-  const remarkText = normalizeText(fat.remark, "No remark");
+  // Comments
+  const commentsText = normalizeText(fat.remark, "No comments");
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.setTextColor(...COLORS.dark);
-  doc.text(`Remark: ${remarkText}`, badgeX + 55, badgeY + 7);
+  doc.text(`Comments: ${commentsText}`, badgeX + 55, badgeY + 7);
 
   y += 30;
 
@@ -461,22 +482,24 @@ export async function exportFatToPdf(fat: FatItemResponse) {
   );
 
   // Footer (Page 1)
+  const hasImages = fat.imageAttachments && fat.imageAttachments.length > 0;
+  const totalPdfPages = hasImages ? 1 + Math.ceil(fat.imageAttachments!.length / 6) : 1;
   doc.setFontSize(7);
   doc.setTextColor(...COLORS.muted);
   doc.text("PG NEWBUILDING • FAT FORM • OFFICIAL DOCUMENT", margin, pageHeight - 10);
-  doc.text("Page 1", pageWidth - margin, pageHeight - 10, { align: "right" });
+  doc.text(`Page 1 of ${totalPdfPages}`, pageWidth - margin, pageHeight - 10, { align: "right" });
 
   // --- Attachment Pages ---
-  if (fat.imageAttachments && fat.imageAttachments.length > 0) {
+  if (hasImages) {
     const imageWidthMm = usableWidth / 2 - 4;
-    const imageHeightMm = 73;
+    const imageHeightMm = 60;
     const attachmentTargetHeightPx = Math.round(ATTACHMENT_TARGET_WIDTH_PX * (imageHeightMm / imageWidthMm));
 
     const imageDataList: Array<{ dataUrl: string; index: number }> = [];
-    for (let i = 0; i < fat.imageAttachments.length; i++) {
+    for (let i = 0; i < fat.imageAttachments!.length; i++) {
       const dataUrl = await downloadImageForPdf(
         fat.shipId,
-        fat.imageAttachments[i],
+        fat.imageAttachments![i],
         ATTACHMENT_TARGET_WIDTH_PX,
         attachmentTargetHeightPx
       );
@@ -486,7 +509,7 @@ export async function exportFatToPdf(fat: FatItemResponse) {
     }
 
     if (imageDataList.length > 0) {
-      const imagesPerPage = 4;
+      const imagesPerPage = 6;
       const totalPages = Math.ceil(imageDataList.length / imagesPerPage);
 
       for (let p = 0; p < totalPages; p++) {
@@ -500,10 +523,10 @@ export async function exportFatToPdf(fat: FatItemResponse) {
           const row = Math.floor(i / 2);
           const col = i % 2;
           const imgX = margin + col * (usableWidth / 2 + 5);
-          const currentY = imgY + row * 95;
+          const currentY = imgY + row * 80;
 
           doc.setDrawColor(...COLORS.border);
-          doc.roundedRect(imgX, currentY, usableWidth / 2 - 2, 75, 2, 2, "S");
+          doc.roundedRect(imgX, currentY, usableWidth / 2 - 2, 62, 2, 2, "S");
 
           try {
             doc.addImage(imgData.dataUrl, "JPEG", imgX + 1, currentY + 1, imageWidthMm, imageHeightMm);
@@ -516,14 +539,14 @@ export async function exportFatToPdf(fat: FatItemResponse) {
 
           doc.setFontSize(8);
           doc.setTextColor(...COLORS.dark);
-          doc.text(`Photo ${imgData.index + 1}`, imgX, currentY + 82);
+          doc.text(`Photo ${imgData.index + 1}`, imgX, currentY + 68);
         });
 
         // Footer
         doc.setFontSize(7);
         doc.setTextColor(...COLORS.muted);
-        doc.text(`PG NEWBUILDING • ATTACHMENT • ${hullDisplayName}`, margin, pageHeight - 10);
-        doc.text(`Page ${p + 2}`, pageWidth - margin, pageHeight - 10, { align: "right" });
+        doc.text(`PG SHIPMANAGEMENT • ATTACHMENT • ${hullDisplayName}`, margin, pageHeight - 10);
+        doc.text(`Page ${p + 2} of ${totalPdfPages}`, pageWidth - margin, pageHeight - 10, { align: "right" });
       }
     }
   }

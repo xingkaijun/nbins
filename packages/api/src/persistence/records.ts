@@ -195,6 +195,7 @@ export interface FatIndexRecord {
   serialNo: number;
   result: string | null;
   remark: string | null;
+  maker: string | null;
   authorId: string;
   createdAt: string;
   updatedAt: string;

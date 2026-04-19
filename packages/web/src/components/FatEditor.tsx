@@ -24,7 +24,7 @@ interface FatEditorProps {
   formattedSerial: string;
   projectOwner?: string | null;
   projectShipyard?: string | null;
-  onSubmit: (data: { title: string; content: string; result: string; remark: string; discipline: string; serialNo: number; imageAttachments: string[] }) => Promise<void>;
+  onSubmit: (data: { title: string; content: string; result: string; remark: string; discipline: string; serialNo: number; imageAttachments: string[]; maker: string }) => Promise<void>;
   onClose: () => void;
 }
 
@@ -42,6 +42,7 @@ export function FatEditor({
   onClose
 }: FatEditorProps) {
   const [subject, setSubject] = useState("");
+  const [maker, setMaker] = useState("");
   const [content, setContent] = useState("");
   const [result, setResult] = useState("PASS");
   const [remark, setRemark] = useState("");
@@ -85,6 +86,12 @@ export function FatEditor({
     setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, remark } : a)));
   };
 
+  const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  };
+
   const handleSubmit = async () => {
     if (!shipId) {
       alert("Please select a ship before creating a FAT.");
@@ -116,7 +123,8 @@ export function FatEditor({
         remark: remark.trim(),
         discipline,
         serialNo,
-        imageAttachments: imageKeys
+        imageAttachments: imageKeys,
+        maker: maker.trim()
       });
     } catch (err: any) {
       console.error(err);
@@ -195,27 +203,41 @@ export function FatEditor({
               </div>
             </div>
 
-            {/* Subject */}
-            <div style={formSectionStyle}>
-              <div style={sectionAccentTitleStyle}>TEST SUBJECT</div>
-              <div style={inputContainerStyle}>
-                <input
-                  style={{ ...premiumInputStyle, fontSize: 16, fontWeight: 800 }}
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                  placeholder="Summarize the FAT item briefly..."
-                />
+            {/* Equipment & Maker - same row */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={formSectionStyle}>
+                <div style={sectionAccentTitleStyle}>EQUIPMENT</div>
+                <div style={inputContainerStyle}>
+                  <input
+                    style={{ ...premiumInputStyle, fontSize: 16, fontWeight: 800 }}
+                    value={subject}
+                    onChange={(e) => setSubject(e.target.value)}
+                    placeholder="Enter equipment name..."
+                  />
+                </div>
+              </div>
+              <div style={formSectionStyle}>
+                <div style={sectionAccentTitleStyle}>MAKER</div>
+                <div style={inputContainerStyle}>
+                  <input
+                    style={{ ...premiumInputStyle, fontSize: 14, fontWeight: 600 }}
+                    value={maker}
+                    onChange={(e) => setMaker(e.target.value)}
+                    placeholder="Enter maker/manufacturer..."
+                  />
+                </div>
               </div>
             </div>
 
             {/* Content */}
-            <div style={{ ...formSectionStyle, flex: 1, minHeight: 180 }}>
+            <div style={formSectionStyle}>
               <div style={sectionAccentTitleStyle}>TEST DESCRIPTION</div>
-              <div style={{ ...inputContainerStyle, flex: 1, display: "flex", flexDirection: "column" }}>
+              <div style={inputContainerStyle}>
                 <textarea
-                  style={{ ...premiumTextareaStyle, minHeight: 140 }}
+                  style={{ ...premiumTextareaStyle, minHeight: 72, resize: "none", overflow: "hidden" }}
                   value={content}
-                  onChange={(e) => setContent(e.target.value)}
+                  onChange={(e) => { setContent(e.target.value); autoResizeTextarea(e.target); }}
+                  ref={(el) => { if (el) autoResizeTextarea(el); }}
                   placeholder="Describe the test procedure and observations..."
                 />
               </div>
@@ -234,20 +256,21 @@ export function FatEditor({
                   <span style={{ color: "#dc2626" }}>FAIL</span>
                 </label>
                 <label style={{ display: "flex", alignItems: "center", cursor: "pointer", fontSize: 13, fontWeight: 800 }}>
-                  <input type="radio" checked={result === "CONDITIONAL"} onChange={() => setResult("CONDITIONAL")} style={radioStyle} />
-                  <span style={{ color: "#d97706" }}>CONDITIONAL</span>
+                  <input type="radio" checked={result === "COMMENTS"} onChange={() => setResult("COMMENTS")} style={radioStyle} />
+                  <span style={{ color: "#d97706" }}>COMMENTS</span>
                 </label>
               </div>
             </div>
 
-            {/* Remark */}
+            {/* Comments */}
             <div style={formSectionStyle}>
-              <div style={sectionAccentTitleStyle}>REMARK</div>
+              <div style={sectionAccentTitleStyle}>COMMENTS</div>
               <div style={inputContainerStyle}>
                 <textarea
-                  style={{ ...premiumTextareaStyle, minHeight: 60 }}
+                  style={{ ...premiumTextareaStyle, minHeight: 72, resize: "none", overflow: "hidden" }}
                   value={remark}
-                  onChange={(e) => setRemark(e.target.value)}
+                  onChange={(e) => { setRemark(e.target.value); autoResizeTextarea(e.target); }}
+                  ref={(el) => { if (el) autoResizeTextarea(el); }}
                   placeholder="Optional remarks..."
                 />
               </div>
@@ -256,32 +279,12 @@ export function FatEditor({
             {/* Attachments */}
             <div style={formSectionStyle}>
               <div style={{ ...sectionAccentTitleStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <span>ATTACHMENTS</span>
+                <span>ATTACHMENTS{attachments.length > 0 ? ` (${attachments.length} photo${attachments.length > 1 ? "s" : ""})` : ""}</span>
                 <button onClick={() => fileInputRef.current?.click()} style={pillButtonStyle}>+ ADD PHOTOS</button>
               </div>
               <input type="file" multiple accept="image/*" ref={fileInputRef} onChange={handleFileSelect} style={{ display: "none" }} />
-              {attachments.length > 0 && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginTop: 8 }}>
-                  {attachments.map((a) => (
-                    <div key={a.id} style={{ position: "relative", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
-                      <img src={a.url} style={{ width: "100%", height: 120, objectFit: "cover" }} alt="Attachment" />
-                      <div style={{ padding: "6px 10px", background: "#fff", borderTop: "1px solid #e2e8f0", display: "flex", alignItems: "center", gap: 6 }}>
-                        <input
-                          style={{ flex: 1, border: "none", outline: "none", fontSize: 10, fontWeight: 600, color: "#334155" }}
-                          placeholder="Photo remark..."
-                          value={a.remark}
-                          onChange={(e) => updateAttachmentRemark(a.id, e.target.value)}
-                        />
-                        <button
-                          onClick={() => setAttachments((prev) => prev.filter((x) => x.id !== a.id))}
-                          style={{ border: "none", background: "transparent", cursor: "pointer", padding: 0 }}
-                        >
-                          <X size={14} color="#ef4444" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              {attachments.length === 0 && (
+                <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic", padding: "8px 0" }}>No photos attached. Click "+ ADD PHOTOS" to browse files.</div>
               )}
             </div>
 
@@ -299,9 +302,82 @@ export function FatEditor({
             <div style={{ fontSize: 7, fontWeight: 900, color: "#cbd5e1", textTransform: "uppercase", letterSpacing: "0.3em" }}>
               PG NEWBUILDING • FAT FORM • OFFICIAL DOCUMENT
             </div>
-            <div style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase" }}>Page 1</div>
+            <div style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase" }}>Page 1 of {attachments.length > 0 ? Math.ceil(attachments.length / 6) + 1 : 1}</div>
           </div>
         </div>
+
+        {/* Attachment Pages */}
+        {attachments.length > 0 && Array.from({ length: Math.ceil(attachments.length / 6) }).map((_, pageIndex) => {
+          const pageAttachments = attachments.slice(pageIndex * 6, (pageIndex + 1) * 6);
+          const totalPages = Math.ceil(attachments.length / 6) + 1;
+          const slots = Array.from({ length: 6 });
+
+          return (
+            <div key={pageIndex} style={{ ...a4ContainerStyle, marginTop: 40, padding: "12mm 15mm" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "2px solid #0f172a", paddingBottom: 15, marginBottom: 20 }}>
+                <div>
+                  <div style={{ fontSize: 8, fontWeight: 900, color: "#0d9488", textTransform: "uppercase", letterSpacing: "0.2em", marginBottom: 2 }}>
+                    PG SHIPMANAGEMENT
+                  </div>
+                  <h1 style={{ fontSize: 22, fontWeight: 900, color: "#0f172a", textTransform: "uppercase", margin: 0 }}>
+                    PHOTO ATTACHMENTS
+                  </h1>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 8, fontWeight: 900, textTransform: "uppercase", color: "#94a3b8", marginBottom: 2 }}>REFERENCE</div>
+                  <div style={{ fontSize: 11, fontWeight: 900, color: "#0f172a" }}>{formattedSerial}</div>
+                </div>
+              </div>
+
+              <div style={{ flex: 1, display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "repeat(3, 1fr)", gap: "8mm", marginBottom: 20 }}>
+                {slots.map((_, slotIndex) => {
+                  const attachment = pageAttachments[slotIndex];
+                  return (
+                    <div key={slotIndex} style={{ display: "flex", flexDirection: "column", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, overflow: "hidden" }}>
+                      <div style={{ flex: 1, position: "relative" }}>
+                        {attachment ? (
+                          <img src={attachment.url} style={{ width: "100%", height: "100%", objectFit: "cover" }} alt="Attachment" />
+                        ) : (
+                          <div style={{ width: "100%", height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#cbd5e1" }}>
+                            <Loader2 size={24} strokeWidth={1} style={{ opacity: 0.5 }} />
+                          </div>
+                        )}
+                        {attachment && (
+                          <div style={{ position: "absolute", top: 8, right: 8 }}>
+                            <button
+                              onClick={() => setAttachments((prev) => prev.filter((a) => a.id !== attachment.id))}
+                              style={{ width: 24, height: 24, border: "none", background: "#fff", borderRadius: 6, cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "0 2px 4px rgba(0,0,0,0.1)" }}
+                            >
+                              <X size={14} color="#ef4444" />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ padding: "8px 12px", background: "#fff", borderTop: "1px solid #e2e8f0" }}>
+                        <input
+                          style={{ width: "100%", border: "none", outline: "none", fontSize: 10, fontWeight: 600, color: "#334155" }}
+                          placeholder={attachment ? "Type photo remark..." : "Empty Slot"}
+                          value={attachment?.remark || ""}
+                          onChange={(e) => attachment && updateAttachmentRemark(attachment.id, e.target.value)}
+                          disabled={!attachment}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div style={{ position: "absolute", bottom: "10mm", left: "15mm", right: "15mm", borderTop: "1px solid #f1f5f9", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 7, fontWeight: 900, color: "#cbd5e1", textTransform: "uppercase", letterSpacing: "0.3em" }}>
+                  PG SHIPMANAGEMENT • ATTACHMENT • {hullNumber}
+                </div>
+                <div style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase" }}>
+                  Page {pageIndex + 2} of {totalPages}
+                </div>
+              </div>
+            </div>
+          );
+        })}
       </div>
     </div>
   );
@@ -322,7 +398,7 @@ const modalHeaderStyle: React.CSSProperties = {
 };
 
 const modalScrollAreaStyle: React.CSSProperties = {
-  flex: 1, overflowY: "auto", padding: "40px 20px", display: "flex", justifyContent: "center"
+  flex: 1, overflowY: "auto", padding: "40px 20px", display: "flex", flexDirection: "column", alignItems: "center"
 };
 
 const a4ContainerStyle: React.CSSProperties = {
