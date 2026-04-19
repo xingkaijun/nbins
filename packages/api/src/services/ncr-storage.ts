@@ -518,7 +518,7 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
   const projectIds = Array.from(new Set(records.map((record) => record.projectId)));
   const userMap = new Map<string, UserDisplayRow>();
   const shipMap = new Map<string, ShipDisplayRow>();
-  const projectMap = new Map<string, string>();
+  const projectMap = new Map<string, { name: string; owner: string | null; shipyard: string | null }>();
 
 
   if (userIds.length > 0) {
@@ -544,11 +544,11 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
 
   if (projectIds.length > 0) {
     const projects = await db.prepare(
-      `SELECT "id", "name" FROM "projects" WHERE "id" IN (${projectIds.map(() => "?").join(",")})`
-    ).bind(...projectIds).all<{ id: string; name: string }>();
+      `SELECT "id", "name", "owner", "shipyard" FROM "projects" WHERE "id" IN (${projectIds.map(() => "?").join(",")})`
+    ).bind(...projectIds).all<{ id: string; name: string; owner: string | null; shipyard: string | null }>();
 
     for (const project of projects.results ?? []) {
-      projectMap.set(project.id, project.name);
+      projectMap.set(project.id, project);
     }
   }
 
@@ -562,11 +562,14 @@ export async function hydrateNcrResponses(env: Bindings, records: StoredNcrRecor
       uploadedByName: userMap.get(file.uploadedBy)?.displayName ?? file.uploadedByName
     }));
 
+    const project = projectMap.get(record.projectId);
     return {
       id: record.id,
       projectId: record.projectId,
       shipId: record.shipId,
-      projectName: projectMap.get(record.projectId),
+      projectName: project?.name,
+      projectOwner: project?.owner ?? undefined,
+      projectShipyard: project?.shipyard ?? undefined,
       shipName: ship?.shipName,
       hullNumber: ship?.hullNumber,
       title: record.title,

@@ -21,6 +21,8 @@ export interface NcrItemResponse {
   shipId: string;
   shipName?: string;
   projectName?: string;
+  projectOwner?: string;
+  projectShipyard?: string;
   hullNumber?: string;
   title: string;
   discipline: string;

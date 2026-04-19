@@ -232,45 +232,38 @@ function drawDocumentHeader(
   title: string,
   reportReference: string
 ): void {
-  doc.setDrawColor(...COLORS.dark);
-  doc.setLineWidth(0.8);
-  doc.line(margin, 35, pageWidth - margin, 35);
+  // Left: Logo
+  const logoSize = 13;
+  doc.addImage(PG_LOGO_B64, "JPEG", margin, 12, logoSize, logoSize);
 
+  // Left: Company name
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(...COLORS.accent);
-  doc.text("PG SHIPMANAGEMENT", margin, 20);
-
-  doc.setFontSize(18);
+  doc.setFontSize(11);
   doc.setTextColor(...COLORS.dark);
-  doc.text(title, margin, 28);
+  doc.text("PG Newbuilding", margin + logoSize + 3, 18.5);
 
-  const logoWidth = 8.25 * 1.2 * 1.2;
-  const logoHeight = 8.25 * 1.2 * 1.2;
-  doc.addImage(PG_LOGO_B64, "JPEG", pageWidth - margin - logoWidth, 20, logoWidth, logoHeight);
-
-  const referenceRight = pageWidth - margin - logoWidth - 4;
-  const referenceLeft = Math.max(margin + 96, referenceRight - 66);
-  const referenceWidth = Math.max(36, referenceRight - referenceLeft);
-
-  doc.setFont("helvetica", "bold");
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(7);
   doc.setTextColor(...COLORS.muted);
-  doc.text("REPORT REFERENCE", referenceRight, 20, { align: "right" });
+  doc.text("Technical Intelligence System", margin + logoSize + 3, 24);
 
+  // Right: Title
   doc.setFont("helvetica", "bold");
-  doc.setTextColor(185, 28, 28);
-  drawAdaptiveText(doc, {
-    text: reportReference,
-    x: referenceLeft,
-    y: 27.5,
-    maxWidth: referenceWidth,
-    fontSize: 11,
-    minFontSize: 8,
-    maxLines: 2,
-    lineHeight: 4,
-    align: "right"
-  });
+  doc.setFontSize(22);
+  doc.setTextColor(...COLORS.dark);
+  doc.text(title.toUpperCase(), pageWidth - margin, 18, { align: "right" });
+
+  // Right: REF
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  doc.setTextColor(...COLORS.muted);
+  doc.text(`REF: ${reportReference}`, pageWidth - margin, 26, { align: "right" });
+
+  // Separator line
+  const headerBottom = 32;
+  doc.setDrawColor(...COLORS.dark);
+  doc.setLineWidth(0.6);
+  doc.line(margin, headerBottom, pageWidth - margin, headerBottom);
 }
 
 export async function exportNcrToPdf(ncr: NcrItemResponse) {
@@ -289,75 +282,89 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   const projectDisplayName = normalizeText(ncr.projectName);
   const hullDisplayName = normalizeText(ncr.hullNumber, normalizeText(ncr.shipName));
 
+  // Fetch owner/shipyard from projects API if missing in NCR response
+  let resolvedOwner = ncr.projectOwner ?? null;
+  let resolvedShipyard = ncr.projectShipyard ?? null;
+  console.log("[NCR-EXPORT] ncr.projectId:", ncr.projectId, "projectOwner:", ncr.projectOwner, "projectShipyard:", ncr.projectShipyard);
+  if ((!resolvedOwner || !resolvedShipyard) && typeof window !== "undefined") {
+    try {
+      const { fetchProjects } = await import("../api");
+      const projects = await fetchProjects();
+      console.log("[NCR-EXPORT] projects from api.ts:", projects);
+      const proj = Array.isArray(projects) && ncr.projectId
+        ? projects.find((p: { id: string; owner: string | null; shipyard: string | null }) => p.id === ncr.projectId)
+        : null;
+      console.log("[NCR-EXPORT] matched project:", proj);
+      if (proj) {
+        resolvedOwner = resolvedOwner || proj.owner;
+        resolvedShipyard = resolvedShipyard || proj.shipyard;
+      }
+    } catch (e) {
+      console.error("Failed to fetch projects for owner/shipyard:", e);
+    }
+  }
+
 
   // --- 第一页: 主报告 ---
 
   // 1. Header (Logo & Title)
   drawDocumentHeader(doc, margin, pageWidth, "NON CONFORMITY REPORT", reportReference);
 
-  // 2. Metadata Cards (布局)
-  let y = 42;
+  // 2. Metadata Cards
+  let y = 38;
 
-  const drawCard = (x: number, title: string, data: { label: string; value: string }[]) => {
-    const cardWidth = usableWidth / 2 - 4;
-    const cardHeight = 24;
-    const innerGap = 4;
-    const itemWidth = (cardWidth - 8 - innerGap) / 2;
+  // Info grid: 3 columns x 2 rows with card background
+  const colCount = 3;
+  const colGap = 4;
+  const colWidth = (usableWidth - colGap * (colCount - 1)) / colCount;
+  const gridHeight = 32;
 
-    doc.setFillColor(...COLORS.bg);
-    doc.roundedRect(x, y, cardWidth, cardHeight, 2, 2, "F");
-    doc.setDrawColor(...COLORS.border);
-    doc.setLineWidth(0.1);
-    doc.roundedRect(x, y, cardWidth, cardHeight, 2, 2, "S");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(...COLORS.accent);
-    doc.text(title, x + 4, y + 5);
-
-    data.forEach((item, i) => {
-      const itemX = x + 4 + (i * (itemWidth + innerGap));
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(6);
-      doc.setTextColor(...COLORS.muted);
-      doc.text(item.label, itemX, y + 10);
-
-      doc.setFont("helvetica", "bold");
-      doc.setTextColor(...COLORS.dark);
-      drawAdaptiveText(doc, {
-        text: item.value,
-        x: itemX,
-        y: y + 14,
-        maxWidth: itemWidth,
-        fontSize: 9,
-        minFontSize: 6.5,
-        maxLines: 2,
-        lineHeight: 3.6,
-        align: "left"
-      });
-    });
-
-    return cardHeight;
-  };
+  // Draw background
+  doc.setFillColor(...COLORS.bg);
+  doc.roundedRect(margin, y - 4, usableWidth, gridHeight - 4, 2, 2, "F");
+  doc.setDrawColor(...COLORS.border);
+  doc.setLineWidth(0.15);
+  doc.roundedRect(margin, y - 4, usableWidth, gridHeight - 4, 2, 2, "S");
 
   const dateStr = new Date(ncr.createdAt).toLocaleDateString("en-GB", {
     day: "2-digit",
     month: "short",
     year: "numeric"
   });
-  const metadataCardHeight = drawCard(margin, "VESSEL & PROJECT", [
-    { label: "PROJECT NAME", value: projectDisplayName },
-    { label: "HULL NUMBER", value: hullDisplayName }
-  ]);
-  drawCard(margin + usableWidth / 2 + 4, "REPORT METADATA", [
-    { label: "ISSUE DATE", value: dateStr },
-    { label: "STATUS", value: getPdfStatusLabel(ncr) }
-  ]);
+
+  const gridItems = [
+    { label: "Project", value: projectDisplayName },
+    { label: "Hull Number", value: hullDisplayName },
+    { label: "Owner", value: normalizeText(resolvedOwner) },
+    { label: "Shipyard", value: normalizeText(resolvedShipyard) },
+    { label: "Issue Date", value: dateStr },
+    { label: "Discipline", value: normalizeText(ncr.discipline) }
+  ];
+
+  gridItems.forEach((item, i) => {
+    const col = i % colCount;
+    const row = Math.floor(i / colCount);
+    const itemX = margin + col * (colWidth + colGap);
+    const itemY = y + (row * 12);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.muted);
+    doc.text(item.label.toUpperCase(), itemX, itemY);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    if (item.label === "Discipline") {
+      doc.setTextColor(...COLORS.accent);
+    } else {
+      doc.setTextColor(...COLORS.dark);
+    }
+    doc.text(item.value || "-", itemX, itemY + 5.5);
+  });
 
 
-  y += metadataCardHeight + 10;
 
-  // 3. Section Drawing Function
+  // 3. Section Drawing Function (used by Description & Rectify below)
   const drawSection = (title: string, content: string, height: number, fontSize = 11, isBold = false) => {
     doc.setDrawColor(...COLORS.accent);
     doc.setLineWidth(1);
@@ -383,45 +390,26 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
     y += height + 10;
   };
 
-  // SUBJECT
-  drawSection("Report Subject", normalizeText(ncr.title), 14, 14, true);
-
-  // TO & DISCIPLINE (Split)
-  const recipient = normalizeText(ncr.remark?.match(/To: (.*?) \|/)?.[1]);
+  // 4. Report Subject (left accent bar style)
+  y = 72;
+  doc.setDrawColor(...COLORS.accent);
+  doc.setLineWidth(1.5);
+  const subjLines = wrapText(doc, normalizeText(ncr.title), usableWidth - 12);
+  const subjHeight = Math.max(14, subjLines.length * 7 + 6);
+  doc.line(margin, y - 4, margin, y + subjHeight - 4);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
+  doc.setTextColor(...COLORS.muted);
+  doc.text("REPORT SUBJECT", margin + 6, y - 1);
+
+  doc.setFontSize(13);
   doc.setTextColor(...COLORS.dark);
-  doc.text("TO (RECIPIENT)", margin + 4, y - 1);
-  doc.text("DISCIPLINE", margin + usableWidth * 0.6 + 4, y - 1);
+  doc.text(subjLines, margin + 6, y + 5);
 
-  doc.roundedRect(margin, y, usableWidth * 0.6 - 5, 12, 1, 1, "S");
-  doc.roundedRect(margin + usableWidth * 0.6, y, usableWidth * 0.4, 12, 1, 1, "S");
+  y += subjHeight + 10;
 
-  doc.setFont("helvetica", "normal");
-  doc.setTextColor(...COLORS.dark);
-  drawAdaptiveText(doc, {
-    text: recipient,
-    x: margin + 4,
-    y: y + 7,
-    maxWidth: usableWidth * 0.6 - 13,
-    fontSize: 11,
-    minFontSize: 8,
-    maxLines: 1,
-    align: "left"
-  });
-  drawAdaptiveText(doc, {
-    text: normalizeText(ncr.discipline),
-    x: margin + usableWidth * 0.6 + 4,
-    y: y + 7,
-    maxWidth: usableWidth * 0.4 - 8,
-    fontSize: 11,
-    minFontSize: 8,
-    maxLines: 1,
-    align: "left"
-  });
-
-  y += 22;
+  // DESCRIPTION & RECTIFY (keep original drawSection)
 
   // DESCRIPTION
   drawSection("Description of Non-Conformity", normalizeText(ncr.content), 55);
