@@ -232,20 +232,20 @@ function drawDocumentHeader(
   title: string,
   reportReference: string
 ): void {
-  // Left: Logo
-  const logoSize = 13;
-  doc.addImage(PG_LOGO_B64, "JPEG", margin, 12, logoSize, logoSize);
+  // Left: Logo (1.3x)
+  const logoSize = 17;
+  doc.addImage(PG_LOGO_B64, "JPEG", margin, 10, logoSize, logoSize);
 
-  // Left: Company name
+  // Left: Company name (1.3x)
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(11);
+  doc.setFontSize(14);
   doc.setTextColor(...COLORS.dark);
   doc.text("PG Newbuilding", margin + logoSize + 3, 18.5);
 
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7);
+  doc.setFontSize(9);
   doc.setTextColor(...COLORS.muted);
-  doc.text("Technical Intelligence System", margin + logoSize + 3, 24);
+  doc.text("Technical Intelligence System", margin + logoSize + 3, 25);
 
   // Right: Title
   doc.setFont("helvetica", "bold");
