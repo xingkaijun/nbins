@@ -60,126 +60,113 @@ export async function buildInspectionReportDoc(detail: InspectionItemDetailRespo
     hashCode = `IA-${new Date().getFullYear().toString().slice(-2)}-${hashHex.substring(0, 10).toUpperCase()}`;
   }
 
-  // --- HEADER ---
-  // Left side: Logo (Enlarged)
-  drawPdfLogo(doc, margin, y - 6, 18);
-  
-  doc.setDrawColor(...colors.outline);
-  doc.setLineWidth(0.5);
-  doc.line(margin + 48, y - 2, margin + 48, y + 10);
-  
-  // Right side of pipe for Title
+  // --- HEADER (NCR-style) ---
+  // Left: Logo (1.3x)
+  const logoSize = 17;
+  doc.addImage(PG_LOGO_B64, 'JPEG', margin, y, logoSize, logoSize);
+
+  // Left: Company name
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text('PG Newbuilding', margin + logoSize + 3, y + 8.5);
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  doc.setTextColor(148, 163, 184);
+  doc.text('Technical Intelligence System', margin + logoSize + 3, y + 15);
+
+  // Right: Title
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(22);
-  doc.setTextColor(...colors.primary);
-  doc.text('INSPECTION REPORT', margin + 52, y + 8);
+  doc.setTextColor(15, 23, 42);
+  doc.text('INSPECTION REPORT', pageWidth - margin, y + 8, { align: 'right' });
 
-  // Right side: Document Hash only (grayed out, smaller font, 16 chars)
-  const topY = margin;
-  
+  // Right: Document Hash
   doc.setFontSize(6);
-  doc.setTextColor(...colors.secondary);
-  doc.text('DOCUMENT HASH', pageWidth - margin, topY + 2, { align: 'right' });
-  
+  doc.setTextColor(148, 163, 184);
+  doc.text('DOCUMENT HASH', pageWidth - margin, y + 12, { align: 'right' });
+
   doc.setFontSize(7);
   doc.setFont('courier', 'normal');
-  doc.setTextColor(...colors.secondary);
-  doc.text(hashCode, pageWidth - margin, topY + 6, { align: 'right' });
+  doc.setTextColor(148, 163, 184);
+  doc.text(hashCode, pageWidth - margin, y + 16, { align: 'right' });
 
-  y += 14;
-  // Divider (moved up, closer to header)
-  doc.setDrawColor(...colors.primary);
-  doc.setLineWidth(0.5);
+  y += 22;
+  // Separator line
+  doc.setDrawColor(15, 23, 42);
+  doc.setLineWidth(0.6);
   doc.line(margin, y, pageWidth - margin, y);
 
-  y += 8;
+  y += 6;
 
-  // --- INFO CARDS ---
-  const cardHeight = 45;
-  const leftCardWidth = 90;
-  const rightCardWidth = 75;
-  
-  // Left Card: Vessel Info
-  doc.setFillColor(...colors.surfaceLow);
-  doc.roundedRect(margin, y, leftCardWidth, cardHeight, 1.5, 1.5, 'F');
-  
-  let cy = y + 8;
+  // --- INFO GRID (NCR-style 3x2) ---
+  const usableWidth = pageWidth - margin * 2;
+  const colCount = 3;
+  const colGap = 4;
+  const colWidth = (usableWidth - colGap * (colCount - 1)) / colCount;
+  const gridHeight = 32;
+
+  // Background card
+  doc.setFillColor(248, 250, 252);
+  doc.roundedRect(margin, y - 4, usableWidth, gridHeight - 4, 2, 2, 'F');
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.15);
+  doc.roundedRect(margin, y - 4, usableWidth, gridHeight - 4, 2, 2, 'S');
+
+  const dateStr = detail.actualDate || detail.plannedDate
+    ? new Date(detail.actualDate || detail.plannedDate!).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })
+    : '-';
+
+  const gridItems = [
+    { label: 'Project', value: detail.projectName || detail.projectCode || '-' },
+    { label: 'Hull Number', value: detail.hullNumber || '-' },
+    { label: 'Owner', value: detail.projectOwner || '-' },
+    { label: 'Shipyard', value: detail.projectShipyard || '-' },
+    { label: 'Issue Date', value: dateStr },
+    { label: 'Discipline', value: detail.discipline || '-' },
+  ];
+
+  gridItems.forEach((item, i) => {
+    const col = i % colCount;
+    const row = Math.floor(i / colCount);
+    const itemX = margin + 5 + col * (colWidth + colGap);
+    const itemY = y + (row * 12);
+
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    doc.text(item.label.toUpperCase(), itemX, itemY);
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
+    if (item.label === 'Discipline') {
+      doc.setTextColor(13, 148, 136);
+    } else {
+      doc.setTextColor(15, 23, 42);
+    }
+    doc.text(item.value, itemX, itemY + 5.5);
+  });
+
+  y += gridHeight + 6;
+
+  // --- INSPECTION ITEM (NCR Report Subject style) ---
+  doc.setDrawColor(13, 148, 136);
+  doc.setLineWidth(1.5);
+  const itemLines = doc.splitTextToSize(detail.itemName || '-', usableWidth - 12);
+  const itemHeight = Math.max(14, itemLines.length * 7 + 6);
+  doc.line(margin, y - 4, margin, y + itemHeight - 4);
+
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(9);
-  doc.setTextColor(...colors.primary);
-  doc.text('VESSEL INFO', margin + 6, cy); 
-  
-  cy += 8;
-  doc.setFontSize(6);
-  doc.setTextColor(...colors.secondary);
-  doc.text('PROJECT CODE', margin + 6, cy);
-  doc.text('HULL NUMBER', margin + 45, cy);
-  
-  cy += 4;
-  doc.setFontSize(10);
-  doc.setTextColor(...colors.textMain);
-  doc.text(detail.projectCode || '-', margin + 6, cy);
-  // Hull Number (Style matched to project code)
-  doc.text(detail.hullNumber || '-', margin + 45, cy);
-  
-  cy += 10;
-  doc.setFontSize(6);
-  doc.setTextColor(...colors.secondary);
-  doc.text('SHIP OWNER', margin + 6, cy);
-  doc.text('SHIPYARD', margin + 45, cy);
-  
-  cy += 4;
-  doc.setFontSize(10);
-  doc.setTextColor(...colors.textMain);
-  doc.text('Pacific Gas', margin + 6, cy); 
-  doc.text('JN Shipyard', margin + 45, cy);
+  doc.setTextColor(148, 163, 184);
+  doc.text('INSPECTION ITEM', margin + 6, y - 1);
 
-  // Right Card: Inspection Data
-  const rx = pageWidth - margin - rightCardWidth;
-  doc.setFillColor(...colors.surfaceLow);
-  doc.roundedRect(rx, y, rightCardWidth, cardHeight, 1.5, 1.5, 'F');
-  
-  cy = y + 8;
-  doc.setFontSize(9);
-  doc.setTextColor(...colors.primary);
-  doc.text('INSPECTION DATA', rx + 6, cy);
-  
-  cy += 8;
-  doc.setFontSize(6);
-  doc.setTextColor(...colors.secondary);
-  doc.text('ITEM', rx + 6, cy);
-  
-  cy += 4;
-  doc.setFontSize(9);
-  doc.setTextColor(...colors.textMain);
-  const splitItem = doc.splitTextToSize(detail.itemName, rightCardWidth - 12);
-  doc.text(splitItem, rx + 6, cy);
-  
-  // Calculate bottom row labels: QC / ROUND / DATE
-  cy = y + cardHeight - 12; 
-  
-  doc.setFontSize(6);
-  doc.setTextColor(...colors.secondary);
-  doc.text('QC', rx + 6, cy);
-  doc.text('ROUND', rx + 30, cy);
-  doc.text('DATE', rx + rightCardWidth - 6, cy, { align: 'right' });
-  
-  cy += 4;
-  doc.setFontSize(8);
-  doc.setTextColor(...colors.textMain);
-  // QC Value (Yard QC defined at import)
-  const qcName = detail.yardQc || '-';
-  doc.text(doc.splitTextToSize(qcName, 22), rx + 6, cy);
-  
-  // Round Value
-  doc.text(`R${detail.currentRound}`, rx + 30, cy);
-  
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(...colors.textMain);
-  doc.text(detail.actualDate || detail.plannedDate || '-', rx + rightCardWidth - 6, cy, { align: 'right' });
-  
-  y += cardHeight + 12;
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  doc.text(itemLines, margin + 6, y + 5);
+
+  y += itemHeight + 6;
 
   // --- COMMENTS / DEFICIENCY ---
   doc.setFontSize(10);

@@ -3,6 +3,8 @@ import ExcelJS from 'exceljs';
 import type { ObservationItem, InspectionCommentView } from '@nbins/shared';
 import { PG_LOGO_B64 } from './pg-logo-b64';
 
+// export-tools v2 - NCR-style header
+
 function drawPdfLogo(doc: jsPDF, x: number, y: number, targetHeight: number = 10) {
   const properties = doc.getImageProperties(PG_LOGO_B64);
   const aspectRatio = properties.width / (properties.height || 1);
@@ -280,25 +282,36 @@ export function exportObservationsPdf(
 
   const drawHeader = () => {
     let y = margin;
-    // PG logo 1.5x size (original 11, now 16.5)
-    drawPdfLogo(doc, margin, y - 3, 16.5);
 
+    // === NCR-style Header ===
+    // Left: Logo (1.3x)
+    const logoSize = 17;
+    doc.addImage(PG_LOGO_B64, 'JPEG', margin, y, logoSize, logoSize);
+
+    // Left: Company name
     doc.setFont('helvetica', 'bold');
-    doc.setFontSize(16);
-    doc.setTextColor(...colors.primary);
-    doc.text(reportTitle, margin + 40, y + 6);
+    doc.setFontSize(14);
+    doc.setTextColor(15, 23, 42);
+    doc.text('PG Newbuilding', margin + logoSize + 3, y + 8.5);
 
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7);
-    doc.setTextColor(...colors.secondary);
-    doc.text(`Project: ${projectName || '-'}`, pageWidth - margin, y + 9, { align: 'right' });
-    doc.text(`Ship: ${shipInfo || '-'}`, pageWidth - margin, y + 13, { align: 'right' });
+    doc.setFontSize(9);
+    doc.setTextColor(148, 163, 184);
+    doc.text('Technical Intelligence System', margin + logoSize + 3, y + 15);
 
-    y += 16.5;
-    doc.setDrawColor(...colors.primary);
-    doc.setLineWidth(0.4);
+    // Right: Title
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(22);
+    doc.setTextColor(15, 23, 42);
+    doc.text(reportTitle.toUpperCase(), pageWidth - margin, y + 8, { align: 'right' });
+
+    // Separator line
+    y += 22;
+    doc.setDrawColor(15, 23, 42);
+    doc.setLineWidth(0.6);
     doc.line(margin, y, pageWidth - margin, y);
 
+    // === Original info bar ===
     y += 4;
     doc.setFillColor(...colors.primaryLight);
     doc.roundedRect(margin, y, usableWidth, 8, 1, 1, 'F');
@@ -321,6 +334,7 @@ export function exportObservationsPdf(
 
     y += 11;
 
+    // Table header row
     doc.setFillColor(...colors.primary);
     doc.rect(margin, y, usableWidth, headerRowHeight, 'F');
     doc.setFont('helvetica', 'bold');
@@ -337,15 +351,12 @@ export function exportObservationsPdf(
 
   const drawFooter = (pageNumber: number, totalPages: number) => {
     doc.setPage(pageNumber);
-    doc.setDrawColor(...colors.outline);
-    doc.setLineWidth(0.2);
-    doc.line(margin, pageHeight - 10, pageWidth - margin, pageHeight - 10);
     doc.setFont('helvetica', 'normal');
-    doc.setFontSize(6);
-    doc.setTextColor(...colors.secondary);
-    doc.text(`HASH: ${hashText}`, margin, footerY);
-    doc.text(`PAGE ${pageNumber}/${totalPages}`, pageWidth / 2, footerY, { align: 'center' });
-    doc.text('PG newbuilding', pageWidth - margin, footerY, { align: 'right' });
+    doc.setFontSize(7);
+    doc.setTextColor(148, 163, 184);
+    const formName = mode === "observations" ? "PUNCH LIST" : "INSPECTION COMMENTS";
+    doc.text(`PG NEWBUILDING • ${formName} • OFFICIAL DOCUMENT`, margin, footerY);
+    doc.text(`Page ${pageNumber}/${totalPages}`, pageWidth - margin, footerY, { align: 'right' });
   };
 
   let y = drawHeader();
