@@ -109,9 +109,9 @@ CREATE TABLE IF NOT EXISTS "ncrs" (
   "replyDate" TEXT,
   "verifiedBy" TEXT,
   "verifyDate" TEXT,
-  "rectifyRequest" TEXT,
   "closedBy" TEXT REFERENCES "users"("id"),
   "closedAt" TEXT,
+  "rectifyRequest" TEXT,
   "attachments" TEXT NOT NULL DEFAULT '[]',
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
@@ -164,20 +164,6 @@ CREATE TABLE IF NOT EXISTS "observations" (
   "status" TEXT NOT NULL DEFAULT 'open',
   "closedBy" TEXT REFERENCES "users"("id"),
   "closedAt" TEXT,
-  "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL
-);
-
-CREATE TABLE IF NOT EXISTS "fat_index" (
-  "id" TEXT PRIMARY KEY,
-  "projectId" TEXT NOT NULL REFERENCES "projects"("id"),
-  "shipId" TEXT NOT NULL REFERENCES "ships"("id"),
-  "title" TEXT NOT NULL,
-  "discipline" TEXT NOT NULL,
-  "serialNo" INTEGER NOT NULL DEFAULT 0,
-  "result" TEXT,
-  "remark" TEXT,
-  "authorId" TEXT NOT NULL REFERENCES "users"("id"),
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );

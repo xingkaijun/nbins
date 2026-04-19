@@ -46,7 +46,7 @@ function assertDb(env: Bindings): NonNullable<Bindings["DB"]> {
   return env.DB;
 }
 
-function assertBucket(env: Bindings): NonNullable<Bindings["BUCKET"]> {
+export function assertBucket(env: Bindings): NonNullable<Bindings["BUCKET"]> {
   if (!env.BUCKET) {
     throw new Error("R2 bucket binding not configured");
   }
