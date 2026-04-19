@@ -9,6 +9,7 @@ interface ImageUploaderProps {
   existingImages: string[];
   onImagesChange: (images: string[]) => void;
   disabled?: boolean;
+  label?: string;
 }
 
 interface LocalPreview {
@@ -85,7 +86,7 @@ async function buildImageVariants(file: File): Promise<Record<MediaVariant, File
   return { original, medium, thumb };
 }
 
-export function ImageUploader({ shipId, existingImages, onImagesChange, disabled = false }: ImageUploaderProps) {
+export function ImageUploader({ shipId, existingImages, onImagesChange, disabled = false, label = "NCR Images" }: ImageUploaderProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [uploading, setUploading] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
@@ -258,7 +259,7 @@ export function ImageUploader({ shipId, existingImages, onImagesChange, disabled
       >
         <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
           <div>
-            <div style={{ fontWeight: 600, color: "var(--nb-text, #334155)", fontSize: 13 }}>NCR Images</div>
+            <div style={{ fontWeight: 600, color: "var(--nb-text, #334155)", fontSize: 13 }}>{label}</div>
             <div style={{ fontSize: 12, color: "var(--nb-text-muted, #64748b)" }}>
               Drag images here, click to browse, or paste from clipboard. The browser will generate `original / medium / thumb` WebP variants before upload.
             </div>

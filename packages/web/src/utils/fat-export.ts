@@ -1,14 +1,14 @@
 import { jsPDF } from "jspdf";
 import { PG_LOGO_B64 } from "./pg-logo-b64";
-import type { FatItemResponse } from "@nbins/shared";
+import type { FatItemResponse, FatComment } from "@nbins/shared";
 import { downloadMedia } from "../api";
 
 /**
  * FAT 高清矢量导出工具
  * 参考 NCR 报告样式，无审批区域
+ * 支持结构化 Comments（open/closed 状态）
  */
 
-// PDF 颜色配置 (same as NCR)
 const COLORS = {
   primary: [15, 118, 110] as [number, number, number],
   dark: [15, 23, 42] as [number, number, number],
@@ -19,10 +19,15 @@ const COLORS = {
   accent: [13, 148, 136] as [number, number, number],
   pass: [22, 163, 74] as [number, number, number],
   fail: [220, 38, 38] as [number, number, number],
-  conditional: [217, 119, 6] as [number, number, number]
+  conditional: [217, 119, 6] as [number, number, number],
+  openBg: [255, 251, 235] as [number, number, number],
+  closedBg: [240, 253, 244] as [number, number, number]
 };
 
 const ATTACHMENT_TARGET_WIDTH_PX = 1400;
+const FOOTER_RESERVE = 15;
+const LINE_HEIGHT = 5;
+const COMMENT_ITEM_HEIGHT = 10; // height per comment item in PDF
 
 function wrapText(doc: jsPDF, text: string, maxWidth: number): string[] {
   return doc.splitTextToSize(text || "-", maxWidth);
@@ -230,8 +235,8 @@ export async function exportFatToPdf(fat: FatItemResponse) {
   });
 
   const margin = 15;
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
+  const pageWidth = (doc.internal as any).pageSize.getWidth();
+  const pageHeight = (doc.internal as any).pageSize.getHeight();
   const usableWidth = pageWidth - margin * 2;
   const reportReference = getReportReference(fat);
   const pdfFilename = getPdfFilename(fat, reportReference);
@@ -257,13 +262,69 @@ export async function exportFatToPdf(fat: FatItemResponse) {
     }
   }
 
-  // --- Page 1: Main Report ---
+  // ---- PHASE 1: Calculate layout and total page count ----
+  const tempDoc = new jsPDF({ orientation: "p", unit: "mm", format: "a4" });
 
-  // 1. Header
+  const RESULT_BLOCK_HEIGHT = 30;
+
+  const descContent = normalizeText(fat.content);
+  const descLines = wrapText(tempDoc, descContent, usableWidth - 8);
+  const descHeight = Math.max(40, descLines.length * LINE_HEIGHT + 10);
+
+  const comments = fat.comments || [];
+  const openCount = comments.filter((c) => c.status === "open").length;
+
+  // Calculate comments section height: each comment is a row with number + text + status
+  const commentItemHeight = 8; // per comment row
+  const commentsListHeight = comments.length > 0
+    ? 4 + comments.length * commentItemHeight + 6 // padding + items + bottom
+    : 16; // "No comments" text
+
+  const headerHeight = 32;
+  const eqHeight = Math.max(14, wrapText(tempDoc, normalizeText(fat.title), (usableWidth - 8) / 2 - 12).length * 7 + 6);
+  const eqRowEndY = 72 + Math.max(eqHeight, 14) + 10;
+  const commentsStartY = eqRowEndY + 6 + descHeight + 10; // desc title + desc + gap
+  const commentsTitleHeight = 6;
+  const page1UsableBottom = pageHeight - FOOTER_RESERVE;
+
+  let reportPageCount = 1;
+  const commentsAndResultNeed = commentsTitleHeight + commentsListHeight + 10 + RESULT_BLOCK_HEIGHT;
+  let commentsOverflowPages = 0;
+
+  if (commentsStartY + commentsTitleHeight + commentsAndResultNeed > page1UsableBottom) {
+    const availableForComments = page1UsableBottom - commentsStartY - commentsTitleHeight - 8;
+    const itemsThatFit = Math.max(0, Math.floor(availableForComments / commentItemHeight));
+    let remaining = comments.length - itemsThatFit;
+    const overflowUsableHeight = pageHeight - headerHeight - FOOTER_RESERVE - RESULT_BLOCK_HEIGHT - 10 - 14; // 14 for title + padding
+    const itemsPerOverflowPage = Math.floor(overflowUsableHeight / commentItemHeight);
+
+    while (remaining > 0) {
+      commentsOverflowPages++;
+      remaining -= itemsPerOverflowPage;
+    }
+    reportPageCount = 1 + commentsOverflowPages;
+  }
+
+  const hasImages = fat.imageAttachments && fat.imageAttachments.length > 0;
+  const attachmentPageCount = hasImages ? Math.ceil(fat.imageAttachments!.length / 6) : 0;
+  const totalPageCount = reportPageCount + attachmentPageCount;
+
+  // ---- PHASE 2: Draw the PDF ----
+  const drawFooter = (pageNum: number) => {
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.muted);
+    doc.text("PG NEWBUILDING • FAT FORM • OFFICIAL DOCUMENT", margin, pageHeight - 10);
+    doc.text(`Page ${pageNum} of ${totalPageCount}`, pageWidth - margin, pageHeight - 10, { align: "right" });
+  };
+
+  let currentPageNum = 1;
+  let y: number;
+
+  // --- Page 1 ---
   drawDocumentHeader(doc, margin, pageWidth, "FACTORY ACCEPTANCE TEST", reportReference);
 
-  // 2. Info Grid (3x2, same as NCR)
-  let y = 38;
+  // Info Grid
+  y = 38;
   const colCount = 3;
   const colGap = 4;
   const colWidth = (usableWidth - colGap * (colCount - 1)) / colCount;
@@ -275,18 +336,18 @@ export async function exportFatToPdf(fat: FatItemResponse) {
   doc.setLineWidth(0.15);
   doc.roundedRect(margin, y - 4, usableWidth, gridHeight - 4, 2, 2, "S");
 
-  const dateStr = new Date(fat.createdAt).toLocaleDateString("en-GB", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric"
-  });
+  const inspectionDateStr = fat.inspectionDate
+    ? new Date(fat.inspectionDate).toLocaleDateString("en-GB", {
+        day: "2-digit", month: "short", year: "numeric"
+      })
+    : "-";
 
   const gridItems = [
     { label: "Project", value: projectDisplayName },
     { label: "Hull Number", value: hullDisplayName },
     { label: "Owner", value: normalizeText(resolvedOwner) },
     { label: "Shipyard", value: normalizeText(resolvedShipyard) },
-    { label: "Issue Date", value: dateStr },
+    { label: "Inspection Date", value: inspectionDateStr },
     { label: "Discipline", value: normalizeText(fat.discipline) }
   ];
 
@@ -311,13 +372,15 @@ export async function exportFatToPdf(fat: FatItemResponse) {
     doc.text(item.value || "-", itemX, itemY + 5.5);
   });
 
-  // 3. Equipment (left accent bar)
+  // Equipment + Maker on same row
   y = 72;
+  const halfWidth = (usableWidth - 8) / 2;
+
   doc.setDrawColor(...COLORS.accent);
   doc.setLineWidth(1.5);
-  const eqLines = wrapText(doc, normalizeText(fat.title), usableWidth - 12);
-  const eqHeight = Math.max(14, eqLines.length * 7 + 6);
-  doc.line(margin, y - 4, margin, y + eqHeight - 4);
+  const eqLines = wrapText(doc, normalizeText(fat.title), halfWidth - 12);
+  const eqH = Math.max(14, eqLines.length * 7 + 6);
+  doc.line(margin, y - 4, margin, y + eqH - 4);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
@@ -328,166 +391,214 @@ export async function exportFatToPdf(fat: FatItemResponse) {
   doc.setTextColor(...COLORS.dark);
   doc.text(eqLines, margin + 6, y + 5);
 
-  y += eqHeight + 10;
-
-  // 3b. Maker (left accent bar)
   if (fat.maker) {
+    const makerX = margin + halfWidth + 8;
     doc.setDrawColor(...COLORS.accent);
     doc.setLineWidth(1.5);
-    const makerLines = wrapText(doc, normalizeText(fat.maker), usableWidth - 12);
-    const makerHeight = Math.max(14, makerLines.length * 7 + 6);
-    doc.line(margin, y - 4, margin, y + makerHeight - 4);
+    const makerLines = wrapText(doc, normalizeText(fat.maker), halfWidth - 12);
+    const makerH = Math.max(14, makerLines.length * 7 + 6);
+    doc.line(makerX, y - 4, makerX, y + makerH - 4);
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(...COLORS.muted);
-    doc.text("MAKER", margin + 6, y - 1);
+    doc.text("MAKER", makerX + 6, y - 1);
 
     doc.setFontSize(13);
     doc.setTextColor(...COLORS.dark);
-    doc.text(makerLines, margin + 6, y + 5);
-
-    y += makerHeight + 10;
+    doc.text(makerLines, makerX + 6, y + 5);
   }
 
-  // 4. Test Description section
-  const drawSection = (title: string, content: string, height: number) => {
-    doc.setDrawColor(...COLORS.accent);
-    doc.setLineWidth(1);
-    doc.line(margin, y - 4, margin, y);
+  y += Math.max(eqH, 14) + 10;
 
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
-    doc.setTextColor(...COLORS.dark);
-    doc.text(title.toUpperCase(), margin + 4, y - 1);
-
-    y += 2;
-    doc.setDrawColor(...COLORS.border);
-    doc.setLineWidth(0.2);
-    doc.roundedRect(margin, y, usableWidth, height, 1, 1, "S");
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(11);
-    doc.setTextColor(...COLORS.dark);
-
-    const wrapped = wrapText(doc, content, usableWidth - 8);
-    doc.text(wrapped, margin + 4, y + 6);
-
-    y += height + 10;
-  };
-
-  // Description
-  drawSection("Test Description", normalizeText(fat.content), 55);
-
-  // 5. Result section (with colored badge)
+  // Test Description
   doc.setDrawColor(...COLORS.accent);
   doc.setLineWidth(1);
   doc.line(margin, y - 4, margin, y);
-
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(...COLORS.dark);
-  doc.text("RESULT", margin + 4, y - 1);
+  doc.text("TEST DESCRIPTION", margin + 4, y - 1);
 
   y += 2;
+  doc.setDrawColor(...COLORS.border);
+  doc.setLineWidth(0.2);
+  doc.roundedRect(margin, y, usableWidth, descHeight, 1, 1, "S");
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(11);
+  doc.setTextColor(...COLORS.dark);
+  doc.text(descLines, margin + 4, y + 6);
+
+  y += descHeight + 10;
+
+  // ---- Comments section (structured list) ----
+  const drawCommentsTitle = (title: string) => {
+    doc.setDrawColor(...COLORS.accent);
+    doc.setLineWidth(1);
+    doc.line(margin, y - 4, margin, y);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...COLORS.dark);
+    doc.text(title, margin + 4, y - 1);
+    y += 2;
+  };
+
+  const drawCommentItem = (comment: FatComment, index: number) => {
+    const isOpen = comment.status === "open";
+    const itemBg = isOpen ? COLORS.openBg : COLORS.closedBg;
+
+    // Background row
+    doc.setFillColor(...itemBg);
+    doc.roundedRect(margin, y, usableWidth, commentItemHeight - 1, 1, 1, "F");
+
+    // Number circle
+    doc.setFillColor(...(isOpen ? COLORS.conditional : COLORS.pass));
+    doc.circle(margin + 6, y + 4, 2.5, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    doc.setTextColor(...COLORS.white);
+    doc.text(String(index + 1), margin + 6, y + 5, { align: "center" });
+
+    // Comment text
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(...COLORS.dark);
+    const commentText = ellipsizeText(doc, comment.content, usableWidth - 50);
+    doc.text(commentText, margin + 12, y + 5);
+
+    // Status badge
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7);
+    const statusText = isOpen ? "OPEN" : "CLOSED";
+    const statusColor = isOpen ? COLORS.conditional : COLORS.pass;
+    doc.setTextColor(...statusColor);
+    doc.text(statusText, margin + usableWidth - 4, y + 5, { align: "right" });
+
+    y += commentItemHeight;
+  };
+
+  // Result + Prepared By block (drawn after comments, at page bottom)
+  const inspectorTitle = normalizeText(fat.authorTitle, "Inspector");
+  const preparedDate = fat.createdAt ? new Date(fat.createdAt).toLocaleDateString() : "-";
   const resultValue = fat.result || "PENDING";
   const resultClr = getResultColor(fat.result);
 
-  doc.setDrawColor(...COLORS.border);
-  doc.setLineWidth(0.2);
-  doc.roundedRect(margin, y, usableWidth, 20, 1, 1, "S");
+  const drawResultAndPreparedBy = () => {
+    // Always draw at the bottom of the page, just above the footer
+    y = pageHeight - FOOTER_RESERVE - RESULT_BLOCK_HEIGHT;
 
-  // Result badge
-  const badgeX = margin + 4;
-  const badgeY = y + 5;
-  doc.setFillColor(...resultClr);
-  doc.roundedRect(badgeX, badgeY, 45, 10, 2, 2, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.setTextColor(...COLORS.white);
-  doc.text(resultValue, badgeX + 22.5, badgeY + 7, { align: "center" });
+    // Result label
+    doc.setDrawColor(...COLORS.accent);
+    doc.setLineWidth(1);
+    doc.line(margin, y - 4, margin, y);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(...COLORS.dark);
+    doc.text("RESULT", margin + 4, y - 1);
 
-  // Comments
-  const commentsText = normalizeText(fat.remark, "No comments");
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(10);
-  doc.setTextColor(...COLORS.dark);
-  doc.text(`Comments: ${commentsText}`, badgeX + 55, badgeY + 7);
+    y += 2;
 
-  y += 30;
+    // Result badge (left)
+    doc.setDrawColor(...COLORS.border);
+    doc.setLineWidth(0.2);
+    doc.roundedRect(margin, y, usableWidth, 20, 1, 1, "S");
 
-  // 6. Signature Block (single column - no approval needed)
-  const sigHeight = 25;
-  doc.setDrawColor(...COLORS.border);
-  doc.setLineWidth(0.3);
-  doc.setFillColor(...COLORS.bg);
-  doc.roundedRect(margin, y, usableWidth, sigHeight, 3, 3, "F");
-  doc.roundedRect(margin, y, usableWidth, sigHeight, 3, 3, "S");
+    const badgeX = margin + 4;
+    const badgeY = y + 5;
+    doc.setFillColor(...resultClr);
+    doc.roundedRect(badgeX, badgeY, 45, 10, 2, 2, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(...COLORS.white);
+    doc.text(resultValue, badgeX + 22.5, badgeY + 7, { align: "center" });
 
-  const drawSig = (x: number, title: string, name: string, personTitle: string, dateLabel: string, dateValue: string) => {
-    const columnWidth = usableWidth - 8;
+    // Prepared By card (right)
+    const sigCardX = margin + usableWidth / 2;
+    const sigCardWidth = usableWidth / 2;
+    const sigCardHeight = 18;
+    doc.setFillColor(...COLORS.bg);
+    doc.setDrawColor(...COLORS.border);
+    doc.roundedRect(sigCardX, y + 1, sigCardWidth - 2, sigCardHeight, 2, 2, "FD");
 
     doc.setFont("helvetica", "bold");
     doc.setFontSize(7);
     doc.setTextColor(...COLORS.muted);
-    doc.text(title.toUpperCase(), x + 4, y + 5);
+    doc.text("PREPARED BY", sigCardX + 6, y + 6);
 
     doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
     doc.setTextColor(...COLORS.dark);
     drawAdaptiveText(doc, {
-      text: name,
-      x: x + 4,
-      y: y + 11,
-      maxWidth: columnWidth,
-      fontSize: 10.5,
-      minFontSize: 8,
-      maxLines: 1,
-      lineHeight: 4,
-      align: "left"
+      text: normalizeText(fat.authorName, fat.authorId),
+      x: sigCardX + 6, y: y + 10, maxWidth: sigCardWidth - 24,
+      fontSize: 10, minFontSize: 8, maxLines: 1, lineHeight: 4, align: "left"
     });
-
-    doc.setFont("helvetica", "italic");
-    doc.setTextColor(...COLORS.dark);
-    drawAdaptiveText(doc, {
-      text: personTitle,
-      x: x + 4,
-      y: y + 15.5,
-      maxWidth: columnWidth,
-      fontSize: 8,
-      minFontSize: 6.5,
-      maxLines: 1,
-      lineHeight: 3.4,
-      align: "left"
-    });
-
-    doc.setDrawColor(...COLORS.border);
-    doc.line(x + 4, y + 20, x + usableWidth - 4, y + 20);
 
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(...COLORS.muted);
-    doc.text(`${dateLabel}: ${dateValue}`, x + 4, y + 23.5);
+    doc.text(`${inspectorTitle} • ${preparedDate}`, sigCardX + 6, y + 15);
   };
 
-  const inspectorTitle = normalizeText(fat.authorTitle, "Inspector");
-  const preparedDate = fat.createdAt ? new Date(fat.createdAt).toLocaleDateString() : "-";
+  // Check if all fits on page 1
+  const needForCommentsAndResult = 8 + commentsListHeight + 10 + RESULT_BLOCK_HEIGHT;
+  const spaceAvailable = page1UsableBottom - y;
 
-  drawSig(
-    margin,
-    "Prepared By",
-    normalizeText(fat.authorName, fat.authorId),
-    inspectorTitle,
-    "Date",
-    preparedDate
-  );
+  if (needForCommentsAndResult <= spaceAvailable && comments.length <= 20) {
+    // Everything fits on page 1
+    drawCommentsTitle(`COMMENTS (${openCount} open / ${comments.length} total)`);
+    if (comments.length === 0) {
+      doc.setFont("helvetica", "italic");
+      doc.setFontSize(10);
+      doc.setTextColor(...COLORS.muted);
+      doc.text("No comments.", margin + 4, y + 5);
+      y += 16;
+    } else {
+      comments.forEach((c, i) => drawCommentItem(c, i));
+      y += 10;
+    }
+    drawResultAndPreparedBy();
+    drawFooter(currentPageNum);
+  } else {
+    // Comments overflow - paginate
+    drawCommentsTitle(`COMMENTS (${openCount} open / ${comments.length} total)`);
 
-  // Footer (Page 1)
-  const hasImages = fat.imageAttachments && fat.imageAttachments.length > 0;
-  const totalPdfPages = hasImages ? 1 + Math.ceil(fat.imageAttachments!.length / 6) : 1;
-  doc.setFontSize(7);
-  doc.setTextColor(...COLORS.muted);
-  doc.text("PG NEWBUILDING • FAT FORM • OFFICIAL DOCUMENT", margin, pageHeight - 10);
-  doc.text(`Page 1 of ${totalPdfPages}`, pageWidth - margin, pageHeight - 10, { align: "right" });
+    // How many items fit on this page (reserve space for result block on last page)
+    const availableY = page1UsableBottom - y - RESULT_BLOCK_HEIGHT;
+    const itemsThisPage = Math.max(0, Math.floor(availableY / commentItemHeight));
+    const firstBatch = comments.slice(0, itemsThisPage);
+    firstBatch.forEach((c, i) => drawCommentItem(c, i));
+
+    // Draw result block at page bottom after first batch if all comments fit
+    if (itemsThisPage >= comments.length) {
+      drawResultAndPreparedBy();
+    }
+    drawFooter(currentPageNum);
+
+    // Remaining items
+    let remaining = comments.slice(itemsThisPage);
+    const itemsPerOverflowPage = Math.floor((pageHeight - headerHeight - FOOTER_RESERVE - RESULT_BLOCK_HEIGHT - 20) / commentItemHeight);
+
+    while (remaining.length > 0) {
+      doc.addPage();
+      currentPageNum++;
+      drawDocumentHeader(doc, margin, pageWidth, "FACTORY ACCEPTANCE TEST", reportReference);
+      y = 38;
+
+      const batch = remaining.slice(0, itemsPerOverflowPage);
+      drawCommentsTitle("COMMENTS (CONTINUED)");
+      batch.forEach((c, i) => drawCommentItem(c, itemsThisPage + (remaining.length - remaining.length) + i));
+      y += 4;
+
+      remaining = remaining.slice(batch.length);
+
+      // If this is the last batch, draw result block at page bottom
+      if (remaining.length === 0) {
+        drawResultAndPreparedBy();
+      }
+      drawFooter(currentPageNum);
+    }
+  }
 
   // --- Attachment Pages ---
   if (hasImages) {
@@ -498,10 +609,8 @@ export async function exportFatToPdf(fat: FatItemResponse) {
     const imageDataList: Array<{ dataUrl: string; index: number }> = [];
     for (let i = 0; i < fat.imageAttachments!.length; i++) {
       const dataUrl = await downloadImageForPdf(
-        fat.shipId,
-        fat.imageAttachments![i],
-        ATTACHMENT_TARGET_WIDTH_PX,
-        attachmentTargetHeightPx
+        fat.shipId, fat.imageAttachments![i],
+        ATTACHMENT_TARGET_WIDTH_PX, attachmentTargetHeightPx
       );
       if (dataUrl) {
         imageDataList.push({ dataUrl, index: i });
@@ -510,10 +619,10 @@ export async function exportFatToPdf(fat: FatItemResponse) {
 
     if (imageDataList.length > 0) {
       const imagesPerPage = 6;
-      const totalPages = Math.ceil(imageDataList.length / imagesPerPage);
 
-      for (let p = 0; p < totalPages; p++) {
+      for (let p = 0; p < Math.ceil(imageDataList.length / imagesPerPage); p++) {
         doc.addPage();
+        currentPageNum++;
         drawDocumentHeader(doc, margin, pageWidth, "PHOTO ATTACHMENTS", reportReference);
 
         const pageImages = imageDataList.slice(p * imagesPerPage, (p + 1) * imagesPerPage);
@@ -542,11 +651,10 @@ export async function exportFatToPdf(fat: FatItemResponse) {
           doc.text(`Photo ${imgData.index + 1}`, imgX, currentY + 68);
         });
 
-        // Footer
         doc.setFontSize(7);
         doc.setTextColor(...COLORS.muted);
         doc.text(`PG SHIPMANAGEMENT • ATTACHMENT • ${hullDisplayName}`, margin, pageHeight - 10);
-        doc.text(`Page ${p + 2} of ${totalPdfPages}`, pageWidth - margin, pageHeight - 10, { align: "right" });
+        doc.text(`Page ${currentPageNum} of ${totalPageCount}`, pageWidth - margin, pageHeight - 10, { align: "right" });
       }
     }
   }

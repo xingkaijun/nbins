@@ -4,6 +4,7 @@ import { PG_LOGO_B64 } from "../utils/pg-logo-b64";
 import { compressImageToWebP } from "../utils/image-compression";
 import { uploadMedia } from "../api";
 import { DISCIPLINES } from "@nbins/shared";
+import type { FatComment } from "@nbins/shared";
 
 interface AttachmentPhoto {
   id: string;
@@ -24,7 +25,16 @@ interface FatEditorProps {
   formattedSerial: string;
   projectOwner?: string | null;
   projectShipyard?: string | null;
-  onSubmit: (data: { title: string; content: string; result: string; remark: string; discipline: string; serialNo: number; imageAttachments: string[]; maker: string }) => Promise<void>;
+  onSubmit: (data: {
+    title: string;
+    content: string;
+    result: string;
+    comments: FatComment[];
+    discipline: string;
+    serialNo: number;
+    imageAttachments: string[];
+    maker: string;
+  }) => Promise<void>;
   onClose: () => void;
 }
 
@@ -44,14 +54,18 @@ export function FatEditor({
   const [subject, setSubject] = useState("");
   const [maker, setMaker] = useState("");
   const [content, setContent] = useState("");
-  const [result, setResult] = useState("PASS");
-  const [remark, setRemark] = useState("");
+  const [commentsText, setCommentsText] = useState("");
   const [discipline, setDiscipline] = useState(userDisciplines[0] || "HULL");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [attachments, setAttachments] = useState<AttachmentPhoto[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
   const dateStr = new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" });
+
+  // Auto-compute result based on comments text
+  const commentLines = commentsText.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+  const openCount = commentLines.length;
+  const computedResult = openCount > 0 ? "COMMENTS" : "PASS";
 
   useEffect(() => {
     return () => attachments.forEach((a) => URL.revokeObjectURL(a.url));
@@ -80,10 +94,6 @@ export function FatEditor({
     } finally {
       setIsSubmitting(false);
     }
-  };
-
-  const updateAttachmentRemark = (id: string, remark: string) => {
-    setAttachments((prev) => prev.map((a) => (a.id === id ? { ...a, remark } : a)));
   };
 
   const autoResizeTextarea = (el: HTMLTextAreaElement | null) => {
@@ -116,11 +126,23 @@ export function FatEditor({
         }
       }
 
+      // Generate comments from textarea: split by newline, filter empty
+      const generatedComments: FatComment[] = commentsText
+        .split("\n")
+        .map((line) => line.trim())
+        .filter((line) => line.length > 0)
+        .map((line) => ({
+          id: crypto.randomUUID(),
+          content: line,
+          status: "open" as const,
+          createdAt: new Date().toISOString()
+        }));
+
       await onSubmit({
         title: subject.trim(),
         content: content.trim(),
-        result,
-        remark: remark.trim(),
+        result: generatedComments.some((c) => c.status === "open") ? "COMMENTS" : "PASS",
+        comments: generatedComments,
         discipline,
         serialNo,
         imageAttachments: imageKeys,
@@ -243,37 +265,77 @@ export function FatEditor({
               </div>
             </div>
 
-            {/* Result */}
+            {/* Result - auto computed */}
             <div style={formSectionStyle}>
-              <div style={sectionAccentTitleStyle}>RESULT</div>
-              <div style={{ ...inputContainerStyle, display: "flex", gap: 20, alignItems: "center", padding: "12px 14px" }}>
-                <label style={{ display: "flex", alignItems: "center", cursor: "pointer", fontSize: 13, fontWeight: 800 }}>
-                  <input type="radio" checked={result === "PASS"} onChange={() => setResult("PASS")} style={radioStyle} />
-                  <span style={{ color: "#16a34a" }}>PASS</span>
-                </label>
-                <label style={{ display: "flex", alignItems: "center", cursor: "pointer", fontSize: 13, fontWeight: 800 }}>
-                  <input type="radio" checked={result === "FAIL"} onChange={() => setResult("FAIL")} style={radioStyle} />
-                  <span style={{ color: "#dc2626" }}>FAIL</span>
-                </label>
-                <label style={{ display: "flex", alignItems: "center", cursor: "pointer", fontSize: 13, fontWeight: 800 }}>
-                  <input type="radio" checked={result === "COMMENTS"} onChange={() => setResult("COMMENTS")} style={radioStyle} />
-                  <span style={{ color: "#d97706" }}>COMMENTS</span>
-                </label>
+              <div style={{ ...sectionAccentTitleStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>RESULT</span>
+                <span style={{
+                  fontSize: 11,
+                  fontWeight: 800,
+                  padding: "3px 10px",
+                  borderRadius: 20,
+                  background: computedResult === "PASS" ? "#dcfce7" : computedResult === "COMMENTS" ? "#fef3c7" : "#fef2f2",
+                  color: computedResult === "PASS" ? "#16a34a" : computedResult === "COMMENTS" ? "#d97706" : "#dc2626"
+                }}>
+                  {computedResult}
+                </span>
+              </div>
+              <div style={{ fontSize: 11, color: "#64748b", fontStyle: "italic", padding: "4px 0" }}>
+                Result is auto-computed: {openCount > 0 ? `${openCount} comment${openCount > 1 ? "s" : ""} → COMMENTS` : "No comments → PASS"}
               </div>
             </div>
 
-            {/* Comments */}
+            {/* Comments - textarea input, newline separated */}
             <div style={formSectionStyle}>
               <div style={sectionAccentTitleStyle}>COMMENTS</div>
-              <div style={inputContainerStyle}>
+              <label style={{
+                display: "grid",
+                gap: 4,
+              }}>
+                <span style={{
+                  fontSize: 8,
+                  fontWeight: 700,
+                  color: "#94a3b8",
+                  textTransform: "uppercase",
+                  letterSpacing: "0.1em"
+                }}>
+                  NEW COMMENTS (ONE PER LINE)
+                </span>
                 <textarea
-                  style={{ ...premiumTextareaStyle, minHeight: 72, resize: "none", overflow: "hidden" }}
-                  value={remark}
-                  onChange={(e) => { setRemark(e.target.value); autoResizeTextarea(e.target); }}
+                  value={commentsText}
+                  onChange={(e) => { setCommentsText(e.target.value); autoResizeTextarea(e.target); }}
                   ref={(el) => { if (el) autoResizeTextarea(el); }}
-                  placeholder="Optional remarks..."
+                  placeholder={"Enter comments, one per line...\n\n1st comment here\n2nd comment here\n3rd comment here"}
+                  style={{
+                    width: "100%",
+                    border: "1px solid rgba(148, 163, 184, 0.4)",
+                    borderRadius: 8,
+                    background: "#ffffff",
+                    padding: "8px 12px",
+                    color: "#0f172a",
+                    font: "inherit",
+                    fontSize: 12,
+                    lineHeight: 1.6,
+                    minHeight: 80,
+                    resize: "none",
+                    overflow: "hidden",
+                    outline: "none"
+                  }}
+                  onFocus={(e) => {
+                    e.target.style.borderColor = "#0d9488";
+                    e.target.style.boxShadow = "0 0 0 2px rgba(13, 148, 136, 0.1)";
+                  }}
+                  onBlur={(e) => {
+                    e.target.style.borderColor = "rgba(148, 163, 184, 0.4)";
+                    e.target.style.boxShadow = "none";
+                  }}
                 />
-              </div>
+              </label>
+              {commentLines.length > 0 && (
+                <div style={{ marginTop: 6, fontSize: 11, color: "#0d9488", fontWeight: 600 }}>
+                  {commentLines.length} comment{commentLines.length > 1 ? "s" : ""} will be generated on submit
+                </div>
+              )}
             </div>
 
             {/* Attachments */}
@@ -358,7 +420,7 @@ export function FatEditor({
                           style={{ width: "100%", border: "none", outline: "none", fontSize: 10, fontWeight: 600, color: "#334155" }}
                           placeholder={attachment ? "Type photo remark..." : "Empty Slot"}
                           value={attachment?.remark || ""}
-                          onChange={(e) => attachment && updateAttachmentRemark(attachment.id, e.target.value)}
+                          onChange={(e) => attachment && setAttachments((prev) => prev.map((a) => a.id === attachment.id ? { ...a, remark: e.target.value } : a))}
                           disabled={!attachment}
                         />
                       </div>
@@ -433,10 +495,6 @@ const premiumTextareaStyle: React.CSSProperties = {
 
 const premiumSelectStyle: React.CSSProperties = {
   ...premiumInputStyle, cursor: "pointer"
-};
-
-const radioStyle: React.CSSProperties = {
-  accentColor: "#0d9488", marginRight: 8
 };
 
 const pillButtonStyle: React.CSSProperties = {

@@ -2,7 +2,7 @@ import type { D1Database } from "@cloudflare/workers-types";
 import type { FatIndexRecord } from "../persistence/records.ts";
 import type { Bindings } from "../env.ts";
 import type { AuthenticatedUser } from "../auth.ts";
-import type { FatItemResponse } from "@nbins/shared";
+import type { FatComment, FatItemResponse } from "@nbins/shared";
 import { resolveAllowedProjectIds } from "../routes/route-helpers.ts";
 
 export interface StoredFatRecord {
@@ -14,8 +14,10 @@ export interface StoredFatRecord {
   serialNo: number;
   content: string;
   result: string | null;
+  comments: FatComment[];
   remark: string | null;
   maker: string | null;
+  inspectionDate: string | null;
   authorId: string;
   imageAttachments: string[];
   createdAt: string;
@@ -74,6 +76,17 @@ function parseStringArray(value: unknown): string[] {
   }
 }
 
+function parseComments(value: unknown): FatComment[] {
+  if (Array.isArray(value)) {
+    return value.filter((c): c is FatComment =>
+      typeof c === "object" && c !== null &&
+      typeof (c as FatComment).id === "string" &&
+      typeof (c as FatComment).content === "string"
+    );
+  }
+  return [];
+}
+
 export function getFatObjectKey(shipId: string, fatId: string): string {
   return `fats/${shipId}/${fatId}.json`;
 }
@@ -108,8 +121,35 @@ export async function hasProjectAccess(
   return allowedProjectIds.includes(projectId);
 }
 
+export function computeOpenCommentsCount(comments: FatComment[]): number {
+  return comments.filter((c) => c.status === "open").length;
+}
+
+export function computeFatResult(comments: FatComment[], manualResult: string | null): string | null {
+  const openCount = computeOpenCommentsCount(comments);
+  if (openCount > 0) return "COMMENTS";
+  // If manual result is FAIL, keep it
+  if (manualResult === "FAIL") return "FAIL";
+  // All comments closed and no explicit FAIL → PASS
+  if (comments.length > 0 && openCount === 0) return "PASS";
+  // No comments, use manual result
+  return manualResult;
+}
+
 export function normalizeStoredFatRecord(raw: Record<string, unknown>): StoredFatRecord {
   const imageAttachments = parseStringArray(raw.imageAttachments);
+  const comments = parseComments(raw.comments);
+  // Backward compat: if old record has remark but no comments, convert remark to a comment
+  const remark = typeof raw.remark === "string" ? raw.remark : null;
+  const finalComments = comments.length > 0 ? comments : (
+    remark ? [{
+      id: crypto.randomUUID(),
+      content: remark,
+      status: "open" as const,
+      createdAt: typeof raw.createdAt === "string" ? raw.createdAt : new Date().toISOString()
+    }] : []
+  );
+
   return {
     id: String(raw.id),
     projectId: String(raw.projectId),
@@ -119,8 +159,10 @@ export function normalizeStoredFatRecord(raw: Record<string, unknown>): StoredFa
     serialNo: typeof raw.serialNo === "number" ? raw.serialNo : Number(raw.serialNo ?? 0),
     content: String(raw.content),
     result: typeof raw.result === "string" ? raw.result : null,
-    remark: typeof raw.remark === "string" ? raw.remark : null,
+    comments: finalComments,
+    remark: finalComments.length > 0 ? finalComments.map((c) => c.content).join("; ") : null,
     maker: typeof raw.maker === "string" ? raw.maker : null,
+    inspectionDate: typeof raw.inspectionDate === "string" ? raw.inspectionDate : null,
     authorId: String(raw.authorId),
     imageAttachments,
     createdAt: String(raw.createdAt),
@@ -185,6 +227,8 @@ export function mapFatIndexRecord(row: Record<string, unknown>): FatIndexRecord 
     result: typeof row.result === "string" ? row.result : null,
     remark: typeof row.remark === "string" ? row.remark : null,
     maker: typeof row.maker === "string" ? row.maker : null,
+    inspectionDate: typeof row.inspectionDate === "string" ? row.inspectionDate : null,
+    openCommentsCount: typeof row.openCommentsCount === "number" ? row.openCommentsCount : 0,
     authorId: String(row.authorId),
     createdAt: String(row.createdAt),
     updatedAt: String(row.updatedAt)
@@ -193,10 +237,11 @@ export function mapFatIndexRecord(row: Record<string, unknown>): FatIndexRecord 
 
 export async function upsertFatIndex(env: Bindings, record: StoredFatRecord): Promise<void> {
   const db = assertDb(env);
+  const openCount = computeOpenCommentsCount(record.comments);
   await db.prepare(
     `INSERT INTO "fat_index" (
-      "id", "projectId", "shipId", "title", "discipline", "serialNo", "result", "remark", "maker", "authorId", "createdAt", "updatedAt"
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      "id", "projectId", "shipId", "title", "discipline", "serialNo", "result", "remark", "maker", "inspectionDate", "openCommentsCount", "authorId", "createdAt", "updatedAt"
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT("id") DO UPDATE SET
       "projectId" = excluded."projectId",
       "shipId" = excluded."shipId",
@@ -206,6 +251,8 @@ export async function upsertFatIndex(env: Bindings, record: StoredFatRecord): Pr
       "result" = excluded."result",
       "remark" = excluded."remark",
       "maker" = excluded."maker",
+      "inspectionDate" = excluded."inspectionDate",
+      "openCommentsCount" = excluded."openCommentsCount",
       "authorId" = excluded."authorId",
       "createdAt" = excluded."createdAt",
       "updatedAt" = excluded."updatedAt"`
@@ -219,6 +266,8 @@ export async function upsertFatIndex(env: Bindings, record: StoredFatRecord): Pr
     record.result,
     record.remark,
     record.maker,
+    record.inspectionDate,
+    openCount,
     record.authorId,
     record.createdAt,
     record.updatedAt
@@ -291,6 +340,11 @@ export async function hydrateFatResponses(env: Bindings, records: StoredFatRecor
   const userIds = Array.from(new Set(
     records.map((record) => record.authorId).filter((id): id is string => typeof id === "string" && id.length > 0)
   ));
+  // Also collect closedBy user IDs from comments
+  const closedByUserIds = Array.from(new Set(
+    records.flatMap((r) => r.comments.map((c) => c.closedBy).filter((id): id is string => typeof id === "string" && id.length > 0))
+  ));
+  const allUserIds = Array.from(new Set([...userIds, ...closedByUserIds]));
 
   const shipIds = Array.from(new Set(records.map((record) => record.shipId)));
   const projectIds = Array.from(new Set(records.map((record) => record.projectId)));
@@ -299,10 +353,10 @@ export async function hydrateFatResponses(env: Bindings, records: StoredFatRecor
   const shipMap = new Map<string, ShipDisplayRow>();
   const projectMap = new Map<string, { name: string; owner: string | null; shipyard: string | null }>();
 
-  if (userIds.length > 0) {
+  if (allUserIds.length > 0) {
     const users = await db.prepare(
-      `SELECT "id", "displayName", "title" FROM "users" WHERE "id" IN (${userIds.map(() => "?").join(",")})`
-    ).bind(...userIds).all<UserDisplayRow>();
+      `SELECT "id", "displayName", "title" FROM "users" WHERE "id" IN (${allUserIds.map(() => "?").join(",")})`
+    ).bind(...allUserIds).all<UserDisplayRow>();
 
     for (const user of users.results ?? []) {
       userMap.set(user.id, user);
@@ -334,6 +388,12 @@ export async function hydrateFatResponses(env: Bindings, records: StoredFatRecor
     const authorUser = userMap.get(record.authorId);
     const project = projectMap.get(record.projectId);
 
+    // Enrich comments with closedBy display name
+    const enrichedComments = record.comments.map((c) => ({
+      ...c,
+      closedBy: c.closedBy ? (userMap.get(c.closedBy)?.displayName || c.closedBy) : undefined
+    }));
+
     return {
       id: record.id,
       projectId: record.projectId,
@@ -351,8 +411,9 @@ export async function hydrateFatResponses(env: Bindings, records: StoredFatRecor
         : undefined,
       content: record.content,
       result: record.result,
-      remark: record.remark,
+      comments: enrichedComments,
       maker: record.maker,
+      inspectionDate: record.inspectionDate,
       authorId: record.authorId,
       authorName: authorUser?.displayName,
       authorTitle: authorUser?.title ?? undefined,

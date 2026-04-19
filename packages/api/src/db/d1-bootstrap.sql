@@ -178,6 +178,8 @@ CREATE TABLE IF NOT EXISTS "fat_index" (
   "result" TEXT,
   "remark" TEXT,
   "maker" TEXT,
+  "inspectionDate" TEXT,
+  "openCommentsCount" INTEGER NOT NULL DEFAULT 0,
   "authorId" TEXT NOT NULL REFERENCES "users"("id"),
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL

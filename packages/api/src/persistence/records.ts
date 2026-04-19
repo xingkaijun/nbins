@@ -196,6 +196,8 @@ export interface FatIndexRecord {
   result: string | null;
   remark: string | null;
   maker: string | null;
+  inspectionDate: string | null;
+  openCommentsCount: number;
   authorId: string;
   createdAt: string;
   updatedAt: string;

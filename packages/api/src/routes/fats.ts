@@ -5,6 +5,7 @@ import type { AuthContextVariables, AuthenticatedUser } from "../auth.ts";
 import type { Bindings } from "../env.ts";
 import type { FatIndexRecord } from "../persistence/records.ts";
 import {
+  computeFatResult,
   getFatIndexById,
   getFatObjectKey,
   getShipContextByShipId,
@@ -143,14 +144,15 @@ export function createFatRoutes(): Hono<FatRouteEnv> {
       }
 
       const title = body.title?.trim();
-      const content = body.content?.trim();
-      if (!title || !content) {
-        return c.json({ ok: false, error: "title and content are required" }, 400);
+      const content = body.content?.trim() || "";
+      if (!title) {
+        return c.json({ ok: false, error: "title is required" }, 400);
       }
 
       const now = new Date().toISOString();
       const serialNo = body.serialNo ?? (await getNextFatSerialNo(c.env, shipId));
       const discipline = body.discipline?.trim() || "GENERAL";
+      const comments = Array.isArray(body.comments) ? body.comments : [];
       const record: StoredFatRecord = {
         id: generateId(),
         projectId: ship.projectId,
@@ -159,9 +161,11 @@ export function createFatRoutes(): Hono<FatRouteEnv> {
         discipline,
         serialNo,
         content,
-        result: body.result?.trim() || null,
-        remark: body.remark?.trim() || null,
+        result: computeFatResult(comments, body.result?.trim() || null),
+        comments,
+        remark: comments.length > 0 ? comments.map((c) => c.content).join("; ") : null,
         maker: body.maker?.trim() || null,
+        inspectionDate: body.inspectionDate?.trim() || null,
         authorId: authUser.id,
         imageAttachments: Array.isArray(body.imageAttachments)
           ? body.imageAttachments.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
@@ -192,13 +196,16 @@ export function createFatRoutes(): Hono<FatRouteEnv> {
         return c.json({ ok: false, error: "FAT not found" }, 404);
       }
 
+      const nextComments = body.comments !== undefined ? body.comments : loaded.record.comments;
+      const manualResult = body.result !== undefined ? (body.result?.trim() || null) : loaded.record.result;
       const nextRecord: StoredFatRecord = {
         ...loaded.record,
         title: body.title !== undefined ? body.title.trim() || loaded.record.title : loaded.record.title,
         discipline: body.discipline !== undefined ? body.discipline.trim() || loaded.record.discipline : loaded.record.discipline,
         content: body.content !== undefined ? body.content.trim() || loaded.record.content : loaded.record.content,
-        result: body.result !== undefined ? (body.result?.trim() || null) : loaded.record.result,
-        remark: body.remark !== undefined ? (body.remark?.trim() || null) : loaded.record.remark,
+        result: computeFatResult(nextComments, manualResult),
+        comments: nextComments,
+        remark: nextComments.length > 0 ? nextComments.map((c) => c.content).join("; ") : null,
         maker: body.maker !== undefined ? (body.maker?.trim() || null) : loaded.record.maker,
         imageAttachments: body.imageAttachments !== undefined
           ? body.imageAttachments.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
