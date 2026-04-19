@@ -186,6 +186,20 @@ export interface NcrIndexRecord {
   updatedAt: string;
 }
 
+export interface FatIndexRecord {
+  id: string;
+  projectId: string;
+  shipId: string;
+  title: string;
+  discipline: string;
+  serialNo: number;
+  result: string | null;
+  remark: string | null;
+  authorId: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
 
 
 export function cloneStorageSnapshot(snapshot: InspectionStorageSnapshot): InspectionStorageSnapshot {

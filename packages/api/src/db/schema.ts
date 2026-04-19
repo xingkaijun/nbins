@@ -16,7 +16,8 @@ import type {
   ShipRecord,
   UserRecord,
   NcrRecord,
-  NcrIndexRecord
+  NcrIndexRecord,
+  FatIndexRecord
 } from "../persistence/records.ts";
 
 
@@ -254,6 +255,22 @@ export const ncrIndexTable = sqliteTable<{
   updatedAt: textColumn<string>()
 });
 
+export const fatIndexTable = sqliteTable<{
+  [K in keyof FatIndexRecord]: ColumnDefinition<FatIndexRecord[K]>;
+}>("fat_index", {
+  id: textColumn<string>({ primaryKey: true }),
+  projectId: textColumn<string>({ references: "projects.id" }),
+  shipId: textColumn<string>({ references: "ships.id" }),
+  title: textColumn<string>(),
+  discipline: textColumn<string>(),
+  serialNo: integerColumn<number>({ default: 0 }),
+  result: textColumn<string | null>({ nullable: true }),
+  remark: textColumn<string | null>({ nullable: true }),
+  authorId: textColumn<string>({ references: "users.id" }),
+  createdAt: textColumn<string>(),
+  updatedAt: textColumn<string>()
+});
+
 export const schema = {
 
   users: usersTable,
@@ -265,6 +282,7 @@ export const schema = {
   comments: commentsTable,
   ncrs: ncrsTable,
   ncrIndex: ncrIndexTable,
+  fatIndex: fatIndexTable,
   observationTypes: observationTypesTable,
 
   observations: observationsTable

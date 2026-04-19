@@ -15,6 +15,7 @@ import { createMediaRoutes } from "./routes/media.ts";
 import { createNcrRoutes } from "./routes/ncrs.ts";
 import { createNcrFileRoutes } from "./routes/ncr-files.ts";
 import { createNcrPdfRoutes } from "./routes/ncr-pdf.ts";
+import { createFatRoutes } from "./routes/fats.ts";
 import { createSqlConsoleRoutes } from "./routes/sql-console.ts";
 
 
@@ -90,6 +91,10 @@ function createApp(): Hono<{ Bindings: Bindings }> {
         "/api/ncrs/:id/files",
         "/api/ncrs/:id/files/:fileId",
         "/api/ncrs/:id/pdf",
+        "/api/fats",
+        "/api/fats/ships/:shipId",
+        "/api/fats/:id",
+        "/api/fats/meta/next-serial",
         "/api/dev/inspection-item-submission",
         "/api/dev/inspection-item-submission/examples",
         "/api/dev/resolve-item-state",
@@ -122,6 +127,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
   app.route("/api/ncrs", createNcrRoutes());
   app.route("/api/ncrs", createNcrFileRoutes());
   app.route("/api/ncrs", createNcrPdfRoutes());
+  app.route("/api/fats", createFatRoutes());
   app.route("/api/sql", createSqlConsoleRoutes());
 
 

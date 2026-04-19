@@ -5,6 +5,7 @@ import type {
 } from "./inspection-detail";
 
 export * from "./ncr.ts";
+export * from "./fat.ts";
 
 export const DISCIPLINES = [
   "HULL",
