@@ -3,6 +3,7 @@ import { X, Loader2 } from "lucide-react";
 import { PG_LOGO_B64 } from "../utils/pg-logo-b64";
 import { compressImageToWebP } from "../utils/image-compression";
 import { uploadMedia } from "../api";
+import { DISCIPLINES } from "@nbins/shared";
 
 interface AttachmentPhoto {
   id: string;
@@ -21,6 +22,8 @@ interface NcrEditorProps {
   userDisciplines: string[];
   serialNo: number;
   formattedSerial: string;
+  projectOwner?: string | null;
+  projectShipyard?: string | null;
   onPublish: (data: { title: string; content: string; rectifyRequest?: string; remark: string; discipline: string; serialNo: number; imageAttachments: string[] }) => Promise<void>;
   onClose: () => void;
 }
@@ -35,6 +38,8 @@ export function NcrEditor({
   userDisciplines,
   serialNo,
   formattedSerial,
+  projectOwner,
+  projectShipyard,
   onPublish,
   onClose
 }: NcrEditorProps) {
@@ -138,58 +143,63 @@ export function NcrEditor({
       </div>
       <div style={modalScrollAreaStyle}>
         <div id="ncr-a4-editor-content" style={a4ContainerStyle} ref={containerRef}>
-          {/* Header Section */}
+          {/* Header Section - match PDF report format */}
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", borderBottom: "2px solid #0f172a", paddingBottom: 20, marginBottom: 25 }}>
-            <div>
-              <div style={{ fontSize: 9, fontWeight: 900, color: "#0d9488", textTransform: "uppercase", letterSpacing: "0.2em", marginBottom: 2 }}>
-                PG SHIPMANAGEMENT
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              <img src={PG_LOGO_B64} alt="PG Logo" style={{ height: 48, width: 48, objectFit: "contain" }} />
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>PG Newbuilding</div>
+                <div style={{ fontSize: 9, fontWeight: 400, color: "#94a3b8" }}>Technical Intelligence System</div>
               </div>
-              <h1 style={{ fontSize: 26, fontWeight: 900, color: "#0f172a", textTransform: "uppercase", letterSpacing: "-0.05em", margin: 0, lineHeight: 1 }}>
-                NON CONFORMITY REPORT
-              </h1>
             </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 8, fontWeight: 900, textTransform: "uppercase", color: "#94a3b8", marginBottom: 4, letterSpacing: "0.1em" }}>
-                  Report Reference
-                </div>
-                <div style={{ fontSize: 13, fontWeight: 900, color: "#b91c1c", letterSpacing: "0.05em" }}>{formattedSerial}</div>
-              </div>
-              <img src={PG_LOGO_B64} alt="PG Logo" style={{ height: 60, objectFit: "contain" }} />
+            <div style={{ textAlign: "right" }}>
+              <div style={{ fontSize: 22, fontWeight: 900, color: "#0f172a", textTransform: "uppercase", lineHeight: 1 }}>NON CONFORMITY REPORT</div>
+              <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 4 }}>REF: {formattedSerial}</div>
             </div>
           </div>
 
-          {/* Metadata Card Section */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 15, marginBottom: 25 }}>
-            <div style={reportStatCardStyle}>
-              <div style={cardHeaderStyle}>VESSEL & PROJECT</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <div style={cardLabelStyle}>PROJECT NAME</div>
-                  <div style={cardValueStyle}>{projectName || "-"}</div>
-                </div>
-                <div>
-                  <div style={cardLabelStyle}>HULL NUMBER</div>
-                  <div style={cardValueStyle}>{hullNumber || "-"}</div>
-                </div>
+          {/* Info Grid - match PDF report 3x2 grid with background */}
+          <div style={{
+            background: "#f8fafc",
+            borderRadius: 8,
+            border: "1px solid #e2e8f0",
+            padding: "14px 18px",
+            marginBottom: 25,
+            display: "grid",
+            gridTemplateColumns: "1fr 1fr 1fr",
+            gap: "16px 12px"
+          }}>
+            {[
+              { label: "PROJECT", value: projectName || "-" },
+              { label: "HULL NUMBER", value: hullNumber || "-" },
+              { label: "OWNER", value: projectOwner || "-" },
+              { label: "SHIPYARD", value: projectShipyard || "-" },
+              { label: "ISSUE DATE", value: dateStr },
+              { label: "DISCIPLINE", value: discipline }
+            ].map((item) => (
+              <div key={item.label}>
+                <div style={{ fontSize: 7, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 2 }}>{item.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 800, color: item.label === "DISCIPLINE" ? "#0d9488" : "#0f172a" }}>{item.value}</div>
               </div>
-            </div>
-            <div style={reportStatCardStyle}>
-              <div style={cardHeaderStyle}>REPORT METADATA</div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <div>
-                  <div style={cardLabelStyle}>ISSUE DATE</div>
-                  <div style={cardValueStyle}>{dateStr}</div>
-                </div>
-                <div>
-                  <div style={cardLabelStyle}>NCR STATUS</div>
-                  <div style={{ ...cardValueStyle, color: "#d97706" }}>PENDING APPROVAL</div>
-                </div>
-              </div>
-            </div>
+            ))}
           </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {/* Discipline - moved above Subject */}
+            <div style={formSectionStyle}>
+              <div style={sectionAccentTitleStyle}>DISCIPLINE</div>
+              <div style={inputContainerStyle}>
+                <select
+                  value={discipline}
+                  onChange={(e) => setDiscipline(e.target.value)}
+                  style={premiumSelectStyle}
+                  data-html2canvas-ignore="false"
+                >
+                  {(DISCIPLINES as readonly string[]).map((d) => <option key={d} value={d}>{d}</option>)}
+                </select>
+              </div>
+            </div>
+
             {/* Subject Area */}
             <div style={formSectionStyle}>
               <div style={sectionAccentTitleStyle}>REPORT SUBJECT</div>
@@ -203,42 +213,6 @@ export function NcrEditor({
                 />
                 <div style={{ ...premiumInputStyle, fontSize: 16, fontWeight: 800, display: "none", whiteSpace: "pre-wrap", wordBreak: "break-word" }} className="pdf-only-show">
                   {subject}
-                </div>
-              </div>
-            </div>
-
-            {/* Recipient & Discipline */}
-            <div style={{ display: "grid", gridTemplateColumns: "1.5fr 1fr", gap: 20 }}>
-              <div style={formSectionStyle}>
-                <div style={sectionAccentTitleStyle}>TO (RECIPIENT)</div>
-                <div style={inputContainerStyle}>
-                  <input
-                    data-html2canvas-ignore="true"
-                    style={premiumInputStyle}
-                    value={toRecipient}
-                    onChange={(e) => setToRecipient(e.target.value)}
-                    placeholder="Name of recipient or organization..."
-                  />
-                  <div style={{ ...premiumInputStyle, display: "none", whiteSpace: "pre-wrap", wordBreak: "break-word" }} className="pdf-only-show">
-                    {toRecipient}
-                  </div>
-                </div>
-              </div>
-              <div style={formSectionStyle}>
-                <div style={sectionAccentTitleStyle}>DISCIPLINE</div>
-                <div style={inputContainerStyle}>
-                  <select
-                    value={discipline}
-                    onChange={(e) => setDiscipline(e.target.value)}
-                    style={premiumSelectStyle}
-                    data-html2canvas-ignore="false"
-                  >
-                    {userDisciplines.length > 0 ? (
-                      userDisciplines.map((d) => <option key={d} value={d}>{d}</option>)
-                    ) : (
-                      <option value="HULL">HULL</option>
-                    )}
-                  </select>
                 </div>
               </div>
             </div>
@@ -331,7 +305,7 @@ export function NcrEditor({
           {/* Page Footer */}
           <div style={{ position: "absolute", bottom: "10mm", left: "15mm", right: "15mm", borderTop: "1px solid #f1f5f9", paddingTop: 12, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div style={{ fontSize: 7, fontWeight: 900, color: "#cbd5e1", textTransform: "uppercase", letterSpacing: "0.3em" }}>
-              PG SHIPMANAGEMENT • NCR FORM • INTERNAL USE ONLY
+              PG NEWBUILDING • NCR FORM • OFFICIAL DOCUMENT
             </div>
             <div style={{ fontSize: 8, fontWeight: 900, color: "#94a3b8", textTransform: "uppercase" }}>
               Page 1 of {hasAttachment && attachments.length > 0 ? Math.ceil(attachments.length / 6) + 1 : 1}

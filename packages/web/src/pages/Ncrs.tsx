@@ -415,6 +415,8 @@ export function Ncrs() {
           userDisciplines={session?.user.disciplines || []}
           serialNo={editorSerial.serial}
           formattedSerial={editorSerial.formatted}
+          projectOwner={selectedProject.owner ?? undefined}
+          projectShipyard={selectedProject.shipyard ?? undefined}
           onPublish={handlePublishNcr}
           onClose={() => setShowEditor(false)}
         />

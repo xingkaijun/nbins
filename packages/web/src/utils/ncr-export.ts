@@ -426,7 +426,7 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   doc.roundedRect(margin, y, usableWidth, sigHeight, 3, 3, "S");
   doc.line(margin + usableWidth / 2, y, margin + usableWidth / 2, y + sigHeight);
 
-  const drawSig = (x: number, title: string, name: string, personTitle: string, detail: string) => {
+  const drawSig = (x: number, title: string, name: string, personTitle: string, dateLabel: string, dateValue: string) => {
     const columnWidth = usableWidth / 2 - 8;
 
     doc.setFont("helvetica", "bold");
@@ -462,33 +462,37 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
       align: "left"
     });
 
+    // Date row instead of signature line
     doc.setDrawColor(...COLORS.border);
-    doc.line(x + 4, y + 22, x + usableWidth / 2 - 4, y + 22);
+    doc.line(x + 4, y + 21, x + usableWidth / 2 - 4, y + 21);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(6);
+    doc.setFontSize(7);
     doc.setTextColor(...COLORS.muted);
-    doc.text(detail.toUpperCase(), x + 4, y + 26);
+    doc.text(`${dateLabel}: ${dateValue}`, x + 4, y + 25);
   };
 
   const inspectorTitle = normalizeText(ncr.authorTitle, "Inspector");
+  const preparedDate = ncr.createdAt ? new Date(ncr.createdAt).toLocaleDateString() : "-";
   const approvedName = normalizeText(ncr.approvedByName, normalizeText(ncr.approvedBy, "Manager"));
   const managerTitle = normalizeText(ncr.approvedByTitle, "Manager");
-  const approvedDate = ncr.approvedAt ? new Date(ncr.approvedAt).toLocaleDateString() : "DATE TBD";
+  const approvedDate = ncr.approvedAt ? new Date(ncr.approvedAt).toLocaleDateString() : "-";
 
   drawSig(
     margin,
     "Prepared By (Inspector)",
     normalizeText(ncr.authorName, ncr.authorId),
     inspectorTitle,
-    "Handwritten Signature"
+    "Date",
+    preparedDate
   );
   drawSig(
     margin + usableWidth / 2,
     "Approved By (Manager)",
     approvedName,
     managerTitle,
-    `Authorized Signature & Date (${approvedDate})`
+    "Date",
+    approvedDate
   );
 
 
@@ -557,7 +561,7 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
         // Footer
         doc.setFontSize(7);
         doc.setTextColor(...COLORS.muted);
-        doc.text(`PG SHIPMANAGEMENT • ATTACHMENT • ${hullDisplayName}`, margin, pageHeight - 10);
+        doc.text(`PG NEWBUILDING • ATTACHMENT • ${hullDisplayName}`, margin, pageHeight - 10);
         doc.text(`Page ${p + 2}`, pageWidth - margin, pageHeight - 10, { align: "right" });
       }
     }
