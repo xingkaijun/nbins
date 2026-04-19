@@ -344,7 +344,7 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   gridItems.forEach((item, i) => {
     const col = i % colCount;
     const row = Math.floor(i / colCount);
-    const itemX = margin + col * (colWidth + colGap);
+    const itemX = margin + 5 + col * (colWidth + colGap);
     const itemY = y + (row * 12);
 
     doc.setFont("helvetica", "normal");
@@ -499,7 +499,7 @@ export async function exportNcrToPdf(ncr: NcrItemResponse) {
   // Footer (Page 1)
   doc.setFontSize(7);
   doc.setTextColor(...COLORS.muted);
-  doc.text("PG SHIPMANAGEMENT • NCR FORM • OFFICIAL DOCUMENT", margin, pageHeight - 10);
+  doc.text("PG NEWBUILDING • NCR FORM • OFFICIAL DOCUMENT", margin, pageHeight - 10);
   doc.text("Page 1", pageWidth - margin, pageHeight - 10, { align: "right" });
 
   // --- 后续页: 附件照片 ---
