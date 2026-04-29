@@ -1,13 +1,42 @@
 import React, { useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { ApiError, login } from '../api';
+import { ApiError, login, changePasswordPublic } from '../api';
 import { useAuth } from '../auth-context';
 import { PG_LOGO_B64 } from '../utils/pg-logo-b64';
 
+type PageMode = 'login' | 'change-password';
+
+const inputStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '12px 16px',
+  borderRadius: '8px',
+  border: '1px solid var(--nb-border)',
+  fontSize: '14px',
+  fontWeight: 600,
+  color: 'var(--nb-text)',
+  backgroundColor: '#f8fafc',
+  boxSizing: 'border-box',
+  outline: 'none',
+  transition: 'border-color 0.2s ease'
+};
+
+const labelStyle: React.CSSProperties = {
+  display: 'block',
+  fontSize: '11px',
+  fontWeight: 800,
+  color: 'var(--nb-text-muted)',
+  marginBottom: '6px'
+};
+
 export function Login() {
+  const [mode, setMode] = useState<PageMode>('login');
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [error, setError] = useState('');
+  const [success, setSuccess] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -51,6 +80,71 @@ export function Login() {
     }
   };
 
+  const handleChangePassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setSuccess('');
+
+    if (!username.trim()) {
+      setError('Username is required.');
+      return;
+    }
+
+    if (!oldPassword) {
+      setError('Current password is required.');
+      return;
+    }
+
+    if (newPassword.length < 4) {
+      setError('New password must be at least 4 characters.');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError('Passwords do not match.');
+      return;
+    }
+
+    if (oldPassword === newPassword) {
+      setError('New password must be different from current password.');
+      return;
+    }
+
+    setIsSubmitting(true);
+
+    try {
+      await changePasswordPublic(username, oldPassword, newPassword);
+      setSuccess('Password changed successfully! Redirecting to login...');
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setTimeout(() => {
+        setMode('login');
+        setSuccess('');
+        setPassword('');
+      }, 1500);
+    } catch (err) {
+      if (err instanceof ApiError) {
+        setError(err.message);
+      } else {
+        setError('Failed to change password. Please try again.');
+      }
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const switchMode = (newMode: PageMode) => {
+    setMode(newMode);
+    setError('');
+    setSuccess('');
+  };
+
+  const focusHandler = (e: React.FocusEvent<HTMLInputElement>) =>
+    e.target.style.borderColor = 'var(--nb-primary)';
+  const blurHandler = (e: React.FocusEvent<HTMLInputElement>) =>
+    e.target.style.borderColor = 'var(--nb-border)';
+
   return (
     <div style={{
       width: '100vw',
@@ -90,74 +184,46 @@ export function Login() {
           NEW BUILDING INSPECTION
         </h1>
         <p style={{ margin: '0 0 32px 0', fontSize: '13px', fontWeight: 600, color: 'var(--nb-primary)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
-          Secure Authentication
+          {mode === 'login' ? 'Secure Authentication' : 'Change Password'}
         </p>
 
-        <form onSubmit={handleLogin} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--nb-text-muted)', marginBottom: '6px' }}>USERNAME / ID</label>
-            <input 
-              type="text" 
-              value={username}
-              onChange={(e) => {
-                setUsername(e.target.value);
-                if (error) {
-                  setError('');
-                }
-              }}
-              placeholder="Enter your inspector ID"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                border: '1px solid var(--nb-border)',
-                fontSize: '14px',
-                fontWeight: 600,
-                color: 'var(--nb-text)',
-                backgroundColor: '#f8fafc',
-                boxSizing: 'border-box',
-                outline: 'none',
-                transition: 'border-color 0.2s ease'
-              }}
-              onFocus={(e) => e.target.style.borderColor = 'var(--nb-primary)'}
-              onBlur={(e) => e.target.style.borderColor = 'var(--nb-border)'}
-              required
-            />
-          </div>
-          <div>
-            <label style={{ display: 'block', fontSize: '11px', fontWeight: 800, color: 'var(--nb-text-muted)', marginBottom: '6px' }}>PASSWORD</label>
-            <input 
-              type="password" 
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (error) {
-                  setError('');
-                }
-              }}
-              placeholder="Enter your security phrase"
-              style={{
-                width: '100%',
-                padding: '12px 16px',
-                borderRadius: '8px',
-                border: '1px solid var(--nb-border)',
-                fontSize: '14px',
-                fontWeight: 600,
-                color: 'var(--nb-text)',
-                backgroundColor: '#f8fafc',
-                boxSizing: 'border-box',
-                outline: 'none',
-                transition: 'border-color 0.2s ease'
-              }}
-              onFocus={(e) => e.target.style.borderColor = 'var(--nb-primary)'}
-              onBlur={(e) => e.target.style.borderColor = 'var(--nb-border)'}
-              required
-            />
-          </div>
+        {mode === 'login' ? (
+          <form onSubmit={handleLogin} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <label style={labelStyle}>USERNAME / ID</label>
+              <input 
+                type="text" 
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="Enter your inspector ID"
+                style={inputStyle}
+                onFocus={focusHandler}
+                onBlur={blurHandler}
+                required
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>PASSWORD</label>
+              <input 
+                type="password" 
+                value={password}
+                onChange={(e) => {
+                  setPassword(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="Enter your security phrase"
+                style={inputStyle}
+                onFocus={focusHandler}
+                onBlur={blurHandler}
+                required
+              />
+            </div>
 
-          {error ? (
-            <div
-              style={{
+            {error ? (
+              <div style={{
                 padding: '10px 12px',
                 borderRadius: '8px',
                 border: '1px solid #fecaca',
@@ -165,15 +231,13 @@ export function Login() {
                 color: '#b91c1c',
                 fontSize: '12px',
                 fontWeight: 700
-              }}
-            >
-              {error}
-            </div>
-          ) : null}
+              }}>
+                {error}
+              </div>
+            ) : null}
 
-          {!error && loginNotice ? (
-            <div
-              style={{
+            {!error && loginNotice ? (
+              <div style={{
                 padding: '10px 12px',
                 borderRadius: '8px',
                 border: '1px solid #fcd34d',
@@ -181,42 +245,221 @@ export function Login() {
                 color: '#92400e',
                 fontSize: '12px',
                 fontWeight: 700
+              }}>
+                {loginNotice}
+              </div>
+            ) : null}
+            
+            <button 
+              type="submit"
+              disabled={isSubmitting}
+              style={{
+                marginTop: '12px',
+                width: '100%',
+                padding: '14px',
+                backgroundColor: 'var(--nb-text)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                transition: 'background-color 0.2s ease',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                opacity: isSubmitting ? 0.7 : 1,
+                cursor: isSubmitting ? 'wait' : 'pointer'
+              }}
+              onMouseOver={(e) => {
+                if (!isSubmitting) {
+                  e.currentTarget.style.backgroundColor = 'var(--nb-primary)';
+                }
+              }}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--nb-text)'}
+            >
+              {isSubmitting ? 'Authenticating...' : 'Authenticate & Proceed'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => switchMode('change-password')}
+              style={{
+                width: '100%',
+                padding: '10px',
+                backgroundColor: 'transparent',
+                color: 'var(--nb-primary)',
+                border: '1px solid var(--nb-border)',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.borderColor = 'var(--nb-primary)';
+                e.currentTarget.style.backgroundColor = 'rgba(59, 130, 246, 0.04)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.borderColor = 'var(--nb-border)';
+                e.currentTarget.style.backgroundColor = 'transparent';
               }}
             >
-              {loginNotice}
+              Change Password
+            </button>
+          </form>
+        ) : (
+          <form onSubmit={handleChangePassword} style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+            <div>
+              <label style={labelStyle}>USERNAME / ID</label>
+              <input 
+                type="text" 
+                value={username}
+                onChange={(e) => {
+                  setUsername(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="Enter your inspector ID"
+                style={inputStyle}
+                onFocus={focusHandler}
+                onBlur={blurHandler}
+                required
+              />
             </div>
-          ) : null}
-          
-          <button 
-            type="submit"
-            disabled={isSubmitting}
-            style={{
-              marginTop: '12px',
-              width: '100%',
-              padding: '14px',
-              backgroundColor: 'var(--nb-text)',
-              color: '#fff',
-              border: 'none',
-              borderRadius: '8px',
-              fontSize: '13px',
-              fontWeight: 800,
-              textTransform: 'uppercase',
-              letterSpacing: '0.05em',
-              transition: 'background-color 0.2s ease',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
-              opacity: isSubmitting ? 0.7 : 1,
-              cursor: isSubmitting ? 'wait' : 'pointer'
-            }}
-            onMouseOver={(e) => {
-              if (!isSubmitting) {
-                e.currentTarget.style.backgroundColor = 'var(--nb-primary)';
-              }
-            }}
-            onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--nb-text)'}
-          >
-            {isSubmitting ? 'Authenticating...' : 'Authenticate & Proceed'}
-          </button>
-        </form>
+            <div>
+              <label style={labelStyle}>CURRENT PASSWORD</label>
+              <input 
+                type="password" 
+                value={oldPassword}
+                onChange={(e) => {
+                  setOldPassword(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="Enter your current password"
+                style={inputStyle}
+                onFocus={focusHandler}
+                onBlur={blurHandler}
+                required
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>NEW PASSWORD</label>
+              <input 
+                type="password" 
+                value={newPassword}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="Enter new password (min 4 chars)"
+                style={inputStyle}
+                onFocus={focusHandler}
+                onBlur={blurHandler}
+                required
+              />
+            </div>
+            <div>
+              <label style={labelStyle}>CONFIRM NEW PASSWORD</label>
+              <input 
+                type="password" 
+                value={confirmPassword}
+                onChange={(e) => {
+                  setConfirmPassword(e.target.value);
+                  if (error) setError('');
+                }}
+                placeholder="Confirm new password"
+                style={inputStyle}
+                onFocus={focusHandler}
+                onBlur={blurHandler}
+                required
+              />
+            </div>
+
+            {error ? (
+              <div style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #fecaca',
+                backgroundColor: '#fef2f2',
+                color: '#b91c1c',
+                fontSize: '12px',
+                fontWeight: 700
+              }}>
+                {error}
+              </div>
+            ) : null}
+
+            {success ? (
+              <div style={{
+                padding: '10px 12px',
+                borderRadius: '8px',
+                border: '1px solid #86efac',
+                backgroundColor: '#f0fdf4',
+                color: '#166534',
+                fontSize: '12px',
+                fontWeight: 700
+              }}>
+                {success}
+              </div>
+            ) : null}
+
+            <button 
+              type="submit"
+              disabled={isSubmitting || !!success}
+              style={{
+                marginTop: '12px',
+                width: '100%',
+                padding: '14px',
+                backgroundColor: 'var(--nb-text)',
+                color: '#fff',
+                border: 'none',
+                borderRadius: '8px',
+                fontSize: '13px',
+                fontWeight: 800,
+                textTransform: 'uppercase',
+                letterSpacing: '0.05em',
+                transition: 'background-color 0.2s ease',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                opacity: (isSubmitting || !!success) ? 0.7 : 1,
+                cursor: (isSubmitting || !!success) ? 'wait' : 'pointer'
+              }}
+              onMouseOver={(e) => {
+                if (!isSubmitting && !success) {
+                  e.currentTarget.style.backgroundColor = 'var(--nb-primary)';
+                }
+              }}
+              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'var(--nb-text)'}
+            >
+              {isSubmitting ? 'Updating...' : 'Update Password'}
+            </button>
+
+            <button
+              type="button"
+              onClick={() => switchMode('login')}
+              style={{
+                width: '100%',
+                padding: '10px',
+                backgroundColor: 'transparent',
+                color: '#64748b',
+                border: '1px solid var(--nb-border)',
+                borderRadius: '8px',
+                fontSize: '12px',
+                fontWeight: 700,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+              onMouseOver={(e) => {
+                e.currentTarget.style.borderColor = '#94a3b8';
+                e.currentTarget.style.backgroundColor = 'rgba(0, 0, 0, 0.02)';
+              }}
+              onMouseOut={(e) => {
+                e.currentTarget.style.borderColor = 'var(--nb-border)';
+                e.currentTarget.style.backgroundColor = 'transparent';
+              }}
+            >
+              ← Back to Login
+            </button>
+          </form>
+        )}
 
         <p style={{ marginTop: '32px', fontSize: '11px', fontWeight: 600, color: '#94a3b8', textAlign: 'center' }}>
           Authorized classification society personnel only.<br/>

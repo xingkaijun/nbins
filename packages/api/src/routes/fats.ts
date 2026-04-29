@@ -207,6 +207,7 @@ export function createFatRoutes(): Hono<FatRouteEnv> {
         comments: nextComments,
         remark: nextComments.length > 0 ? nextComments.map((c) => c.content).join("; ") : null,
         maker: body.maker !== undefined ? (body.maker?.trim() || null) : loaded.record.maker,
+        inspectionDate: body.inspectionDate !== undefined ? (body.inspectionDate?.trim() || null) : loaded.record.inspectionDate,
         imageAttachments: body.imageAttachments !== undefined
           ? body.imageAttachments.filter((entry): entry is string => typeof entry === "string" && entry.length > 0)
           : loaded.record.imageAttachments,

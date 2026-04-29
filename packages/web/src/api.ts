@@ -279,6 +279,21 @@ export async function login(username: string, password: string): Promise<LoginRe
   });
 }
 
+export async function changePasswordPublic(
+  username: string,
+  oldPassword: string,
+  newPassword: string
+): Promise<{ message: string }> {
+  return requestJson<{ message: string }>("/auth/change-password", {
+    method: "POST",
+    body: JSON.stringify({
+      username: username.trim(),
+      oldPassword,
+      newPassword
+    })
+  });
+}
+
 export function clearStoredAuth(): void {
   clearAuthSession();
 }

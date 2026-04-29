@@ -850,7 +850,7 @@ export function Fats() {
 }
 
 function AddCommentInput({ value, onChange, disabled }: { value: string; onChange: (text: string) => void; disabled: boolean }) {
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const autoResize = (el: HTMLTextAreaElement | null) => {
     if (!el) return;

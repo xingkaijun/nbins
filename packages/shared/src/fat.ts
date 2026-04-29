@@ -2,6 +2,7 @@ export interface FatComment {
   id: string;
   content: string;
   status: "open" | "closed";
+  authorName?: string;
   closedBy?: string;
   closedAt?: string;
   createdAt: string;
@@ -42,6 +43,7 @@ export interface CreateFatRequest {
   result?: string;
   comments?: FatComment[];
   maker?: string;
+  inspectionDate?: string;
   imageAttachments?: string[];
 }
 
