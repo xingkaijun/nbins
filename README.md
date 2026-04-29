@@ -1,116 +1,76 @@
-# NBINS - 新造船检验管理系统
+# NBINS — 新造船检验管理系统
 
-> **NBINS** (New Building Inspection System)
-
-NBINS 是一个面向船舶检验机构的多人协作新造船检验管理平台，用来管理报验（inspection requests）、检验结果、整改意见和轮次历史。
-
-## 当前状态
-
-NBINS 当前处于 **可演示的 MVP baseline** 阶段：核心检验明细读取、结果提交、领域规则和 mock-backed API 流程已经落地；真实 D1 持久化、权限体系、导入/PDF/n8n 仍在后续阶段。
-
-- `✅ Complete`: monorepo 基础、共享类型契约、inspection detail API、结果提交流程、核心领域规则、基础测试
-- `🟡 Partial`: persistence 抽象与 repository、D1 foundation、前端工作台与 API 集成深度、backend auth / RBAC（最小登录骨架已落地）
-- `❌ Not started`: 完整 JWT / session auth、import pipeline、正式 PDF、n8n automation
-
-更细的模块状态见：[项目状态看板](./docs/status-board.md)
-- 本轮 auth 增量说明见：[M15 Auth Login Increment](./docs/m15-auth-login.md)
-
-当前仓库已经不只是“架构草图”——它已经具备一套可演示的 MVP 主线：
-
-- 前后端共享类型契约
-- 检验结果状态机与提交语义
-- 详情页 / comments / round history / 提交表单
-- Hono API 路由与乐观锁校验
-- 可运行的 mock persistence 与基础测试
+> **New Building Inspection System** · 基于 Cloudflare Workers + D1 + R2 构建的船舶新造检验协作平台
 
 ---
 
-## 当前 MVP 已实现什么
+## 功能概览
 
-### 后端
-
-- `GET /api/inspections/:id`
-- `PUT /api/inspections/:id/rounds/current/result`
-- repository / service / persistence 分层
-- in-memory mock database（用于本地演示）
-- optimistic locking（`expectedVersion`）
-- 领域规则测试与路由测试
-
-### 前端
-
-- 今日检验项目列表
-- 检验项详情侧栏
-- round history 展示
-- comments 清单展示
-- 结果提交表单与提交后本地状态刷新
-- 提交前 preview（next workflow / open comments / final acceptance）
-
-### 共享契约
-
-- 检验结果枚举：`CX / AA / QCC / OWC / RJ`
-- 工作流状态：`pending / open / closed / cancelled`
-- comment 状态：`open / closed`
-- inspection detail / submit request / submit response 类型
+| 模块 | 说明 |
+| :--- | :--- |
+| **检验管理** | 报验项目管理、多轮检验工作流（AA / QCC / OWC / RJ / CX）、意见追踪与关闭 |
+| **NCR 管理** | 不符合项报告（NCR）全生命周期：创建、审批、整改、关闭，含图片附件与 PDF 导出 |
+| **FAT 管理** | 工厂验收测试记录，支持意见追踪与多图上传 |
+| **巡检意见** | 巡检/试航意见记录，支持高亮标记与 Excel 导出 |
+| **项目 & 船舶** | 多项目多船管理，里程碑节点追踪（钢板切割 / 安放龙骨 / 下水 / 试航 / 交船） |
+| **用户管理** | 基于角色的权限控制（Admin / Manager / Reviewer / Inspector），多专业方向授权 |
+| **检验报告** | 基于 jsPDF + html2canvas 生成高保真 PDF 报告 |
+| **SQL 控制台** | 内置受密码保护的远程 SQL 查询界面（仅限调试） |
 
 ---
 
-## 关键业务规则
+## 技术栈
 
-NBINS 当前最核心的价值，不是 UI，而是把检验业务规则真正编码进系统。
+### 后端 (`packages/api`)
 
-### 检验结果语义
+- **运行时**：Cloudflare Workers（基于 [Hono](https://hono.dev/) 框架）
+- **数据库**：Cloudflare D1（SQLite）
+- **对象存储**：Cloudflare R2（NCR 数据 JSON + 图片附件）
+- **认证**：JWT（`jose` 库），PBKDF2-SHA256 密码哈希（90,000 次迭代）
 
-- `AA`（接受）
-  - **不能新增 comments**
-  - 如果历史仍有开放 comments，则 item 仍保持 `workflowStatus = open`
-  - 此时 `resolvedResult = null`，表示“最终接受待定”
-  - 只有所有 comments 关闭后，才会真正转为 `AA + closed`
+### 前端 (`packages/web`)
 
-- `QCC`（带意见接受）
-  - 允许新增 comments
-  - 不触发新的 round
-  - comments 全部关闭后，可自动归并为最终 `AA`
+- **框架**：React 18 + React Router v7
+- **构建**：Vite 5
+- **图表**：Recharts
+- **PDF**：jsPDF + html2canvas
+- **Excel**：ExcelJS
 
-- `OWC`（复检） / `RJ`（拒绝）
-  - 允许新增 comments
-  - 保持 `workflowStatus = open`
-  - `waitingForNextRound = true`
-  - 语义上等待船厂重新报验
+### 共享类型 (`packages/shared`)
 
-- `CX`（取消）
-  - 直接转为 `workflowStatus = cancelled`
-  - 不新增 comments
+前后端共享 TypeScript 类型定义、常量与业务枚举。
 
 ---
 
 ## 仓库结构
 
 ```text
-├── package.json
-├── pnpm-workspace.yaml
-├── tsconfig.base.json
+nbins/
 ├── packages/
-│   ├── shared/    # 前后端共享类型、常量、mock helpers
-│   ├── api/       # Hono API（Cloudflare Workers-compatible）
-│   └── web/       # Vite + React 检验工作台
-├── n8n/           # 预留：n8n workflow 定义与备份
-└── docs/          # 架构、前端、n8n、MVP 说明等文档
+│   ├── api/           # Hono API (Cloudflare Workers)
+│   │   └── src/
+│   │       ├── auth/          # JWT 签发 & 密码哈希
+│   │       ├── db/            # D1 Schema & bootstrap SQL
+│   │       ├── domain/        # 检验状态机领域规则
+│   │       ├── persistence/   # R2 存储操作
+│   │       ├── repositories/  # D1 数据仓库
+│   │       ├── routes/        # Hono 路由（auth, users, projects, ships, inspections, ncrs, fats…）
+│   │       └── services/      # 业务服务层
+│   ├── shared/        # 前后端共享类型与常量
+│   └── web/           # React 前端
+│       └── src/
+│           ├── pages/         # 各功能页面
+│           ├── components/    # 通用组件
+│           └── utils/         # PDF / Excel 导出工具
+├── docs/              # 补充文档
+├── n8n/               # n8n 工作流备份
+├── DEPLOY.md          # 部署操作手册
+└── pnpm-workspace.yaml
 ```
-
-当前关键代码：
-
-- `packages/shared/src/index.ts`
-- `packages/shared/src/inspection-detail.ts`
-- `packages/api/src/routes/inspections.ts`
-- `packages/api/src/services/inspection-service.ts`
-- `packages/api/src/repositories/inspection-repository.ts`
-- `packages/api/src/domain/inspection-item-state.ts`
-- `packages/api/src/domain/inspection-item-submission.ts`
-- `packages/web/src/App.tsx`
 
 ---
 
-## 快速启动
+## 快速启动（本地开发）
 
 ### 1. 安装依赖
 
@@ -118,173 +78,97 @@ NBINS 当前最核心的价值，不是 UI，而是把检验业务规则真正�
 pnpm install
 ```
 
-### 2. 启动前端
+### 2. 初始化本地 D1 数据库（首次运行）
 
 ```bash
-pnpm dev:web
+pnpm d1:bootstrap
 ```
 
-### 3. 启动 API (搭载 D1 真实数据库)
+会自动执行建表 SQL 并写入种子数据（2个项目、4条船、若干默认用户）。
+
+### 3. 启动 API
 
 ```bash
 pnpm dev:api:d1
 ```
 
+API 运行于 `http://127.0.0.1:8787`
+
+### 4. 启动前端
+
+```bash
+pnpm dev:web
+```
+
+前端运行于 `http://127.0.0.1:5173`
+
 ---
 
-## 账号与环境管理
+## 默认账号
 
-### 1. 默认登录账号矩阵
-系统已预置了一套完整的测试套件，**所有账号的初始密码均为 `1234`**：
+所有账号的初始密码均为 `1234`：
 
-| 角色 (Role) | 账号 (Username) | 备注 |
+| 角色 | 账号 | 权限说明 |
 | :--- | :--- | :--- |
-| **超级管理员** | `admin1`, `admin2` | 拥有全系统所有项目、船舶及人员管理权限 |
-| **项目经理** | `manager1`, `manager2` | 仅能查看其所属项目（1号或2号项目）的进度 |
-| **审图专员** | `reviewer1`, `reviewer2` | 归属于对应项目的工作流审核角色 |
-| **现场检验员** | `inspector1`, `inspector2` | 归属于对应项目，具备 `HULL` 和 `PAINT` 专业权限 |
+| **超级管理员** | `admin1`, `admin2` | 全系统管理权限 |
+| **项目经理** | `manager1`, `manager2` | 所属项目的查看与管理 |
+| **审图专员** | `reviewer1`, `reviewer2` | 所属项目的审核角色 |
+| **现场检验员** | `inspector1`, `inspector2` | 所属项目，HULL & PAINT 专业 |
 
-### 2. 怎么清理/重置数据库？
-如果你需要将库重置为上述初始状态，请运行以下连招：
-```bash
-# 停止 API 后运行
-pnpm d1:bootstrap
-```
-这会触发 `seed.ts` 中的逻辑，自动将数据库物理重置为上述 2个项目、4条船及对应人员的初始状态。
+> 用户可在**登录页**自行修改密码，无需管理员介入。
 
-### 3. 持久化说明
-> **注意：系统已经全面拥抱真实的本地 SQLite (D1) 数据库。**数据物理保存在 `packages/api/.wrangler/state` 中。你在前端填写的任何表单都会被真实持久化。
+---
 
-### 4. 类型检查 / 构建
+## 检验结果业务规则
 
-```bash
-pnpm typecheck
-pnpm build
-```
+| 结果 | 含义 | 后续行为 |
+| :--- | :--- | :--- |
+| `AA` | 接受 | 不允许新增意见；所有意见关闭后才最终 `closed` |
+| `QCC` | 带意见接受（质检复核） | 允许新增意见；不触发新一轮检验 |
+| `OWC` | 复检 | 允许新增意见；等待下一轮报验 |
+| `RJ` | 拒绝 | 同 OWC，等待整改后重新报验 |
+| `CX` | 取消 | 直接转为 `cancelled` |
 
-### 5. 跑 API 测试
+---
+
+## 常用命令
 
 ```bash
+# 开发
+pnpm dev:web           # 启动前端
+pnpm dev:api:d1        # 启动 API（本地 D1 模式）
+
+# 构建 & 检查
+pnpm build             # 构建全部包
+pnpm typecheck         # 全量类型检查
+
+# 测试
 pnpm --filter @nbins/api test
+
+# 部署
+pnpm deploy:api        # 部署 API 到 Cloudflare Workers
+pnpm deploy:web        # 构建前端并部署到 Cloudflare Pages
+pnpm deploy:all        # 一键部署 API + 前端
+
+# 数据库（远程）
+npx wrangler d1 execute nbins-prod --remote --file=packages/api/src/db/d1-bootstrap.sql
 ```
 
 ---
 
-## 演示方式
+## 部署
 
-当前最适合做的是 **本地 MVP 演示**。
+详细部署说明请参阅 [DEPLOY.md](./DEPLOY.md)。
 
-### 前端演示重点
+### 关键配置（`packages/api/wrangler.jsonc`）
 
-建议在页面中依次演示：
+- `d1_databases[0].database_id`：Cloudflare D1 数据库 ID
+- `r2_buckets[0].bucket_name`：R2 存储桶名称（默认 `nbins-assets`）
+- `vars.SQL_CONSOLE_SECRET`：SQL 控制台访问密码
 
-1. 左侧 inspection list
-2. 右侧 inspection detail
-3. round history
-4. comments 列表
-5. result submission form
-
-### 推荐演示场景
-
-- 对已有开放意见的项目选择 `AA`
-  - 演示：不能新增 comments
-  - 演示：若历史 comments 未关闭，则不会真正 closed
-
-- 对待处理项目提交 `QCC`
-  - 演示：可新增 comments
-  - 演示：不进入新 round
-
-- 提交 `OWC` / `RJ`
-  - 演示：等待下一 round
-
-- 提交 `CX`
-  - 演示：直接 cancelled
-
-更多详细步骤见：
-
-- [docs/mvp-status.md](./docs/mvp-status.md)
-
----
-
-## API 示例
-
-### 获取详情
+### 生产环境必须设置的 Secrets
 
 ```bash
-curl http://127.0.0.1:8787/api/inspections/insp-002
+npx wrangler secret put JWT_SECRET     # JWT 签名密钥（生产环境必须）
+npx wrangler secret put APP_ENV        # 设置为 production
 ```
-
-### 提交带意见接受（QCC）
-
-```bash
-curl -X PUT http://127.0.0.1:8787/api/inspections/insp-001/rounds/current/result \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "result": "QCC",
-    "actualDate": "2026-04-03",
-    "submittedBy": "Inspector Demo",
-    "inspectorDisplayName": "Inspector Demo",
-    "expectedVersion": 1,
-    "comments": [
-      { "message": "Touch-up coating at nozzle edge" },
-      { "message": "Attach holiday test report" }
-    ]
-  }'
-```
-
-### 演示 `AA` 禁止新增 comments
-
-```bash
-curl -X PUT http://127.0.0.1:8787/api/inspections/insp-001/rounds/current/result \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "result": "AA",
-    "actualDate": "2026-04-03",
-    "submittedBy": "Inspector Demo",
-    "expectedVersion": 1,
-    "comments": [
-      { "message": "This should be rejected" }
-    ]
-  }'
-```
-
----
-
-## 当前限制
-
-当前仓库仍处于 MVP 早期，以下能力还没有接入：
-
-- 真实 Cloudflare D1 / Drizzle persistence
-- 前端直连真实 API
-- 用户认证 / RBAC
-- comment close / resolve 的完整交互闭环
-- PDF 正式报告生成
-- n8n 自动导入 / 自动发报告
-
-所以这版仓库的定位应明确为：
-
-> **可运行、可演示、可继续迭代的 MVP 基线**
-
-而不是生产环境就绪版本。
-
----
-
-## 文档导航
-
-- [架构设计规划](./docs/architecture.md)
-- [MVP 当前状态与演示说明](./docs/mvp-status.md)
-- [前端页面规划](./docs/frontend-plan.md)
-- [前端风格对齐方案](./docs/frontend-style-alignment.md)
-- [n8n 工作流设计](./docs/n8n-plan.md)
-
----
-
-## 下一步建议
-
-优先级建议如下：
-
-1. mock persistence → Cloudflare D1 / Drizzle
-2. 前端详情页接真实 API
-3. comment close / resolve 接口与前端闭环
-4. 用户认证与项目级权限控制
-5. 导入链路与正式 PDF 报告
