@@ -1,4 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
+import { FileSpreadsheet, Trash2 } from "lucide-react";
 import type { NcrItemResponse } from "@nbins/shared";
 import { DISCIPLINES } from "@nbins/shared";
 import {
@@ -338,6 +340,54 @@ export function Ncrs() {
     }
   }
 
+  function handleGenerateList(): void {
+    const headers = [
+      "Serial",
+      "Title",
+      "Status",
+      "Open/Closed",
+      "Ship",
+      "Hull",
+      "Discipline",
+      "Raised By",
+      "Created At",
+      "Published By",
+      "Published At",
+      "Images",
+      "Files",
+      "Remark"
+    ];
+    const rows = items.map((item) => [
+      item.formattedSerial || `#${item.serialNo}`,
+      item.title,
+      item.status.replace(/_/g, " "),
+      item.status === "approved" ? (item.closedAt ? "Closed" : "Open") : "-",
+      item.shipName || item.shipId,
+      item.hullNumber || "",
+      item.discipline,
+      item.authorName ?? item.authorId,
+      new Date(item.createdAt).toLocaleString(),
+      item.approvedByName ?? item.approvedBy ?? "",
+      item.approvedAt ? new Date(item.approvedAt).toLocaleString() : "",
+      String(item.imageAttachments.length),
+      String(item.relatedFiles.length),
+      item.remark || ""
+    ]);
+
+    const escapeCell = (value: string) => `"${value.replace(/"/g, '""')}"`;
+    const csv = [headers, ...rows].map((row) => row.map(escapeCell).join(",")).join("\r\n");
+    const blob = new Blob([`\uFEFF${csv}`], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    const date = new Date().toISOString().slice(0, 10);
+    anchor.href = url;
+    anchor.download = `ncr-list-${date}.csv`;
+    document.body.appendChild(anchor);
+    anchor.click();
+    anchor.remove();
+    URL.revokeObjectURL(url);
+  }
+
 
   return (
     <>
@@ -351,14 +401,27 @@ export function Ncrs() {
             NCR MANAGEMENT · {selectedProject ? `${selectedProject.name} (${selectedProject.code})` : "NO PROJECT SELECTED"}
           </p>
         </div>
-        <button
-          className="nb-btn nb-btn-primary"
-          onClick={() => void handleOpenEditor()}
-          style={btnStyle("primary")}
-          disabled={!selectedShipId}
-        >
-          {showEditor ? "Close Editor" : "+ Create NCR"}
-        </button>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+          <button
+            type="button"
+            style={btnStyle("secondary")}
+            onClick={handleGenerateList}
+            disabled={items.length === 0}
+          >
+            <span style={iconButtonContentStyle}>
+              <FileSpreadsheet size={15} />
+              Generate List
+            </span>
+          </button>
+          <button
+            className="nb-btn nb-btn-primary"
+            onClick={() => void handleOpenEditor()}
+            style={btnStyle("primary")}
+            disabled={!selectedShipId}
+          >
+            {showEditor ? "Close Editor" : "+ Create NCR"}
+          </button>
+        </div>
       </div>
 
       <div style={filterBarStyle}>
@@ -405,7 +468,7 @@ export function Ncrs() {
         </label>
       </div>
 
-      {showEditor && editorSerial && selectedProject && (
+      {showEditor && editorSerial && selectedProject && typeof document !== "undefined" ? createPortal(
         <NcrEditor
           projectCode={selectedProject.code}
           projectName={selectedProject.name}
@@ -420,8 +483,9 @@ export function Ncrs() {
           projectShipyard={selectedProject.shipyard ?? undefined}
           onPublish={handlePublishNcr}
           onClose={() => setShowEditor(false)}
-        />
-      )}
+        />,
+        document.body
+      ) : null}
 
       {!selectedProjectId ? (
         <div style={emptyStateStyle}>Please select a project first.</div>
@@ -442,7 +506,20 @@ export function Ncrs() {
 
 
             return (
-              <section key={item.id} style={panelStyle}>
+              <section
+                key={item.id}
+                style={expanded ? { ...panelStyle, borderColor: "rgba(0, 106, 99, 0.45)", boxShadow: "0 10px 28px rgba(15, 23, 42, 0.08)" } : panelStyle}
+                role="button"
+                tabIndex={0}
+                onClick={() => setExpandedId(item.id)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    setExpandedId(item.id);
+                  }
+                }}
+                aria-label={`Open NCR ${item.formattedSerial || item.serialNo}`}
+              >
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
                   <div style={{ flex: 1, minWidth: 280 }}>
                     <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", marginBottom: 8 }}>
@@ -468,7 +545,7 @@ export function Ncrs() {
                         : ""}
                     </div>
                     <div style={{ fontSize: 14, color: "var(--nb-text)", lineHeight: 1.6, marginBottom: 8, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
-                      {item.content.length > 180 && !expanded ? `${item.content.slice(0, 180)}...` : item.content}
+                      {item.content.length > 180 ? `${item.content.slice(0, 180)}...` : item.content}
                     </div>
                     <div style={{ display: "flex", gap: 10, flexWrap: "wrap", fontSize: 12, color: "var(--nb-text-muted)" }}>
                       <span style={{ wordBreak: "break-word" }}>Remark: {item.remark || "-"}</span>
@@ -482,9 +559,12 @@ export function Ncrs() {
                       </div>
                     )}
                   </div>
-                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                    <button type="button" style={btnStyle("secondary")} onClick={() => setExpandedId(expanded ? null : item.id)}>
-                      {expanded ? "Hide Details" : "Show Details"}
+                  <div
+                    style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}
+                    onClick={(event) => event.stopPropagation()}
+                  >
+                    <button type="button" style={btnStyle("secondary")} onClick={() => setExpandedId(item.id)}>
+                      Edit / View
                     </button>
                     {canDownloadPdf ? (
                       <button
@@ -509,18 +589,6 @@ export function Ncrs() {
                       </button>
                     ) : null}
 
-                    {canDelete ? (
-                      <button
-                        type="button"
-                        style={dangerStyle}
-                        onClick={() => void handleDeleteNcr(item)}
-                        disabled={deletingId === item.id}
-                        aria-busy={deletingId === item.id}
-                      >
-                        {deletingId === item.id ? "Deleting..." : "Delete NCR"}
-                      </button>
-                    ) : null}
-
                     {item.status === "approved" && (
                       <button
                         type="button"
@@ -530,11 +598,48 @@ export function Ncrs() {
                         {item.closedAt ? "Re-open NCR" : "Close NCR"}
                       </button>
                     )}
+
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        style={deleteIconButtonStyle}
+                        onClick={() => void handleDeleteNcr(item)}
+                        disabled={deletingId === item.id}
+                        aria-busy={deletingId === item.id}
+                        aria-label={`Delete NCR ${item.formattedSerial || item.serialNo}`}
+                        title="Delete NCR"
+                      >
+                        {deletingId === item.id ? <span style={spinnerStyle} aria-hidden="true" /> : <Trash2 size={16} />}
+                      </button>
+                    ) : null}
                   </div>
                 </div>
 
-                {expanded ? (
-                  <div style={{ marginTop: 18, display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: 16 }}>
+                {expanded && typeof document !== "undefined" ? createPortal(
+                  <div
+                    style={ncrModalBackdropStyle}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      setExpandedId(null);
+                    }}
+                  >
+                    <div style={ncrModalDialogStyle} onClick={(event) => event.stopPropagation()}>
+                      <div style={ncrModalHeaderStyle}>
+                        <div style={{ minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                            <span style={tagStyle(badgeColor(item.status))}>{item.status.replace(/_/g, " ").toUpperCase()}</span>
+                            <strong style={{ fontSize: 16, color: "var(--nb-text)", wordBreak: "break-word" }}>{item.title}</strong>
+                          </div>
+                          <div style={{ marginTop: 4, fontSize: 12, color: "var(--nb-text-muted)" }}>
+                            {item.formattedSerial || `#${item.serialNo}`} / {item.shipName || item.shipId}
+                          </div>
+                        </div>
+                        <button type="button" style={modalCloseButtonStyle} onClick={() => setExpandedId(null)} aria-label="Close NCR editor">
+                          Close
+                        </button>
+                      </div>
+                      <div style={ncrModalBodyStyle}>
+                  <div style={ncrModalGridStyle}>
                     <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
                       <div style={{ ...subPanelStyle, borderLeft: canReviewEdit ? "4px solid var(--nb-accent, #0f766e)" : "4px solid #cbd5e1" }}>
                         <div style={{ ...subTitleStyle, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
@@ -715,6 +820,10 @@ export function Ncrs() {
                       </div>
                     </div>
                   </div>
+                      </div>
+                    </div>
+                  </div>,
+                  document.body
                 ) : null}
               </section>
             );
@@ -761,6 +870,13 @@ const busyContentStyle: React.CSSProperties = {
   gap: 8
 };
 
+const iconButtonContentStyle: React.CSSProperties = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 7
+};
+
 const spinnerStyle: React.CSSProperties = {
   width: 14,
   height: 14,
@@ -778,12 +894,81 @@ const dangerStyle: React.CSSProperties = {
   color: "#b91c1c"
 };
 
+const deleteIconButtonStyle: React.CSSProperties = {
+  width: 34,
+  height: 34,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 8,
+  border: "1px solid #fecaca",
+  background: "#fff",
+  color: "#b91c1c",
+  cursor: "pointer",
+  flexShrink: 0
+};
+
 
 const panelStyle: React.CSSProperties = {
   background: "var(--nb-surface, #fff)",
   border: "1px solid var(--nb-border, #e2e8f0)",
-  borderRadius: 12,
-  padding: 18
+  borderRadius: 8,
+  padding: 16,
+  cursor: "pointer",
+  transition: "border-color 140ms ease, box-shadow 140ms ease, transform 140ms ease"
+};
+
+const ncrModalBackdropStyle: React.CSSProperties = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 9998,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 24,
+  background: "rgba(15, 23, 42, 0.56)",
+  backdropFilter: "blur(6px)"
+};
+
+const ncrModalDialogStyle: React.CSSProperties = {
+  width: "min(1180px, 96vw)",
+  maxHeight: "92vh",
+  display: "flex",
+  flexDirection: "column",
+  overflow: "hidden",
+  borderRadius: 8,
+  background: "#ffffff",
+  boxShadow: "0 28px 80px rgba(15, 23, 42, 0.28)",
+  border: "1px solid rgba(226, 232, 240, 0.9)"
+};
+
+const ncrModalHeaderStyle: React.CSSProperties = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 16,
+  padding: "16px 18px",
+  borderBottom: "1px solid var(--nb-border, #e2e8f0)",
+  background: "#f8fafc",
+  flexShrink: 0
+};
+
+const ncrModalBodyStyle: React.CSSProperties = {
+  overflowY: "auto",
+  padding: 18,
+  background: "#ffffff"
+};
+
+const ncrModalGridStyle: React.CSSProperties = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1.2fr) minmax(320px, 0.8fr)",
+  gap: 16,
+  alignItems: "start"
+};
+
+const modalCloseButtonStyle: React.CSSProperties = {
+  ...btnStyle("secondary"),
+  flexShrink: 0
 };
 
 const subPanelStyle: React.CSSProperties = {
