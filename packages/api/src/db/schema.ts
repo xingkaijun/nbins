@@ -266,6 +266,9 @@ export const fatIndexTable = sqliteTable<{
   serialNo: integerColumn<number>({ default: 0 }),
   result: textColumn<string | null>({ nullable: true }),
   remark: textColumn<string | null>({ nullable: true }),
+  maker: textColumn<string | null>({ nullable: true }),
+  inspectionDate: textColumn<string | null>({ nullable: true }),
+  openCommentsCount: integerColumn<number>({ default: 0 }),
   authorId: textColumn<string>({ references: "users.id" }),
   createdAt: textColumn<string>(),
   updatedAt: textColumn<string>()

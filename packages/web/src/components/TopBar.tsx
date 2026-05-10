@@ -10,8 +10,7 @@ const navItems = [
   { path: "/ncrs", label: "NCRs" },
   { path: "/fats", label: "FAT" },
   { path: "/reports", label: "Reports" },
-  { path: "/import", label: "Import" },
-  { path: "/milestones", label: "Milestones" }
+  { path: "/import", label: "Import" }
 ];
 
 export function TopBar() {
@@ -73,7 +72,7 @@ export function TopBar() {
       {!isGlobalHall ? (
         <nav className="navPills" aria-label="Primary">
           <NavLink to="/" className="pill" style={{ display: 'inline-flex', alignItems: 'center', gap: '6px', transform: 'translateY(-1px)' }}>
-             <span style={{ fontSize: '10px', marginTop: '-1px' }}>◀</span> HALL
+             <span style={{ fontSize: '10px', marginTop: '-1px' }}>&lt;</span> HALL
           </NavLink>
           {navItems.map((item) => (
             <NavLink

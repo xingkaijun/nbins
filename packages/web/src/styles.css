@@ -1370,3 +1370,42 @@ tbody tr.record-row.isSelected {
     break-after: auto !important;
   }
 }
+
+/* ========== Page Transitions ========== */
+.page-transition-wrapper {
+  animation: pageFadeIn 250ms ease-out forwards;
+  width: 100%;
+}
+
+@keyframes pageFadeIn {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========== Skeleton Loading ========== */
+.skeleton-box {
+  background: linear-gradient(
+    90deg,
+    rgba(226, 232, 240, 0.6) 25%,
+    rgba(241, 245, 249, 0.8) 50%,
+    rgba(226, 232, 240, 0.6) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite linear;
+  border-radius: 6px;
+}
+
+@keyframes shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}

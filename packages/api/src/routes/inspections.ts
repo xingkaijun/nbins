@@ -406,7 +406,7 @@ function createInspectionRoutes(
       const now = new Date().toISOString();
 
       const storage = resolveStorage(c.env);
-      const db = storage.db;
+      const db = c.env.DB!;
 
       // 获取 comment 所属的 inspection item 和 project
       const comment = await db

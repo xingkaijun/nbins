@@ -13,7 +13,7 @@ import { Login } from "./pages/Login";
 import { Observations } from "./pages/Observations";
 import { Ncrs } from "./pages/Ncrs";
 import { Fats } from "./pages/Fats";
-import { Milestones } from "./pages/Milestones";
+import { ErrorBoundary } from "./components/ErrorBoundary";
 
 function AdminGuard() {
   const { session } = useAuth();
@@ -28,23 +28,25 @@ export function App() {
     <BrowserRouter>
       <AuthProvider>
         <ProjectProvider>
-          <Routes>
-            <Route path="/login" element={<Login />} />
-            <Route element={<ProtectedRoute />}>
-              <Route path="/" element={<Layout />}>
-                <Route index element={<Projects />} />
-                <Route path="dashboard" element={<Dashboard />} />
-                <Route path="reports" element={<Reports />} />
-                <Route path="import" element={<Import />} />
-                <Route path="observations" element={<Observations />} />
-                <Route path="ncrs" element={<Ncrs />} />
-                <Route path="fats" element={<Fats />} />
-                <Route path="milestones" element={<Milestones />} />
-                <Route path="admin" element={<AdminGuard />} />
-                <Route path="admin/sql" element={<SqlConsole />} />
+          <ErrorBoundary>
+            <Routes>
+              <Route path="/login" element={<Login />} />
+              <Route element={<ProtectedRoute />}>
+                <Route path="/" element={<Layout />}>
+                  <Route index element={<Projects />} />
+                  <Route path="dashboard" element={<Dashboard />} />
+                  <Route path="reports" element={<Reports />} />
+                  <Route path="import" element={<Import />} />
+                  <Route path="observations" element={<Observations />} />
+                  <Route path="ncrs" element={<Ncrs />} />
+                  <Route path="fats" element={<Fats />} />
+
+                  <Route path="admin" element={<AdminGuard />} />
+                  <Route path="admin/sql" element={<SqlConsole />} />
+                </Route>
               </Route>
-            </Route>
-          </Routes>
+            </Routes>
+          </ErrorBoundary>
         </ProjectProvider>
       </AuthProvider>
     </BrowserRouter>
