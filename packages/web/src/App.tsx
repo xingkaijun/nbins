@@ -15,6 +15,8 @@ import { Ncrs } from "./pages/Ncrs";
 import { Fats } from "./pages/Fats";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
+const routerBasename = import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
+
 function AdminGuard() {
   const { session } = useAuth();
   if (session?.user.role !== "admin") {
@@ -25,7 +27,7 @@ function AdminGuard() {
 
 export function App() {
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={routerBasename}>
       <AuthProvider>
         <ProjectProvider>
           <ErrorBoundary>
