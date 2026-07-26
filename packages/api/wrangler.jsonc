@@ -22,6 +22,9 @@
   ],
   "vars": {
 
-    "SQL_CONSOLE_SECRET": "pgnewbuilding"
+    "SQL_CONSOLE_SECRET": "pgnewbuilding",
+    "APP_ENV": "production",
+    // ITP 测试站跨域来源；正式 ITP 上线后在此追加
+    "EXTRA_CORS_ORIGINS": "https://itp-test.6666996.xyz"
   }
 }
