@@ -11,6 +11,7 @@ const TABLE_ORDER = [
   "comments",
   "ncrs",
   "ncrIndex",
+  "fatIndex",
   "observationTypes",
   "observations"
 ] as const satisfies ReadonlyArray<keyof SchemaDefinition>;

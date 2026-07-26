@@ -1,0 +1,27 @@
+{
+  // 测试环境部署配置：pnpm exec wrangler deploy --config wrangler.test.jsonc
+  // 与生产（wrangler.jsonc / nbins-api / nbins-prod）完全隔离
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "nbins-api-test",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-04-03",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "nbins-test",
+      "database_id": "330c1a56-305b-4457-9126-3fd73a320734"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "BUCKET",
+      "bucket_name": "nbins-assets-test"
+    }
+  ],
+  "vars": {
+    "APP_ENV": "production",
+    "EXTRA_CORS_ORIGINS": "https://itp-test.6666996.xyz"
+    // JWT_SECRET 与 SYNC_SERVICE_TOKEN 用 wrangler secret put 设置，不入库
+    // SQL_CONSOLE_SECRET 故意不配 -> SQL 控制台在测试环境禁用
+  }
+}
