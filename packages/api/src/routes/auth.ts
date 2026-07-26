@@ -51,7 +51,9 @@ function createAuthRoutes(): Hono<AuthRouteEnv> {
         {
           id: result.user.id,
           role: result.user.role,
-          disciplines: result.user.disciplines
+          disciplines: result.user.disciplines,
+          username: result.user.username,
+          displayName: result.user.displayName
         },
         c.env
       );

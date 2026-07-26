@@ -24,22 +24,34 @@ function createApp(): Hono<{ Bindings: Bindings }> {
   const resolveStorage = createInspectionStorageResolver();
 
   // 允许所有本地开发端口和本地域名进行跨域请求
+  const STATIC_CORS_ORIGINS = [
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:5174",
+    "http://localhost:5174",
+    "http://192.168.190.129:5173",
+    "http://127.0.0.1:4173",
+    "http://localhost:4173",
+    "https://ins.6666996.xyz",
+    "https://nbins-six.vercel.app",
+    // Cloudflare Pages 域名
+    "https://nbins.pages.dev",
+  ];
+
   app.use(
     "/api/*",
     cors({
-      origin: [
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-        "http://127.0.0.1:5174",
-        "http://localhost:5174",
-        "http://192.168.190.129:5173",
-        "http://127.0.0.1:4173",
-        "http://localhost:4173",
-        "https://ins.6666996.xyz",
-        "https://nbins-six.vercel.app",
-        // Cloudflare Pages 域名
-        "https://nbins.pages.dev",
-      ],
+      // EXTRA_CORS_ORIGINS：逗号分隔的额外来源（如 ITP 站点），部署时按环境配置
+      origin: (origin, c) => {
+        if (STATIC_CORS_ORIGINS.includes(origin)) {
+          return origin;
+        }
+        const extras = (c.env?.EXTRA_CORS_ORIGINS ?? "")
+          .split(",")
+          .map((entry: string) => entry.trim())
+          .filter((entry: string) => entry.length > 0);
+        return extras.includes(origin) ? origin : null;
+      },
       allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     })
   );

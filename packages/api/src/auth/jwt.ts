@@ -10,6 +10,9 @@ export interface JwtUserClaims {
   id: string;
   role: Role;
   disciplines: Discipline[];
+  /** 供外部系统（如 ITP）识别用户身份与审计记录使用；旧 token 无此字段 */
+  username?: string;
+  displayName?: string;
 }
 
 interface JwtPayload extends JwtUserClaims {
@@ -43,6 +46,8 @@ export async function issueAccessToken(
     id: claims.id,
     role: claims.role,
     disciplines: [...claims.disciplines],
+    username: claims.username,
+    displayName: claims.displayName,
     iat: nowSeconds,
     exp: nowSeconds + (options?.ttlSeconds ?? ACCESS_TOKEN_TTL_SECONDS)
   };
@@ -80,7 +85,9 @@ export async function verifyAccessToken(
   return {
     id: payload.id,
     role: payload.role,
-    disciplines: payload.disciplines
+    disciplines: payload.disciplines,
+    username: typeof payload.username === "string" ? payload.username : undefined,
+    displayName: typeof payload.displayName === "string" ? payload.displayName : undefined
   };
 }
 

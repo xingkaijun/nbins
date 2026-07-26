@@ -8,5 +8,7 @@ export interface Bindings {
   JWT_SECRET?: string;
   N8N_WEBHOOK_URL?: string;
   SQL_CONSOLE_SECRET?: string;
+  /** 逗号分隔的额外 CORS 来源（如 ITP 站点域名），无需改代码即可扩展白名单 */
+  EXTRA_CORS_ORIGINS?: string;
 }
 
