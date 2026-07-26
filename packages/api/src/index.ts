@@ -17,6 +17,7 @@ import { createNcrFileRoutes } from "./routes/ncr-files.ts";
 import { createNcrPdfRoutes } from "./routes/ncr-pdf.ts";
 import { createFatRoutes } from "./routes/fats.ts";
 import { createSqlConsoleRoutes } from "./routes/sql-console.ts";
+import { createSyncRoutes } from "./routes/sync.ts";
 
 
 function createApp(): Hono<{ Bindings: Bindings }> {
@@ -136,6 +137,9 @@ function createApp(): Hono<{ Bindings: Bindings }> {
   app.route("/api/projects", createProjectRoutes());
   app.route("/api/ships", createShipRoutes());
   app.route("/api/users", createUserRoutes());
+  // 必须先于 observation 路由注册：observation 挂在 /api 根且 use("*") 强制用户 JWT，
+  // 而 sync 走独立的服务密钥，不能被它拦截
+  app.route("/api/sync", createSyncRoutes());
   app.route("/api", createObservationRoutes());
   app.route("/api/media", createMediaRoutes());
   app.route("/api/ncrs", createNcrRoutes());

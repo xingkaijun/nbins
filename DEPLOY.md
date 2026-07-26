@@ -131,3 +131,13 @@ pnpm --filter @nbins/web build
 ## 4. 核心流程说明
 - **数据流**: 前端通过 `/api/*` 请求后端，后端根据环境变量 `D1_DRIVER=d1` 调用本地或远程的 D1 数据库。
 - **种子数据**: 本地开发时，如果数据库为空，API 会自动根据 `packages/api/src/persistence/seed.ts` 生成初始数据。
+
+## 5. 与 ITP 系统集成的环境变量
+
+| 变量 | 部署位置 | 说明 |
+|---|---|---|
+| `JWT_SECRET` | Workers secret | 用户 JWT 签名密钥；ITP 侧的 `NBINS_JWT_SECRET` 必须配成相同值 |
+| `EXTRA_CORS_ORIGINS` | Workers var | 逗号分隔的额外 CORS 来源（ITP 站点域名），使 ITP 登录页能直接调用本 API |
+| `SYNC_SERVICE_TOKEN` | Workers secret | 服务间同步密钥；ITP 侧 `NBINS_SYNC_TOKEN` 配成相同值。未配置时 `/api/sync/*` 整体禁用 |
+
+本地联调时在 `packages/api/.dev.vars`（已 gitignore）中设置这些变量。
