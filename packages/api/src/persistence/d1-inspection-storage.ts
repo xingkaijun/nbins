@@ -21,6 +21,7 @@ import {
   INSPECTION_DETAIL_SUMMARY_SQL,
   INSPECTION_LIST_SUMMARY_SQL
 } from "./d1-inspection-sql.ts";
+import { buildItpOutboxStatement, mapWorkflowStatusToItp } from "../services/itp-outbox.ts";
 
 type JsonRow = Record<string, unknown>;
 
@@ -282,8 +283,8 @@ export class D1InspectionStorage implements InspectionStorage {
       insertStatements.push(
         this.db
           .prepare(
-            `INSERT INTO "inspection_items" ("id", "shipId", "itemName", "itemNameNormalized", "discipline", "workflowStatus", "lastRoundResult", "resolvedResult", "currentRound", "openCommentsCount", "version", "source", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO "inspection_items" ("id", "shipId", "itemName", "itemNameNormalized", "discipline", "workflowStatus", "lastRoundResult", "resolvedResult", "currentRound", "openCommentsCount", "version", "source", "itpCode", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
             record.id,
@@ -298,6 +299,7 @@ export class D1InspectionStorage implements InspectionStorage {
             record.openCommentsCount,
             record.version,
             record.source,
+            record.itpCode ?? null,
             record.createdAt,
             record.updatedAt
           )
@@ -420,7 +422,13 @@ export class D1InspectionStorage implements InspectionStorage {
           mutation.inspectionItem.version,
           mutation.inspectionItem.updatedAt,
           mutation.inspectionItem.id
-        )
+        ),
+      buildItpOutboxStatement(
+        this.db,
+        mutation.inspectionItem.id,
+        mapWorkflowStatusToItp(mutation.inspectionItem.workflowStatus),
+        { trigger: "round_result", result: mutation.inspectionRound.result }
+      )
     ];
 
     for (const record of mutation.createdComments) {
@@ -494,7 +502,13 @@ export class D1InspectionStorage implements InspectionStorage {
           mutation.inspectionItem.version,
           mutation.inspectionItem.updatedAt,
           mutation.inspectionItem.id
-        )
+        ),
+      buildItpOutboxStatement(
+        this.db,
+        mutation.inspectionItem.id,
+        mapWorkflowStatusToItp(mutation.inspectionItem.workflowStatus),
+        { trigger: "comment_change" }
+      )
     ];
 
     await this.db.batch(statements);
@@ -668,6 +682,7 @@ function mapInspectionItemSummaryRecord(row: JsonRow): InspectionItemRecord {
     openCommentsCount: integerValue(row.item_openCommentsCount),
     version: integerValue(row.item_version),
     source: stringValue(row.item_source) as InspectionItemRecord["source"],
+    itpCode: nullableStringValue(row.item_itpCode),
     createdAt: stringValue(row.item_createdAt),
     updatedAt: stringValue(row.item_updatedAt)
   };
@@ -730,6 +745,7 @@ function mapInspectionItemRecord(row: JsonRow): InspectionItemRecord {
     openCommentsCount: integerValue(row.openCommentsCount),
     version: integerValue(row.version),
     source: stringValue(row.source) as InspectionItemRecord["source"],
+    itpCode: nullableStringValue(row.itpCode),
     createdAt: stringValue(row.createdAt),
     updatedAt: stringValue(row.updatedAt)
   };

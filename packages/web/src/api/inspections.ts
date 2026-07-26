@@ -175,6 +175,7 @@ export async function batchImportInspections(payload: {
     plannedDate: string;
     yardQc: string;
     startAtRound: number;
+    itpCode?: string;
   }>;
 }): Promise<{ imported: number }> {
   return requestJson<{ imported: number }>("/inspections/batch", {

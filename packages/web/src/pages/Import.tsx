@@ -14,6 +14,8 @@ interface StagingRow {
   startAtRound: number;
   shipId?: string;
   hullLabel?: string;
+  /** 对应 ITP 条目编码；留空则不向 ITP 同步 */
+  itpCode: string;
 }
 
 let _uid = 0;
@@ -105,6 +107,7 @@ export function Import() {
         startAtRound,
         shipId: selectedShip,
         hullLabel: currentHullLabel,
+        itpCode: '',
       });
     });
 
@@ -125,23 +128,24 @@ export function Import() {
       
       const newRows: StagingRow[] = [];
       let headerRowIndex = -1;
-      let itemIdx = -1, dateIdx = -1, hullIdx = -1, qcIdx = -1, roundIdx = -1;
-      
+      let itemIdx = -1, dateIdx = -1, hullIdx = -1, qcIdx = -1, roundIdx = -1, itpIdx = -1;
+
       // Attempt to find header row (first 20 rows)
       for (let i = 0; i < Math.min(json.length, 20); i++) {
         const row = json[i];
         if (!Array.isArray(row)) continue;
-        
-        let foundItem = -1, foundDate = -1, foundHull = -1, foundQc = -1, foundRound = -1;
+
+        let foundItem = -1, foundDate = -1, foundHull = -1, foundQc = -1, foundRound = -1, foundItp = -1;
         for (let j = 0; j < row.length; j++) {
             const cell = String(row[j] || '').toLowerCase().replace(/[\s\.]/g, '');
+            if (cell.includes('itp') || cell.includes('编号')) foundItp = j;
             if (cell.includes('item') || cell.includes('项目') || cell.includes('description') || cell.includes('内容')) foundItem = j;
             if (cell.includes('date') || cell.includes('日期') || cell.includes('time') || cell.includes('plan')) foundDate = j;
             if (cell.includes('vs') || cell.includes('hull') || cell.includes('船号') || cell.includes('为') || cell === 'v/s') foundHull = j;
             if (cell.includes('qc') || cell.includes('检验') || cell.includes('inspector') || cell.includes('质检')) foundQc = j;
             if (cell.includes('round') || cell.includes('轮次') || cell.includes('start')) foundRound = j;
         }
-        
+
         if (foundItem !== -1) {
             headerRowIndex = i;
             itemIdx = foundItem;
@@ -149,6 +153,8 @@ export function Import() {
             hullIdx = foundHull;
             qcIdx = foundQc;
             roundIdx = foundRound;
+            // 同一列既像条目名又像编号时（如"项目编号"），当作条目名处理
+            itpIdx = foundItp === foundItem ? -1 : foundItp;
             break;
         }
       }
@@ -175,6 +181,7 @@ export function Import() {
         let rawHull = hullIdx !== -1 ? String(row[hullIdx] || '').trim() : '';
         let rawQc = qcIdx !== -1 ? String(row[qcIdx] || '').trim() : '-';
         let rawRound = roundIdx !== -1 ? parseInt(String(row[roundIdx] || "1"), 10) : 1;
+        const rawItpCode = itpIdx !== -1 ? String(row[itpIdx] || '').trim() : '';
         
         // fuzzy match hull to ship id
         let matchedShipId = selectedShip;
@@ -202,7 +209,8 @@ export function Import() {
           qc: rawQc || '-',
           startAtRound,
           shipId: matchedShipId,
-          hullLabel: finalHullLabel || '-'
+          hullLabel: finalHullLabel || '-',
+          itpCode: rawItpCode
         });
       };
 
@@ -301,7 +309,8 @@ export function Import() {
             discipline: r.discipline,
             plannedDate: r.date,
             yardQc: r.qc,
-            startAtRound: r.startAtRound
+            startAtRound: r.startAtRound,
+            itpCode: r.itpCode.trim() || undefined
           }))
         });
         successCount += resp.imported;
@@ -487,6 +496,7 @@ export function Import() {
                     <tr style={{ background: 'var(--nb-bg)', borderBottom: '2px solid var(--nb-border)', position: 'sticky', top: 0 }}>
                       <th style={thS}>#</th>
                       <th style={thS}>Inspection Item</th>
+                      <th style={thS}>ITP</th>
                       <th style={thS}>Disc.</th>
                       <th style={thS}>Hull</th>
                       <th style={thS}>Date</th>
@@ -504,6 +514,7 @@ export function Import() {
                           {isEditing ? (
                             <>
                               <td style={tdS}><input value={editForm.item || ''} onChange={e => setEditForm(f => ({ ...f, item: e.target.value }))} style={cellInput} /></td>
+                              <td style={tdS}><input value={editForm.itpCode || ''} placeholder="ITP code" onChange={e => setEditForm(f => ({ ...f, itpCode: e.target.value }))} style={cellInput} /></td>
                               <td style={tdS}>
                                 <select value={editForm.discipline || ''} onChange={e => setEditForm(f => ({ ...f, discipline: e.target.value }))} style={cellInput}>
                                   {projectDisciplines.map(d => <option key={d} value={d}>{d}</option>)}
@@ -538,6 +549,11 @@ export function Import() {
                           ) : (
                             <>
                               <td style={{ ...tdS, fontWeight: 600 }}>{r.item}</td>
+                              <td style={tdS}>
+                                {r.itpCode
+                                  ? <span style={{ fontFamily: 'monospace', fontSize: 11 }}>{r.itpCode}</span>
+                                  : <span style={{ color: 'var(--nb-text-muted)' }}>-</span>}
+                              </td>
                               <td style={tdS}>
                                 <span style={{
                                   fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.05em',

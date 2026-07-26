@@ -7,6 +7,7 @@ import { createInspectionStorageResolver } from "../persistence/storage-factory.
 import { InspectionRepository } from "../repositories/inspection-repository.ts";
 import { InspectionService } from "../services/inspection-service.ts";
 import { resolveAllowedProjectIdsForAuthUser } from "../services/inspection-read-authorization.ts";
+import { buildItpOutboxStatement, mapWorkflowStatusToItp } from "../services/itp-outbox.ts";
 
 function normalizeItemName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -70,6 +71,7 @@ function createInspectionRoutes(
           plannedDate: string;
           yardQc: string;
           startAtRound?: number;
+          itpCode?: string;
         }>;
       }>();
 
@@ -140,8 +142,8 @@ function createInspectionRoutes(
           c.env.DB!
             .prepare(
               `INSERT INTO "inspection_items"
-               ("id", "shipId", "itemName", "itemNameNormalized", "discipline", "workflowStatus", "currentRound", "openCommentsCount", "version", "source", "createdAt", "updatedAt")
-               VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, 1, 'manual', ?, ?)`
+               ("id", "shipId", "itemName", "itemNameNormalized", "discipline", "workflowStatus", "currentRound", "openCommentsCount", "version", "source", "itpCode", "createdAt", "updatedAt")
+               VALUES (?, ?, ?, ?, ?, 'pending', ?, 0, 1, 'manual', ?, ?, ?)`
             )
             .bind(
               itemId,
@@ -150,9 +152,14 @@ function createInspectionRoutes(
               normalizeItemName(item.itemName),
               item.discipline,
               initialRound,
+              item.itpCode?.trim() || null,
               now,
               now
             )
+        );
+
+        statements.push(
+          buildItpOutboxStatement(c.env.DB!, itemId, "in_progress", { trigger: "import" })
         );
 
         statements.push(
@@ -543,6 +550,7 @@ function createInspectionRoutes(
         resolvedResult?: string | null;
         currentRound?: number;
         source?: "manual" | "n8n";
+        itpCode?: string | null;
       }>();
       const now = new Date().toISOString();
 
@@ -559,10 +567,27 @@ function createInspectionRoutes(
       if (body.resolvedResult !== undefined) sets.push('"resolvedResult" = ?'), params.push(body.resolvedResult);
       if (body.currentRound !== undefined) sets.push('"currentRound" = ?'), params.push(body.currentRound);
       if (body.source !== undefined) sets.push('"source" = ?'), params.push(body.source);
+      if (body.itpCode !== undefined) sets.push('"itpCode" = ?'), params.push(body.itpCode?.trim() || null);
       params.push(id);
-      
+
       const info = await c.env.DB!.prepare(`UPDATE "inspection_items" SET ${sets.join(", ")} WHERE "id" = ?`).bind(...params).run();
       if (info.meta?.changes === 0) return c.json({ ok: false, error: "Inspection item not found" }, 404);
+
+      // 管理员可能改了状态或刚补上 itpCode，按当前最新状态补发一条同步事件
+      if (body.workflowStatus !== undefined || body.itpCode !== undefined || body.shipId !== undefined) {
+        const row = await c.env.DB!
+          .prepare(`SELECT "workflowStatus" FROM "inspection_items" WHERE "id" = ?`)
+          .bind(id)
+          .first<{ workflowStatus: string }>();
+        if (row) {
+          await buildItpOutboxStatement(
+            c.env.DB!,
+            id,
+            mapWorkflowStatusToItp(row.workflowStatus as any),
+            { trigger: "admin_update" }
+          ).run();
+        }
+      }
 
       return c.json({ ok: true, data: { id, updatedAt: now } });
     } catch (e: any) {
@@ -705,6 +730,9 @@ function createInspectionRoutes(
 
       const itemRow = await c.env.DB!.prepare(`SELECT "id" FROM "inspection_items" WHERE "id" = ?`).bind(inspectionItemId).first<{ id: string }>();
       if (!itemRow) return c.json({ ok: false, error: "Inspection item not found" }, 404);
+
+      // 删除前先发同步事件（INSERT...SELECT 需要行还在），ITP 侧回退为 not_started
+      await buildItpOutboxStatement(c.env.DB!, inspectionItemId, "not_started", { trigger: "deleted" }).run();
 
       // Cascade: delete comments, rounds, then item
       await c.env.DB!.prepare(`DELETE FROM "comments" WHERE "inspectionItemId" = ?`).bind(inspectionItemId).run();

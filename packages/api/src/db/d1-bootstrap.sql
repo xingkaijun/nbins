@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS "inspection_items" (
   "openCommentsCount" INTEGER NOT NULL DEFAULT 0,
   "version" INTEGER NOT NULL DEFAULT 1,
   "source" TEXT NOT NULL,
+  "itpCode" TEXT,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
@@ -77,6 +78,18 @@ CREATE TABLE IF NOT EXISTS "inspection_rounds" (
   "source" TEXT NOT NULL,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
+);
+
+CREATE TABLE IF NOT EXISTS "sync_outbox" (
+  "id" INTEGER PRIMARY KEY,
+  "createdAt" TEXT NOT NULL,
+  "eventType" TEXT NOT NULL,
+  "projectCode" TEXT NOT NULL,
+  "hullNumber" TEXT NOT NULL,
+  "itpCode" TEXT NOT NULL,
+  "itpStatus" TEXT NOT NULL,
+  "inspectionItemId" TEXT,
+  "detail" TEXT
 );
 
 CREATE TABLE IF NOT EXISTS "comments" (
@@ -167,59 +180,3 @@ CREATE TABLE IF NOT EXISTS "observations" (
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
-
-CREATE TABLE IF NOT EXISTS "fat_index" (
-  "id" TEXT PRIMARY KEY,
-  "projectId" TEXT NOT NULL REFERENCES "projects"("id"),
-  "shipId" TEXT NOT NULL REFERENCES "ships"("id"),
-  "title" TEXT NOT NULL,
-  "discipline" TEXT NOT NULL,
-  "serialNo" INTEGER NOT NULL DEFAULT 0,
-  "result" TEXT,
-  "remark" TEXT,
-  "maker" TEXT,
-  "inspectionDate" TEXT,
-  "openCommentsCount" INTEGER NOT NULL DEFAULT 0,
-  "authorId" TEXT NOT NULL REFERENCES "users"("id"),
-  "createdAt" TEXT NOT NULL,
-  "updatedAt" TEXT NOT NULL
-);
-
--- ============================================================
--- Performance Indexes
--- ============================================================
-
--- ships: 按项目查询船舶
-CREATE INDEX IF NOT EXISTS idx_ships_projectId ON "ships"("projectId");
-
--- inspection_items: 按船/专业/状态筛选检验项
-CREATE INDEX IF NOT EXISTS idx_inspection_items_shipId ON "inspection_items"("shipId");
-CREATE INDEX IF NOT EXISTS idx_inspection_items_discipline ON "inspection_items"("discipline");
-CREATE INDEX IF NOT EXISTS idx_inspection_items_workflowStatus ON "inspection_items"("workflowStatus");
-
--- inspection_rounds: 按检验项加载轮次
-CREATE INDEX IF NOT EXISTS idx_inspection_rounds_inspectionItemId ON "inspection_rounds"("inspectionItemId");
-CREATE INDEX IF NOT EXISTS idx_inspection_rounds_item_round ON "inspection_rounds"("inspectionItemId", "roundNumber");
-
--- comments: 按检验项加载意见 + 按状态统计
-CREATE INDEX IF NOT EXISTS idx_comments_inspectionItemId ON "comments"("inspectionItemId");
-CREATE INDEX IF NOT EXISTS idx_comments_status ON "comments"("inspectionItemId", "status");
-
--- observations: 按船+专业筛选意见
-CREATE INDEX IF NOT EXISTS idx_observations_shipId ON "observations"("shipId");
-CREATE INDEX IF NOT EXISTS idx_observations_ship_discipline ON "observations"("shipId", "discipline");
-
--- ncr_index: 按项目/船舶筛选 NCR
-CREATE INDEX IF NOT EXISTS idx_ncr_index_projectId ON "ncr_index"("projectId");
-CREATE INDEX IF NOT EXISTS idx_ncr_index_shipId ON "ncr_index"("shipId");
-
--- ncrs: 按船舶筛选 NCR（旧表）
-CREATE INDEX IF NOT EXISTS idx_ncrs_shipId ON "ncrs"("shipId");
-
--- fat_index: 按项目/船舶筛选 FAT
-CREATE INDEX IF NOT EXISTS idx_fat_index_projectId ON "fat_index"("projectId");
-CREATE INDEX IF NOT EXISTS idx_fat_index_shipId ON "fat_index"("shipId");
-
--- project_members: 按项目/用户查成员关系
-CREATE INDEX IF NOT EXISTS idx_project_members_projectId ON "project_members"("projectId");
-CREATE INDEX IF NOT EXISTS idx_project_members_userId ON "project_members"("userId");

@@ -28,6 +28,31 @@ function createSyncRoutes(): Hono<SyncRouteEnv> {
 
   routes.use("*", requireSyncToken());
 
+  // 拉取检验状态事件流：?after=<游标>&limit=<条数>，按 id 升序返回
+  routes.get("/events", async (c) => {
+    try {
+      const after = Number(c.req.query("after") ?? "0");
+      const rawLimit = Number(c.req.query("limit") ?? "200");
+      if (!Number.isFinite(after) || after < 0 || !Number.isFinite(rawLimit)) {
+        return c.json({ ok: false, error: "after/limit must be non-negative numbers" }, 400);
+      }
+      const limit = Math.min(Math.max(Math.trunc(rawLimit), 1), 500);
+
+      const result = await c.env.DB!
+        .prepare('SELECT * FROM "sync_outbox" WHERE "id" > ? ORDER BY "id" ASC LIMIT ?')
+        .bind(after, limit)
+        .all<Record<string, unknown>>();
+
+      const events = result.results ?? [];
+      const cursor = events.length > 0 ? events[events.length - 1].id : after;
+
+      return c.json({ ok: true, data: { events, cursor } });
+    } catch (e: any) {
+      console.error("GET /sync/events error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
   routes.get("/master-data", async (c) => {
     try {
       const projects = await c.env.DB!

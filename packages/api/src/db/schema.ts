@@ -17,7 +17,8 @@ import type {
   UserRecord,
   NcrRecord,
   NcrIndexRecord,
-  FatIndexRecord
+  FatIndexRecord,
+  SyncOutboxRecord
 } from "../persistence/records.ts";
 
 
@@ -128,8 +129,24 @@ export const inspectionItemsTable = sqliteTable<{
   openCommentsCount: integerColumn<number>({ default: 0 }),
   version: integerColumn<number>({ default: 1 }),
   source: textColumn<"manual" | "n8n">(),
+  itpCode: textColumn<string | null | undefined>({ nullable: true }),
   createdAt: textColumn<string>(),
   updatedAt: textColumn<string>()
+});
+
+export const syncOutboxTable = sqliteTable<{
+  [K in keyof SyncOutboxRecord]: ColumnDefinition<SyncOutboxRecord[K]>;
+}>("sync_outbox", {
+  // INTEGER PRIMARY KEY 即 rowid 别名，自增，作为 ITP 拉取的游标
+  id: integerColumn<number>({ primaryKey: true }),
+  createdAt: textColumn<string>(),
+  eventType: textColumn<string>(),
+  projectCode: textColumn<string>(),
+  hullNumber: textColumn<string>(),
+  itpCode: textColumn<string>(),
+  itpStatus: textColumn<string>(),
+  inspectionItemId: textColumn<string | null>({ nullable: true }),
+  detail: textColumn<string | null>({ nullable: true })
 });
 
 export const inspectionRoundsTable = sqliteTable<{
@@ -282,6 +299,7 @@ export const schema = {
   ships: shipsTable,
   inspectionItems: inspectionItemsTable,
   inspectionRounds: inspectionRoundsTable,
+  syncOutbox: syncOutboxTable,
   comments: commentsTable,
   ncrs: ncrsTable,
   ncrIndex: ncrIndexTable,

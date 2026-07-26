@@ -61,8 +61,23 @@ export interface InspectionItemRecord {
   openCommentsCount: number;
   version: number;
   source: "manual" | "n8n";
+  /** 关联的 ITP 条目编码，用于向 ITP 系统同步完成状态 */
+  itpCode?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+/** 待投递给 ITP 的检验状态事件（outbox 模式，id 即拉取游标） */
+export interface SyncOutboxRecord {
+  id: number;
+  createdAt: string;
+  eventType: string;
+  projectCode: string;
+  hullNumber: string;
+  itpCode: string;
+  itpStatus: string;
+  inspectionItemId: string | null;
+  detail: string | null;
 }
 
 export interface InspectionRoundRecord {

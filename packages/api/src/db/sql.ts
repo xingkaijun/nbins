@@ -7,6 +7,7 @@ const TABLE_ORDER = [
   "ships",
   "inspectionItems",
   "inspectionRounds",
+  "syncOutbox",
   "comments",
   "ncrs",
   "ncrIndex",
