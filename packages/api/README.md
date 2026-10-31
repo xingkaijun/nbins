@@ -1,115 +1,12 @@
 # @nbins/api
 
-Cloudflare Workers-compatible Hono API for the NBINS MVP demo lane.
+nbins 后端：Hono API，跑在 Node.js >= 22.13 上（`@hono/node-server`），数据在一个 SQLite 文件（`node:sqlite`，WAL）和一个本地文件目录里。
 
-## Available routes
+- 配置：复制 `.env.example` 为 `.env`（不进 git），或用 `NBINS_ENV_FILE` 指定文件。变量说明见 `.env.example` 和 `src/config.ts`。
+- 开发：`pnpm dev`（`node --watch src/server.ts`）
+- 构建：`pnpm build` → `dist/server.mjs`（服务）和 `dist/cli.mjs`（维护命令），依赖已打包
+- 运行：`pnpm start`（`node dist/server.mjs`），默认监听 `127.0.0.1:8787`
+- 维护：`pnpm db:init` / `db:migrate` / `db:check` / `db:backup` / `db:import-d1`，或 `node dist/cli.mjs <命令>`
+- 测试：`pnpm test`（内存 SQLite 上跑真实建表脚本）
 
-- `GET /health`
-- `GET /api/meta`
-- `GET /api/inspections/:id`
-- `PUT /api/inspections/:id/rounds/current/result`
-- `GET /api/dev/inspection-item-submission`
-- `GET /api/dev/inspection-item-submission/examples`
-- `GET /api/dev/resolve-item-state`
-- `GET /api/dev/resolve-item-state/examples`
-
-## Local development
-
-From the repo root:
-
-```bash
-pnpm install
-pnpm dev:api
-```
-
-Wrangler serves the API at `http://127.0.0.1:8787`.
-
-### D1 under Wrangler dev
-
-By default, the API uses the mock storage path. The mock path is used when either of these is true:
-
-- `D1_DRIVER` is unset or not `d1`
-- the Wrangler `DB` binding is missing or unresolved
-
-To exercise the D1 path locally, keep the `DB` binding in [`packages/api/wrangler.jsonc`](/workspace/nbins/packages/api/wrangler.jsonc) and set `D1_DRIVER=d1` when starting dev.
-
-1. Create or select a D1 database:
-
-```bash
-pnpm --filter @nbins/api exec wrangler d1 create nbins-local
-```
-
-Wrangler will print a `database_name` and `database_id`. Copy those into [`packages/api/wrangler.jsonc`](/workspace/nbins/packages/api/wrangler.jsonc) under the `d1_databases` entry for binding `DB`.
-
-If you want to point at an existing database instead, keep `binding = "DB"` and update `database_name` / `database_id` to that database's values.
-
-2. Generate a bootstrap SQL file from the existing schema helper in [`packages/api/src/db/sql.ts`](/workspace/nbins/packages/api/src/db/sql.ts):
-
-```bash
-pnpm --filter @nbins/api run gen:bootstrap-sql -- /tmp/nbins-api-bootstrap.sql
-```
-
-3. Bootstrap schema into local D1 state:
-
-```bash
-pnpm --filter @nbins/api exec wrangler d1 execute DB --local --file=/tmp/nbins-api-bootstrap.sql
-```
-
-4. Run the API against D1:
-
-```bash
-D1_DRIVER=d1 pnpm dev:api
-```
-
-If you omit `D1_DRIVER=d1`, or if the `DB` binding is not configured correctly in Wrangler, the API falls back to mock storage even while running `pnpm dev:api`.
-
-## Demo curl commands
-
-Fetch one inspection item:
-
-```bash
-curl http://127.0.0.1:8787/api/inspections/insp-002
-```
-
-Submit `QCC` with tracking comments:
-
-```bash
-curl -X PUT http://127.0.0.1:8787/api/inspections/insp-003/rounds/current/result \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "result": "QCC",
-    "actualDate": "2026-04-03",
-    "submittedAt": "2026-04-03T11:00:00.000Z",
-    "submittedBy": "user-inspector-wang",
-    "inspectorDisplayName": "Wang Wu",
-    "expectedVersion": 5,
-    "comments": [
-      { "message": "Monitor one repaired weld during close-out." }
-    ]
-  }'
-```
-
-Prove that `AA` cannot introduce new comments:
-
-```bash
-curl -X PUT http://127.0.0.1:8787/api/inspections/insp-002/rounds/current/result \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "result": "AA",
-    "actualDate": "2026-04-03",
-    "submittedAt": "2026-04-03T11:30:00.000Z",
-    "submittedBy": "user-inspector-li",
-    "inspectorDisplayName": "Li Si",
-    "expectedVersion": 3,
-    "comments": [
-      { "message": "This should fail." }
-    ]
-  }'
-```
-
-## Validation
-
-```bash
-pnpm test:api
-pnpm qa
-```
+路由列表见 `GET /api/meta`。部署（nginx、systemd、备份、从 Cloudflare D1/R2 迁移）见仓库根目录的 `DEPLOY.md`。

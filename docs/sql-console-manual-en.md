@@ -407,7 +407,7 @@ UPDATE users SET role = 'admin' WHERE username = 'someuser';
 ### Common Issues
 
 **Q: Forgot SQL_CONSOLE_SECRET?**
-A: Contact system administrator or check server environment variable configuration
+A: Contact the system administrator, or check `SQL_CONSOLE_SECRET` in the server's env file (`packages/api/.env` on a dev machine, `/etc/nbins/nbins.env` per DEPLOY.md). Restart the service after changing it.
 
 **Q: Database import failed?**
 A: Check JSON file format is correct and file is not corrupted
@@ -426,7 +426,8 @@ A: Currently only one statement can be executed at a time, multiple statements n
 ## Technical Details
 
 ### Database Type
-- Uses Cloudflare D1 (based on SQLite)
+- Uses a local SQLite database (Node `node:sqlite`, single file)
+- "Export Database" does not include FAT data (`fat_index` and the `fats/` records), so it is not a full backup; use `pnpm db:backup`
 - Supports standard SQL syntax
 
 ### API Endpoints
@@ -438,10 +439,11 @@ A: Currently only one statement can be executed at a time, multiple statements n
 - Delete Project: `DELETE /api/sql/delete-project/:projectId`
 
 ### Permission Verification
-All API requests require Header:
+All API requests require a logged-in user (`Authorization: Bearer <token>`, the web page sends it) and the header:
 ```
 X-SQL-Secret: {SQL_CONSOLE_SECRET}
 ```
+Without `SQL_CONSOLE_SECRET` configured the console is disabled (403); a wrong secret returns 401.
 
 ---
 

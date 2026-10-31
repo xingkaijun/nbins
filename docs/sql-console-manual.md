@@ -404,7 +404,7 @@ UPDATE users SET role = 'admin' WHERE username = 'someuser';
 ### 常见问题
 
 **Q: 忘记了 SQL_CONSOLE_SECRET 怎么办？**
-A: 联系系统管理员或查看服务器环境变量配置
+A: 联系系统管理员，或查看服务器配置文件里的 `SQL_CONSOLE_SECRET`（开发机是 `packages/api/.env`，服务器按 DEPLOY.md 是 `/etc/nbins/nbins.env`）。修改后重启服务生效。
 
 **Q: 导入数据库失败怎么办？**
 A: 检查 JSON 文件格式是否正确，确认文件没有损坏
@@ -423,7 +423,8 @@ A: 目前每次只能执行一条语句，多条语句需要分别执行
 ## 技术说明
 
 ### 数据库类型
-- 使用 Cloudflare D1（基于 SQLite）
+- 使用本地 SQLite 数据库（Node `node:sqlite`，单文件）
+- 「导出数据库」不包含 FAT 数据（`fat_index` 表和 `fats/` 下的记录），不能代替完整备份；完整备份用 `pnpm db:backup`
 - 支持标准 SQL 语法
 
 ### API 端点
@@ -435,10 +436,11 @@ A: 目前每次只能执行一条语句，多条语句需要分别执行
 - 删除项目：`DELETE /api/sql/delete-project/:projectId`
 
 ### 权限验证
-所有 API 请求都需要在 Header 中携带：
+所有 API 请求都需要已登录（`Authorization: Bearer <登录令牌>`，网页会自动带上），并在 Header 中携带：
 ```
 X-SQL-Secret: {SQL_CONSOLE_SECRET}
 ```
+未配置 `SQL_CONSOLE_SECRET` 时控制台关闭（403）；口令错误返回 401。
 
 ---
 
