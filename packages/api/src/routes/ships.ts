@@ -1,3 +1,4 @@
+import type { SqlDatabase } from "../platform/sql-database.ts";
 import { Hono } from "hono";
 import type { Bindings } from "../env.ts";
 import type { ShipRecord } from "../persistence/records.ts";
@@ -18,7 +19,7 @@ type ShipRouteEnv = { Bindings: Bindings; Variables: AuthContextVariables };
  * - 其他角色需在 project_members 表中有记录
  */
 async function checkProjectAccess(
-  db: D1Database,
+  db: SqlDatabase,
   user: AuthenticatedUser,
   projectId: string
 ): Promise<boolean> {

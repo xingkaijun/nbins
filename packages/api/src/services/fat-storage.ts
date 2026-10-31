@@ -1,4 +1,4 @@
-import type { D1Database } from "@cloudflare/workers-types";
+import type { SqlDatabase } from "../platform/sql-database.ts";
 import type { FatIndexRecord } from "../persistence/records.ts";
 import type { Bindings } from "../env.ts";
 import type { AuthenticatedUser } from "../auth.ts";
@@ -44,14 +44,14 @@ interface QueryFatIndexFilters {
 
 function assertDb(env: Bindings): NonNullable<Bindings["DB"]> {
   if (!env.DB) {
-    throw new Error("D1 database binding not configured");
+    throw new Error("DATABASE_NOT_CONFIGURED: SQLite database not configured");
   }
   return env.DB;
 }
 
 export function assertBucket(env: Bindings): NonNullable<Bindings["BUCKET"]> {
   if (!env.BUCKET) {
-    throw new Error("R2 bucket binding not configured");
+    throw new Error("OBJECT_STORE_NOT_CONFIGURED: file storage (NBINS_STORAGE_DIR) not configured");
   }
   return env.BUCKET;
 }
@@ -91,7 +91,7 @@ export function getFatObjectKey(shipId: string, fatId: string): string {
   return `fats/${shipId}/${fatId}.json`;
 }
 
-export async function getShipContextByShipId(db: D1Database, shipId: string): Promise<{ id: string; projectId: string; shipName: string; hullNumber: string } | null> {
+export async function getShipContextByShipId(db: SqlDatabase, shipId: string): Promise<{ id: string; projectId: string; shipName: string; hullNumber: string } | null> {
   const row = await db
     .prepare('SELECT "id", "projectId", "shipName", "hullNumber" FROM "ships" WHERE "id" = ?')
     .bind(shipId)
@@ -110,7 +110,7 @@ export async function getShipContextByShipId(db: D1Database, shipId: string): Pr
 }
 
 export async function hasProjectAccess(
-  db: D1Database,
+  db: SqlDatabase,
   user: AuthenticatedUser,
   projectId: string
 ): Promise<boolean> {

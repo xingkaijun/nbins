@@ -4,25 +4,25 @@
   "private": true,
   "packageManager": "pnpm@9.1.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.13.0"
   },
   "scripts": {
-    "build": "pnpm -r build",
+    "dev": "pnpm --parallel --filter @nbins/api --filter @nbins/web dev",
     "dev:web": "pnpm --filter @nbins/web dev",
     "dev:api": "pnpm --filter @nbins/api dev",
-    "dev:api:d1": "pnpm d1:bootstrap && cross-env pnpm --filter @nbins/api exec wrangler dev --local --var D1_DRIVER:d1 --persist-to .wrangler/state",
-    "d1:gen": "pnpm --filter @nbins/api run gen:bootstrap-sql -- src/db/d1-bootstrap.sql",
-    "d1:bootstrap": "pnpm d1:gen && pnpm --filter @nbins/api exec node scripts/bootstrap-local-d1.mjs",
+    "build": "pnpm -r build",
+    "build:nbins": "pnpm --filter @nbins/api build && pnpm --filter @nbins/web build:nbins",
+    "start": "pnpm --filter @nbins/api start",
+    "db:init": "pnpm --filter @nbins/api db:init",
+    "db:migrate": "pnpm --filter @nbins/api db:migrate",
+    "db:check": "pnpm --filter @nbins/api db:check",
+    "db:backup": "pnpm --filter @nbins/api db:backup",
+    "db:import-d1": "pnpm --filter @nbins/api db:import-d1",
+    "db:gen": "pnpm --filter @nbins/api db:gen",
     "test:api": "pnpm --filter @nbins/api test",
     "test:web": "pnpm --filter @nbins/web test",
     "qa": "pnpm typecheck && pnpm build && pnpm test:api",
-    "typecheck": "pnpm -r typecheck",
-    "deploy:api": "pnpm --filter @nbins/api exec wrangler deploy",
-    "deploy:web": "pnpm --filter @nbins/web run deploy",
-    "deploy:all": "pnpm deploy:api && pnpm deploy:web"
-  },
-  "devDependencies": {
-    "cross-env": "^10.1.0"
+    "typecheck": "pnpm -r typecheck"
   },
   "dependencies": {
     "@types/exceljs": "^1.3.2",

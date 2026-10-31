@@ -326,7 +326,6 @@ function createFixture() {
   seedBaseData(db);
   const app = createApp();
   const env = {
-    D1_DRIVER: "d1",
     DB: db,
     BUCKET: bucket
   };

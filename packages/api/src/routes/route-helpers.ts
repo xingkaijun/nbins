@@ -1,3 +1,4 @@
+import type { SqlDatabase } from "../platform/sql-database.ts";
 import type {
   ProjectRecord,
   UserRecord
@@ -23,7 +24,7 @@ export function parseStringArray(value: unknown): string[] {
   }
 }
 
-export async function resolveAllowedProjectIds(db: D1Database, userId: string): Promise<string[]> {
+export async function resolveAllowedProjectIds(db: SqlDatabase, userId: string): Promise<string[]> {
   const [userRow, membershipRows] = await Promise.all([
     db.prepare('SELECT "accessibleProjectIds" FROM "users" WHERE "id" = ?')
       .bind(userId)

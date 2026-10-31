@@ -5,7 +5,13 @@ build/
 .cache/
 .vite/
 coverage/
+# leftover local state of the old Cloudflare dev setup (safe to delete)
 .wrangler/
+# local runtime data (SQLite database, uploaded files, backups) and secrets
+data/
+.env
+.env.*
+!.env.example
 *.tsbuildinfo
 .DS_Store
 

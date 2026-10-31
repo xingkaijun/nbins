@@ -8,7 +8,7 @@ import type { AuthUser } from "../auth";
 export interface ApiMeta {
   appName: string;
   environment: string;
-  storageMode: "mock" | "d1" | "d1+r2";
+  storageMode: "sqlite+fs";
   generatedAt: string;
   disciplines: string[];
   routes: string[];

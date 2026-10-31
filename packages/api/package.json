@@ -4,19 +4,30 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "dev": "wrangler dev",
-    "gen:bootstrap-sql": "node --experimental-strip-types ./scripts/gen-bootstrap-sql.mjs",
-    "test": "node --experimental-specifier-resolution=node --test \"src/**/*.test.mjs\"",
+    "build": "tsc -p tsconfig.json && node scripts/build-server.mjs",
+    "dev": "node --experimental-strip-types --disable-warning=ExperimentalWarning --watch src/server.ts",
+    "start": "node --disable-warning=ExperimentalWarning dist/server.mjs",
+    "cli": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli.ts",
+    "db:init": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli.ts init",
+    "db:migrate": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli.ts migrate",
+    "db:check": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli.ts check",
+    "db:backup": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli.ts backup",
+    "db:import-d1": "node --experimental-strip-types --disable-warning=ExperimentalWarning src/cli.ts import-d1",
+    "db:gen": "node --experimental-strip-types --disable-warning=ExperimentalWarning ./scripts/gen-bootstrap-sql.mjs",
+    "test": "node --experimental-strip-types --disable-warning=ExperimentalWarning --test \"src/**/*.test.mjs\"",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@hono/node-server": "^2.1.5",
     "@nbins/shared": "workspace:*",
     "hono": "^4.7.7"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20250402.0",
-    "typescript": "^5.8.3",
-    "wrangler": "^4.10.0"
+    "@types/node": "^22.13.0",
+    "esbuild": "^0.27.3",
+    "typescript": "^5.8.3"
+  },
+  "engines": {
+    "node": ">=22.13.0"
   }
 }

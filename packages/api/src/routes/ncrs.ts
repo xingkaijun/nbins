@@ -364,8 +364,10 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
         updatedAt: now
       });
 
-      try {
-        c.executionCtx.waitUntil((async () => {
+      // Fire-and-forget: the response does not wait for the n8n webhook. On the
+      // Node server a pending promise keeps running after the response is sent.
+      {
+        void (async () => {
           const webhookUrl = c.env.N8N_WEBHOOK_URL;
           if (!webhookUrl) {
             return;
@@ -392,9 +394,7 @@ export function createNcrRoutes(): Hono<NcrRouteEnv> {
           } catch (error) {
             console.error("Failed to trigger NCR approval webhook", error);
           }
-        })());
-      } catch {
-        // Some test environments do not provide an ExecutionContext.
+        })();
       }
 
 

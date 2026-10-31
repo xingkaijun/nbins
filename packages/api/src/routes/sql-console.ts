@@ -1,3 +1,4 @@
+import type { SqlStatement } from "../platform/sql-database.ts";
 import { Hono } from "hono";
 import type { Bindings } from "../env.ts";
 
@@ -198,8 +199,8 @@ function buildInsertStatements(
   db: NonNullable<Bindings["DB"]>,
   tables: readonly string[],
   data: Record<string, Array<Record<string, unknown>>>
-): D1PreparedStatement[] {
-  const statements: D1PreparedStatement[] = [];
+): SqlStatement[] {
+  const statements: SqlStatement[] = [];
 
   for (const table of tables) {
     const rows = data[table] || [];
@@ -277,7 +278,7 @@ export function createSqlConsoleRoutes(): Hono<SqlConsoleEnv> {
       }
 
       const data = stripReservedFields(rawData);
-      const statements: D1PreparedStatement[] = [];
+      const statements: SqlStatement[] = [];
 
       for (const table of [...FULL_DB_TABLES].reverse()) {
         statements.push(c.env.DB!.prepare(`DELETE FROM "${table}"`));
@@ -398,7 +399,7 @@ export function createSqlConsoleRoutes(): Hono<SqlConsoleEnv> {
       ).results.map((ship) => String(ship.id));
       const importedShipIds = (data.ships ?? []).map((ship) => String(ship.id));
       const allShipIds = Array.from(new Set([...existingShipIds, ...importedShipIds]));
-      const statements: D1PreparedStatement[] = [];
+      const statements: SqlStatement[] = [];
 
       if (existingShipIds.length > 0) {
         const placeholders = existingShipIds.map(() => "?").join(", ");
@@ -439,7 +440,7 @@ export function createSqlConsoleRoutes(): Hono<SqlConsoleEnv> {
   sqlRoutes.delete("/delete-project/:projectId", async (c) => {
     try {
       const projectId = c.req.param("projectId");
-      const statements: D1PreparedStatement[] = [];
+      const statements: SqlStatement[] = [];
       const shipIds = (
         await c.env.DB!
           .prepare(`SELECT id FROM "ships" WHERE "projectId" = ?`)

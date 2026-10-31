@@ -1,3 +1,4 @@
+import type { SqlDatabase } from "../platform/sql-database.ts";
 import { Hono } from "hono";
 import type { Bindings } from "../env.ts";
 import type { ObservationRecord } from "../persistence/records.ts";
@@ -18,7 +19,7 @@ type ObsRouteEnv = { Bindings: Bindings; Variables: AuthContextVariables };
  * - 其他角色同时兼容 accessibleProjectIds 与 project_members
  */
 async function checkProjectAccess(
-  db: D1Database,
+  db: SqlDatabase,
   user: AuthenticatedUser,
   projectId: string
 ): Promise<boolean> {
@@ -34,7 +35,7 @@ async function checkProjectAccess(
 /**
  * 通过 shipId 获取对应的项目ID
  */
-async function getProjectIdByShipId(db: D1Database, shipId: string): Promise<string | null> {
+async function getProjectIdByShipId(db: SqlDatabase, shipId: string): Promise<string | null> {
   const ship = await db
     .prepare('SELECT "projectId" FROM "ships" WHERE "id" = ?')
     .bind(shipId)
@@ -46,7 +47,7 @@ async function getProjectIdByShipId(db: D1Database, shipId: string): Promise<str
 /**
  * 通过 observationId 获取对应的项目ID
  */
-async function getProjectIdByObservationId(db: D1Database, observationId: string): Promise<string | null> {
+async function getProjectIdByObservationId(db: SqlDatabase, observationId: string): Promise<string | null> {
   const obs = await db
     .prepare(
       `SELECT s."projectId"

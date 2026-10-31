@@ -6,7 +6,7 @@ import {
   INSPECTION_LIST_SUMMARY_SQL
 } from "./d1-inspection-sql.ts";
 import { createBaselineInspectionStorage } from "../test-support/baseline-fixture.mjs";
-import { SqliteD1Database } from "../test-support/sqlite-d1.mjs";
+import { TestSqliteDatabase } from "../test-support/test-database.mjs";
 
 function assertUsesSingleJoinedDetailSummaryQuery(executedSql) {
   assert.equal(
@@ -45,7 +45,7 @@ function assertUsesSingleJoinedListSummaryQuery(executedSql) {
 }
 
 test("D1InspectionStorage reads and writes repository snapshots", async () => {
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -56,7 +56,7 @@ test("D1InspectionStorage reads and writes repository snapshots", async () => {
 });
 
 test("D1InspectionStorage readProjectMembersByUserId uses a narrow membership query", async () => {
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -80,7 +80,7 @@ test("D1InspectionStorage readProjectMembersByUserId uses a narrow membership qu
 });
 
 test("D1InspectionStorage submitCurrentRoundResult updates only affected tables", async () => {
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -142,7 +142,7 @@ test("D1InspectionStorage submitCurrentRoundResult updates only affected tables"
 });
 
 test("D1InspectionStorage readInspectionDetail selects only item-scoped records", async () => {
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -178,7 +178,7 @@ test("D1InspectionStorage readInspectionDetail selects only item-scoped records"
 });
 
 test("D1InspectionStorage readInspectionDetail returns empty users without issuing user query", async () => {
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -201,7 +201,7 @@ test("D1InspectionStorage readInspectionDetail returns empty users without issui
 });
 
 test("D1InspectionStorage readInspectionList uses a single joined summary query", async () => {
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -219,7 +219,7 @@ test("D1InspectionStorage readInspectionList uses a single joined summary query"
 });
 
 test("D1InspectionStorage readSubmissionContext selects only item-scoped records", async () => {
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -249,7 +249,7 @@ test("D1InspectionStorage readSubmissionContext selects only item-scoped records
 });
 
 test("D1InspectionStorage readSubmittedInspectionDetail narrows the post-submit summary read", async () => {
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 

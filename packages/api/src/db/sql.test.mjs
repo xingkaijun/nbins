@@ -1,8 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { bootstrapD1Schema } from "./bootstrap.ts";
+import { bootstrapSchema } from "./bootstrap.ts";
 import { readFileSync } from "node:fs";
-import { createTableStatements } from "./sql.ts";
+import { createIndexStatements, createTableStatements, renderBootstrapSql } from "./sql.ts";
 import { schema } from "./schema.ts";
 
 test("createTableStatements emits one CREATE TABLE statement per schema table", () => {
@@ -36,8 +36,8 @@ test("createTableStatements emits one CREATE TABLE statement per schema table", 
   assert.match(createTableStatements[6], /CREATE TABLE IF NOT EXISTS "comments"/);
 });
 
-test("every generated table also exists in the D1 bootstrap SQL", () => {
-  const bootstrapSql = readFileSync(new URL("./d1-bootstrap.sql", import.meta.url), "utf8");
+test("every generated table also exists in the bootstrap SQL", () => {
+  const bootstrapSql = readFileSync(new URL("./bootstrap.sql", import.meta.url), "utf8");
 
   for (const statement of createTableStatements) {
     const tableName = statement.match(/^CREATE TABLE IF NOT EXISTS "([^"]+)"/)?.[1];
@@ -66,7 +66,7 @@ test("createTableStatements preserves defaults and foreign keys needed by the mo
   );
 });
 
-test("bootstrapD1Schema executes each generated statement in order", async () => {
+test("bootstrapSchema executes each generated table and index statement in order", async () => {
   const executed = [];
   const db = {
     exec(statement) {
@@ -75,7 +75,17 @@ test("bootstrapD1Schema executes each generated statement in order", async () =>
     }
   };
 
-  await bootstrapD1Schema(db);
+  await bootstrapSchema(db);
 
-  assert.deepEqual(executed, createTableStatements);
+  assert.deepEqual(executed, [...createTableStatements, ...createIndexStatements]);
+});
+
+test("src/db/bootstrap.sql is exactly what `pnpm db:gen` generates (tables and indexes)", () => {
+  // Regenerating the file used to drop the hand-written indexes; this pins that
+  // the file and sql.ts can no longer drift apart.
+  const bootstrapSql = readFileSync(new URL("./bootstrap.sql", import.meta.url), "utf8");
+
+  assert.equal(renderBootstrapSql(), bootstrapSql);
+  assert.equal(createIndexStatements.length, (bootstrapSql.match(/^CREATE INDEX IF NOT EXISTS /gm) ?? []).length);
+  assert.ok(createIndexStatements.length > 0);
 });

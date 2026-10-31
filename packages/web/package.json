@@ -8,8 +8,7 @@
     "dev": "vite",
     "typecheck": "tsc -p tsconfig.app.json",
     "test": "node --test ./src/*.test.mjs",
-    "deploy": "pnpm build && wrangler pages deploy dist --project-name=nbins-web",
-    "deploy:preview": "pnpm build && wrangler pages deploy dist --project-name=nbins-web --branch=preview"
+    "build:nbins": "tsc -p tsconfig.app.json && NBINS_WEB_BASE=/nbins/ VITE_NBINS_API_BASE_URL=/nbins/api vite build"
   },
   "dependencies": {
     "@nbins/shared": "workspace:*",

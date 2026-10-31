@@ -7,10 +7,10 @@ import {
   INSPECTION_LIST_SUMMARY_SQL
 } from "../persistence/d1-inspection-sql.ts";
 import { createBaselineInspectionStorage } from "../test-support/baseline-fixture.mjs";
-import { SqliteD1Database, createSqliteD1Env } from "../test-support/sqlite-d1.mjs";
+import { TestSqliteDatabase, createTestEnv } from "../test-support/test-database.mjs";
 
 // Every request runs on the real D1 storage over an in-memory SQLite with the
-// real schema (../test-support/sqlite-d1.mjs), seeded with the baseline fixture
+// real schema (../test-support/test-database.mjs), seeded with the baseline fixture
 // these tests were written against. The mock storage driver they used to fall
 // back to was removed in commit 84b37ac. Like the old per-app mock, state lives
 // as long as the app object, so sequential requests on one app see each other.
@@ -18,7 +18,7 @@ const SEED_GATE_SQL = "SELECT COUNT(*) as cnt FROM users";
 
 function createTestApp() {
   const app = createApp();
-  const env = createSqliteD1Env(createBaselineInspectionStorage());
+  const env = createTestEnv(createBaselineInspectionStorage());
 
   return {
     env,
@@ -275,7 +275,7 @@ test("PUT /api/inspections/:id/rounds/current/result accepts QCC with comments",
 
 test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", async () => {
   const app = createApp();
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   seedFakeD1Database(db);
 
   db.deletedTables = [];
@@ -283,7 +283,6 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   db.insertedTables = [];
   db.executedSql = [];
   const headers = await loginAndCreateAuthHeader(app, {
-    D1_DRIVER: "d1",
     DB: db
   }, WANG_WU);
   db.executedSql = [];
@@ -305,7 +304,6 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
       })
     },
     {
-      D1_DRIVER: "d1",
       DB: db
     }
   );
@@ -369,18 +367,16 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
 
 test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   const app = createApp();
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   seedFakeD1Database(db);
 
   db.executedSql = [];
   const headers = await loginAndCreateAuthHeader(app, {
-    D1_DRIVER: "d1",
     DB: db
   });
   db.executedSql = [];
 
   const response = await app.request("http://localhost/api/inspections/insp-002", { headers }, {
-    D1_DRIVER: "d1",
     DB: db
   });
   const payload = await response.json();
@@ -417,19 +413,17 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
 
 test("GET /api/inspections uses narrow D1 reads", async () => {
   const app = createApp();
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   // Second item in li.si's project so ordering and project filtering are both visible.
   seedFakeD1Database(db, withSecondHdLngItem(createBaselineInspectionStorage()));
 
   db.executedSql = [];
   const headers = await loginAndCreateAuthHeader(app, {
-    D1_DRIVER: "d1",
     DB: db
   });
   db.executedSql = [];
 
   const response = await app.request("http://localhost/api/inspections", { headers }, {
-    D1_DRIVER: "d1",
     DB: db
   });
   const payload = await response.json();
@@ -472,18 +466,16 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
 
 test("GET /api/inspections/:id returns 404 in D1 when the item is outside project membership", async () => {
   const app = createApp();
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   seedFakeD1Database(db);
 
   db.executedSql = [];
   const headers = await loginAndCreateAuthHeader(app, {
-    D1_DRIVER: "d1",
     DB: db
   });
   db.executedSql = [];
 
   const response = await app.request("http://localhost/api/inspections/insp-003", { headers }, {
-    D1_DRIVER: "d1",
     DB: db
   });
   const payload = await response.json();
@@ -505,7 +497,7 @@ test("GET /api/inspections/:id returns 404 in D1 when the item is outside projec
 
 test("GET /api/inspections returns an empty list when the user has no project memberships", async () => {
   const app = createApp();
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const seed = createBaselineInspectionStorage();
   seed.users.push({
     id: "user-no-membership",
@@ -529,14 +521,12 @@ test("GET /api/inspections returns an empty list when the user has no project me
       disciplines: []
     },
     {
-      D1_DRIVER: "d1",
       DB: db
     }
   );
   db.executedSql = [];
 
   const response = await app.request("http://localhost/api/inspections", { headers }, {
-    D1_DRIVER: "d1",
     DB: db
   });
   const payload = await response.json();
@@ -558,7 +548,7 @@ test("GET /api/inspections returns an empty list when the user has no project me
 
 test("GET /api/inspections/:id returns 404 when the user has no project memberships", async () => {
   const app = createApp();
-  const db = new SqliteD1Database();
+  const db = new TestSqliteDatabase();
   const seed = createBaselineInspectionStorage();
   seed.users.push({
     id: "user-no-membership",
@@ -582,14 +572,12 @@ test("GET /api/inspections/:id returns 404 when the user has no project membersh
       disciplines: []
     },
     {
-      D1_DRIVER: "d1",
       DB: db
     }
   );
   db.executedSql = [];
 
   const response = await app.request("http://localhost/api/inspections/insp-002", { headers }, {
-    D1_DRIVER: "d1",
     DB: db
   });
   const payload = await response.json();

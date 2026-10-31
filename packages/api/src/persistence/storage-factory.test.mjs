@@ -2,23 +2,22 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { createInspectionStorage, createInspectionStorageResolver } from "./storage-factory.ts";
 import { D1SeededInspectionStorage } from "./d1-seeded-inspection-storage.ts";
-import { createSqliteD1 } from "../test-support/sqlite-d1.mjs";
+import { createTestDatabase } from "../test-support/test-database.mjs";
 
-// The mock storage driver was removed on purpose (commit 84b37ac): the API is
-// D1-only and refuses to start a request without a D1 binding instead of
-// silently falling back to in-memory data. These tests pin that contract.
+// The mock storage driver was removed on purpose (commit 84b37ac): the API
+// needs its SQLite database and refuses to serve a request without one instead
+// of silently falling back to in-memory data. These tests pin that contract.
 
 test("createInspectionStorage without bindings fails loudly instead of falling back to mock storage", () => {
-  assert.throws(() => createInspectionStorage(), /D1_DATABASE_BINDING_MISSING/);
+  assert.throws(() => createInspectionStorage(), /DATABASE_NOT_CONFIGURED/);
 });
 
-test("createInspectionStorage fails when the D1 driver is requested without a DB binding", () => {
-  assert.throws(() => createInspectionStorage({ D1_DRIVER: "d1" }), /D1_DATABASE_BINDING_MISSING/);
+test("createInspectionStorage fails when bindings are present but the database is missing", () => {
+  assert.throws(() => createInspectionStorage({ JWT_SECRET: "x" }), /DATABASE_NOT_CONFIGURED/);
 });
 
-test("createInspectionStorage returns D1 storage when driver and binding are present", () => {
+test("createInspectionStorage returns database-backed storage when the database is present", () => {
   const storage = createInspectionStorage({
-    D1_DRIVER: "d1",
     DB: {
       prepare() {
         throw new Error("not used");
@@ -32,15 +31,15 @@ test("createInspectionStorage returns D1 storage when driver and binding are pre
   assert.equal(storage instanceof D1SeededInspectionStorage, true);
 });
 
-test("createInspectionStorageResolver returns D1 storage over the request's binding and rejects a missing one", async () => {
+test("createInspectionStorageResolver returns database-backed storage over the request's database and rejects a missing one", async () => {
   const resolveStorage = createInspectionStorageResolver();
-  const db = createSqliteD1();
-  const first = resolveStorage({ D1_DRIVER: "d1", DB: db });
-  const second = resolveStorage({ D1_DRIVER: "d1", DB: db });
+  const db = createTestDatabase();
+  const first = resolveStorage({ DB: db });
+  const second = resolveStorage({ DB: db });
 
   assert.equal(first instanceof D1SeededInspectionStorage, true);
   assert.equal(second instanceof D1SeededInspectionStorage, true);
-  assert.throws(() => resolveStorage(), /D1_DATABASE_BINDING_MISSING/);
+  assert.throws(() => resolveStorage(), /DATABASE_NOT_CONFIGURED/);
 
   // Both resolve to the same database: a write through one is visible to the other.
   await first.readUserByUsername("nobody");

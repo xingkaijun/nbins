@@ -1,4 +1,4 @@
-import type { D1Database } from "@cloudflare/workers-types";
+import type { SqlDatabase } from "../platform/sql-database.ts";
 import type { InspectionStorageSnapshot } from "./records.ts";
 import type {
   InspectionListStorageRecord,
@@ -20,10 +20,10 @@ import { D1InspectionStorage } from "./d1-inspection-storage.ts";
  */
 export class D1SeededInspectionStorage implements InspectionStorage {
   private readonly inner: InspectionStorage;
-  private readonly db: D1Database;
+  private readonly db: SqlDatabase;
   private seeded = false;
 
-  constructor(dbOrInner: D1Database | InspectionStorage) {
+  constructor(dbOrInner: SqlDatabase | InspectionStorage) {
     if (isInspectionStorage(dbOrInner)) {
       this.inner = dbOrInner;
       // We won't have a raw DB handle in this case, but seed check

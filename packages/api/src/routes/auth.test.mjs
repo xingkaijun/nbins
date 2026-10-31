@@ -4,16 +4,16 @@ import { createApp } from "../index.ts";
 import { createPasswordHash, verifyPasswordHash } from "../auth/password.ts";
 import { verifyAccessToken } from "../auth/jwt.ts";
 import { createBaselineInspectionStorage } from "../test-support/baseline-fixture.mjs";
-import { createSqliteD1, createSqliteD1Env } from "../test-support/sqlite-d1.mjs";
+import { createTestDatabase, createTestEnv } from "../test-support/test-database.mjs";
 
 // Requests run against the real D1 storage on an in-memory SQLite with the real
-// schema (see ../test-support/sqlite-d1.mjs); the mock storage driver these
+// schema (see ../test-support/test-database.mjs); the mock storage driver these
 // tests used to fall back to was removed in commit 84b37ac.
 const SEED_GATE_SQL = "SELECT COUNT(*) as cnt FROM users";
 
 function createTestApp() {
   const app = createApp();
-  const env = createSqliteD1Env(createBaselineInspectionStorage());
+  const env = createTestEnv(createBaselineInspectionStorage());
 
   return {
     env,
@@ -24,7 +24,7 @@ function createTestApp() {
 }
 
 function createSeededD1() {
-  return createSqliteD1(createBaselineInspectionStorage());
+  return createTestDatabase(createBaselineInspectionStorage());
 }
 
 test("createPasswordHash creates hashes that verify correctly", async () => {
@@ -123,7 +123,6 @@ test("POST /api/auth/login uses narrow D1 user lookup", async () => {
       })
     },
     {
-      D1_DRIVER: "d1",
       DB: db
     }
   );
@@ -225,7 +224,6 @@ test("GET /api/auth/me uses narrow D1 user lookup by id", async () => {
       })
     },
     {
-      D1_DRIVER: "d1",
       DB: db
     }
   );
@@ -241,7 +239,6 @@ test("GET /api/auth/me uses narrow D1 user lookup by id", async () => {
       headers: { authorization: `Bearer ${loginPayload.data.token}` }
     },
     {
-      D1_DRIVER: "d1",
       DB: db
     }
   );
@@ -274,7 +271,6 @@ test("GET /api/auth/me rejects tokens for inactive users", async () => {
       })
     },
     {
-      D1_DRIVER: "d1",
       DB: db
     }
   );
@@ -292,7 +288,6 @@ test("GET /api/auth/me rejects tokens for inactive users", async () => {
       headers: { authorization: `Bearer ${loginPayload.data.token}` }
     },
     {
-      D1_DRIVER: "d1",
       DB: db
     }
   );

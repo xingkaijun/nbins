@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { createObservationTypeRoutes } from "./observation-types.ts";
 import { issueAccessToken } from "../auth/jwt.ts";
 import { createBaselineInspectionStorage } from "../test-support/baseline-fixture.mjs";
-import { createSqliteD1Env } from "../test-support/sqlite-d1.mjs";
+import { createTestEnv } from "../test-support/test-database.mjs";
 
 // The route reads and writes c.env.DB directly and sits behind requireAuth +
 // admin role, so the test runs it against an in-memory SQLite D1 with the real
@@ -11,7 +11,7 @@ import { createSqliteD1Env } from "../test-support/sqlite-d1.mjs";
 const NOW = "2026-04-03T09:00:00.000Z";
 
 function createEnv() {
-  return createSqliteD1Env({
+  return createTestEnv({
     ...createBaselineInspectionStorage(),
     observationTypes: [
       { id: "obs-type-patrol", code: "patrol", label: "Patrol", sortOrder: 1, createdAt: NOW, updatedAt: NOW },

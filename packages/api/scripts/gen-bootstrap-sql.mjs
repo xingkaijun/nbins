@@ -1,22 +1,17 @@
+// Regenerates src/db/bootstrap.sql (tables + indexes) from src/db/schema.ts / sql.ts.
+// Usage: pnpm db:gen            (writes src/db/bootstrap.sql)
+//        pnpm --filter @nbins/api run gen:bootstrap-sql -- <output-path>
 import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { createTableStatements } from "../src/db/sql.ts";
-
-const outputPathArg = process.argv.slice(2).find((value) => value !== "--");
-
-if (!outputPathArg) {
-  console.error("Usage: pnpm --filter @nbins/api run gen:bootstrap-sql -- <output-path>");
-  process.exit(1);
-}
+import { renderBootstrapSql } from "../src/db/sql.ts";
 
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const packageDir = resolve(scriptDir, "..");
-
+const outputPathArg = process.argv.slice(2).find((value) => value !== "--") ?? "src/db/bootstrap.sql";
 const outputPath = resolve(packageDir, outputPathArg);
-const sql = `${createTableStatements.join("\n\n")}\n`;
 
 await mkdir(dirname(outputPath), { recursive: true });
-await writeFile(outputPath, sql, "utf8");
+await writeFile(outputPath, renderBootstrapSql(), "utf8");
 
 console.log(outputPath);

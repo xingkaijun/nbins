@@ -1,4 +1,4 @@
-import type { D1Database } from "@cloudflare/workers-types";
+import type { SqlDatabase } from "../platform/sql-database.ts";
 import type { NcrIndexRecord } from "../persistence/records.ts";
 import type { Bindings } from "../env.ts";
 import type { AuthenticatedUser } from "../auth.ts";
@@ -61,7 +61,7 @@ interface QueryNcrIndexFilters {
 
 function assertDb(env: Bindings): NonNullable<Bindings["DB"]> {
   if (!env.DB) {
-    throw new Error("D1 database binding not configured");
+    throw new Error("DATABASE_NOT_CONFIGURED: SQLite database not configured");
   }
 
   return env.DB;
@@ -69,7 +69,7 @@ function assertDb(env: Bindings): NonNullable<Bindings["DB"]> {
 
 export function assertBucket(env: Bindings): NonNullable<Bindings["BUCKET"]> {
   if (!env.BUCKET) {
-    throw new Error("R2 bucket binding not configured");
+    throw new Error("OBJECT_STORE_NOT_CONFIGURED: file storage (NBINS_STORAGE_DIR) not configured");
   }
 
   return env.BUCKET;
@@ -249,7 +249,7 @@ export function getObjectFilename(objectKey: string): string {
 }
 
 export async function hasProjectAccess(
-  db: D1Database,
+  db: SqlDatabase,
   user: AuthenticatedUser,
   projectId: string
 ): Promise<boolean> {
@@ -261,7 +261,7 @@ export async function hasProjectAccess(
   return allowedProjectIds.includes(projectId);
 }
 
-export async function getShipContextByShipId(db: D1Database, shipId: string): Promise<ShipContext | null> {
+export async function getShipContextByShipId(db: SqlDatabase, shipId: string): Promise<ShipContext | null> {
   const row = await db
     .prepare('SELECT "id", "projectId", "shipName", "hullNumber" FROM "ships" WHERE "id" = ?')
     .bind(shipId)

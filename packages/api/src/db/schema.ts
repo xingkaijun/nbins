@@ -23,7 +23,7 @@ import type {
 
 type SqliteStorage = "text" | "integer";
 
-interface ColumnDefinition<T> {
+export interface ColumnDefinition<T> {
   storage: SqliteStorage;
   nullable?: boolean;
   primaryKey?: boolean;

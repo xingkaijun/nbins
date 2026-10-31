@@ -4,13 +4,13 @@ import { Hono } from "hono";
 import { createRequireAuth, createRequireRole, extractBearerToken } from "./auth.ts";
 import { issueAccessToken } from "./auth/jwt.ts";
 import { createBaselineInspectionStorage } from "./test-support/baseline-fixture.mjs";
-import { createSqliteD1Env } from "./test-support/sqlite-d1.mjs";
+import { createTestEnv } from "./test-support/test-database.mjs";
 
 // requireAuth re-reads the user from storage on every request (role and
 // disciplines come from D1, not from the token), so requests carry a real D1
 // binding on an in-memory SQLite seeded with the baseline fixture.
 function createEnv() {
-  return createSqliteD1Env(createBaselineInspectionStorage());
+  return createTestEnv(createBaselineInspectionStorage());
 }
 
 function createProtectedApp() {

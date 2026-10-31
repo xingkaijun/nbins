@@ -1,4 +1,4 @@
-import type { D1Database, D1PreparedStatement } from "@cloudflare/workers-types";
+import type { SqlDatabase, SqlStatement } from "../platform/sql-database.ts";
 import type {
   CommentRecord,
   InspectionItemRecord,
@@ -25,9 +25,9 @@ import {
 type JsonRow = Record<string, unknown>;
 
 export class D1InspectionStorage implements InspectionStorage {
-  private readonly db: D1Database;
+  private readonly db: SqlDatabase;
 
-  constructor(db: D1Database) {
+  constructor(db: SqlDatabase) {
     this.db = db;
   }
 
@@ -192,14 +192,14 @@ export class D1InspectionStorage implements InspectionStorage {
 
   async write(next: InspectionStorageSnapshot): Promise<void> {
     // DELETEs must run first, in their own batch
-    const deleteStatements: D1PreparedStatement[] = [];
+    const deleteStatements: SqlStatement[] = [];
     for (const tableName of ["observations", "comments", "inspection_rounds", "inspection_items", "ships", "project_members", "projects", "users"]) {
       deleteStatements.push(this.db.prepare(`DELETE FROM "${tableName}"`));
     }
     await this.db.batch(deleteStatements);
 
     // Collect all INSERT statements
-    const insertStatements: D1PreparedStatement[] = [];
+    const insertStatements: SqlStatement[] = [];
 
     for (const record of next.users) {
       insertStatements.push(
@@ -391,7 +391,7 @@ export class D1InspectionStorage implements InspectionStorage {
   async submitCurrentRoundResult(
     mutation: SubmitCurrentRoundResultStorageMutation
   ): Promise<void> {
-    const statements: D1PreparedStatement[] = [
+    const statements: SqlStatement[] = [
       this.db
         .prepare(
           `UPDATE "inspection_rounds"
@@ -465,7 +465,7 @@ export class D1InspectionStorage implements InspectionStorage {
       }
     }
 
-    const statements: D1PreparedStatement[] = [
+    const statements: SqlStatement[] = [
       this.db
         .prepare(
           `UPDATE "comments"

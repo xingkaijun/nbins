@@ -1,3 +1,4 @@
+import type { SqlDatabase } from "../platform/sql-database.ts";
 import { Hono } from "hono";
 import type { Bindings } from "../env.ts";
 import type { UserRecord } from "../persistence/records.ts";
@@ -28,7 +29,7 @@ function normalizeProjectIds(projectIds?: string[]): string[] {
 }
 
 async function syncUserProjectMemberships(
-  db: D1Database,
+  db: SqlDatabase,
   userId: string,
   projectIds: string[],
   now: string

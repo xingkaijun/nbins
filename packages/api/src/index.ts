@@ -19,28 +19,37 @@ import { createFatRoutes } from "./routes/fats.ts";
 import { createSqlConsoleRoutes } from "./routes/sql-console.ts";
 
 
+const DEFAULT_CORS_ORIGINS = [
+  "http://127.0.0.1:5173",
+  "http://localhost:5173",
+  "http://127.0.0.1:5174",
+  "http://localhost:5174",
+  "http://192.168.190.129:5173",
+  "http://127.0.0.1:4173",
+  "http://localhost:4173",
+  "https://ins.6666996.xyz",
+  "https://nbins-six.vercel.app"
+];
+
+function parseOriginList(value: string | undefined): string[] {
+  return (value ?? "")
+    .split(",")
+    .map((origin) => origin.trim().replace(/\/+$/, ""))
+    .filter(Boolean);
+}
+
 function createApp(): Hono<{ Bindings: Bindings }> {
   const app = new Hono<{ Bindings: Bindings }>();
   const resolveStorage = createInspectionStorageResolver();
 
-  // 允许所有本地开发端口和本地域名进行跨域请求
+  // 本地开发端口 + 已知前端域名；生产经 nginx 同源访问时不需要 CORS。
+  // 额外的来源用环境变量 NBINS_CORS_ORIGINS（逗号分隔）追加。
   app.use(
     "/api/*",
     cors({
-      origin: [
-        "http://127.0.0.1:5173",
-        "http://localhost:5173",
-        "http://127.0.0.1:5174",
-        "http://localhost:5174",
-        "http://192.168.190.129:5173",
-        "http://127.0.0.1:4173",
-        "http://localhost:4173",
-        "https://ins.6666996.xyz",
-        "https://nbins-six.vercel.app",
-        // Cloudflare Pages 域名
-        "https://nbins.pages.dev",
-      ],
-      allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+      origin: (origin, c) =>
+        DEFAULT_CORS_ORIGINS.includes(origin) || parseOriginList(c.env?.CORS_ORIGINS).includes(origin) ? origin : null,
+      allowMethods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"]
     })
   );
 
@@ -56,7 +65,7 @@ function createApp(): Hono<{ Bindings: Bindings }> {
     return c.json({
       appName: c.env.APP_NAME ?? "NBINS",
       environment: c.env.APP_ENV ?? "development",
-      storageMode: "d1+r2",
+      storageMode: "sqlite+fs",
       generatedAt: new Date().toISOString(),
       disciplines: DISCIPLINES.filter((d: string) => d !== "all"),
       routes: [
