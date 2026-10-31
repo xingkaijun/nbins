@@ -3,53 +3,28 @@ import assert from "node:assert/strict";
 import { createApp } from "../index.ts";
 import { createPasswordHash, verifyPasswordHash } from "../auth/password.ts";
 import { verifyAccessToken } from "../auth/jwt.ts";
-import { createSeedInspectionStorageSnapshot } from "../persistence/seed.ts";
+import { createBaselineInspectionStorage } from "../test-support/baseline-fixture.mjs";
+import { createSqliteD1, createSqliteD1Env } from "../test-support/sqlite-d1.mjs";
 
-class FakePreparedStatement {
-  #db;
-  #sql;
-  #params = [];
+// Requests run against the real D1 storage on an in-memory SQLite with the real
+// schema (see ../test-support/sqlite-d1.mjs); the mock storage driver these
+// tests used to fall back to was removed in commit 84b37ac.
+const SEED_GATE_SQL = "SELECT COUNT(*) as cnt FROM users";
 
-  constructor(db, sql) {
-    this.#db = db;
-    this.#sql = sql;
-  }
+function createTestApp() {
+  const app = createApp();
+  const env = createSqliteD1Env(createBaselineInspectionStorage());
 
-  bind(...params) {
-    this.#params = params;
-    return this;
-  }
-
-  async all() {
-    return { results: this.#db.select(this.#sql, this.#params) };
-  }
+  return {
+    env,
+    request(input, init, requestEnv) {
+      return app.request(input, init, requestEnv ?? env);
+    }
+  };
 }
 
-class FakeAuthD1Database {
-  constructor() {
-    this.tables = { users: [] };
-    this.executedSql = [];
-  }
-
-  prepare(sql) {
-    return new FakePreparedStatement(this, sql);
-  }
-
-  select(sql, params) {
-    this.executedSql.push(sql);
-
-    if (sql === 'SELECT * FROM "users" WHERE "username" = ?') {
-      return this.tables.users.filter((record) => record.username === params[0]);
-    }
-
-    if (sql === 'SELECT * FROM "users" WHERE "id" = ?') {
-      return this.tables.users.filter((record) => record.id === params[0]);
-    }
-
-    {
-      throw new Error(`Unsupported SQL: ${sql}`);
-    }
-  }
+function createSeededD1() {
+  return createSqliteD1(createBaselineInspectionStorage());
 }
 
 test("createPasswordHash creates hashes that verify correctly", async () => {
@@ -67,8 +42,8 @@ test("createPasswordHash creates hashes that verify correctly", async () => {
   assert.equal(await verifyPasswordHash("nbins-secret", "dev-only"), false);
 });
 
-test("POST /api/auth/login authenticates the default mock user", async () => {
-  const app = createApp();
+test("POST /api/auth/login authenticates a seeded D1 user", async () => {
+  const app = createTestApp();
   const response = await app.request("http://localhost/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -100,7 +75,7 @@ test("POST /api/auth/login authenticates the default mock user", async () => {
 });
 
 test("POST /api/auth/login rejects invalid credentials", async () => {
-  const app = createApp();
+  const app = createTestApp();
   const response = await app.request("http://localhost/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -117,7 +92,7 @@ test("POST /api/auth/login rejects invalid credentials", async () => {
 });
 
 test("POST /api/auth/login validates required fields", async () => {
-  const app = createApp();
+  const app = createTestApp();
   const response = await app.request("http://localhost/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -134,17 +109,8 @@ test("POST /api/auth/login validates required fields", async () => {
 });
 
 test("POST /api/auth/login uses narrow D1 user lookup", async () => {
-  const app = createApp();
-  const db = new FakeAuthD1Database();
-  const seed = createSeedInspectionStorageSnapshot();
-
-  for (const user of seed.users) {
-    db.tables.users.push({ 
-      ...user, 
-      disciplines: JSON.stringify(user.disciplines),
-      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
-    });
-  }
+  const app = createTestApp();
+  const db = createSeededD1();
 
   const response = await app.request(
     "http://localhost/api/auth/login",
@@ -165,11 +131,14 @@ test("POST /api/auth/login uses narrow D1 user lookup", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
-  assert.deepEqual(db.executedSql, ['SELECT * FROM "users" WHERE "username" = ?']);
+  // D1SeededInspectionStorage first runs its seed gate (COUNT on users, see
+  // d1-seeded-inspection-storage.ts); the user itself is fetched by one narrow
+  // lookup and never by a full users scan.
+  assert.deepEqual(db.executedSql, [SEED_GATE_SQL, 'SELECT * FROM "users" WHERE "username" = ?']);
 });
 
 test("POST /api/auth/login requires JWT_SECRET in production env", async () => {
-  const app = createApp();
+  const app = createTestApp();
   const response = await app.request(
     "http://localhost/api/auth/login",
     {
@@ -181,6 +150,8 @@ test("POST /api/auth/login requires JWT_SECRET in production env", async () => {
       })
     },
     {
+      // Real D1 binding so the request reaches token issuing; only JWT_SECRET is missing.
+      ...app.env,
       APP_ENV: "production"
     }
   );
@@ -194,7 +165,7 @@ test("POST /api/auth/login requires JWT_SECRET in production env", async () => {
 });
 
 test("GET /api/auth/me returns 401 without bearer token", async () => {
-  const app = createApp();
+  const app = createTestApp();
   const response = await app.request("http://localhost/api/auth/me");
   const payload = await response.json();
 
@@ -206,7 +177,7 @@ test("GET /api/auth/me returns 401 without bearer token", async () => {
 });
 
 test("GET /api/auth/me returns the authenticated user profile", async () => {
-  const app = createApp();
+  const app = createTestApp();
   const loginResponse = await app.request("http://localhost/api/auth/login", {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -240,17 +211,8 @@ test("GET /api/auth/me returns the authenticated user profile", async () => {
 });
 
 test("GET /api/auth/me uses narrow D1 user lookup by id", async () => {
-  const app = createApp();
-  const db = new FakeAuthD1Database();
-  const seed = createSeedInspectionStorageSnapshot();
-
-  for (const user of seed.users) {
-    db.tables.users.push({ 
-      ...user, 
-      disciplines: JSON.stringify(user.disciplines),
-      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
-    });
-  }
+  const app = createTestApp();
+  const db = createSeededD1();
 
   const loginResponse = await app.request(
     "http://localhost/api/auth/login",
@@ -287,24 +249,19 @@ test("GET /api/auth/me uses narrow D1 user lookup by id", async () => {
 
   assert.equal(response.status, 200);
   assert.equal(payload.ok, true);
+  // requireAuth and the /me handler each resolve storage (one seed gate COUNT
+  // each) and each read the user by id; no full users scan.
   assert.deepEqual(db.executedSql, [
+    SEED_GATE_SQL,
     'SELECT * FROM "users" WHERE "id" = ?',
+    SEED_GATE_SQL,
     'SELECT * FROM "users" WHERE "id" = ?'
   ]);
 });
 
 test("GET /api/auth/me rejects tokens for inactive users", async () => {
-  const app = createApp();
-  const db = new FakeAuthD1Database();
-  const seed = createSeedInspectionStorageSnapshot();
-
-  for (const user of seed.users) {
-    db.tables.users.push({ 
-      ...user, 
-      disciplines: JSON.stringify(user.disciplines),
-      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
-    });
-  }
+  const app = createTestApp();
+  const db = createSeededD1();
 
   const loginResponse = await app.request(
     "http://localhost/api/auth/login",
@@ -327,7 +284,7 @@ test("GET /api/auth/me rejects tokens for inactive users", async () => {
 
   const user = db.tables.users.find((record) => record.id === "user-inspector-li");
   assert.ok(user);
-  user.isActive = 0;
+  await db.prepare('UPDATE "users" SET "isActive" = 0 WHERE "id" = ?').bind("user-inspector-li").run();
 
   const meResponse = await app.request(
     "http://localhost/api/auth/me",

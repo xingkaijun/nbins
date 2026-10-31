@@ -29,6 +29,8 @@ interface InspectionDetailPanelProps {
   submitError: string | null;
   clientNotice: string | null;
   preview: any;
+  /** When set, the user may not change this item (see inspection-permissions.ts); controls are disabled. */
+  writeBlockedReason?: string | null;
 }
 
 export function InspectionDetailPanel({
@@ -51,9 +53,11 @@ export function InspectionDetailPanel({
   hasExistingOpenComments,
   submitError,
   clientNotice,
-  preview
+  preview,
+  writeBlockedReason = null
 }: InspectionDetailPanelProps) {
   const resultOptions = INSPECTION_RESULTS;
+  const writeBlocked = Boolean(writeBlockedReason);
 
   return (
     <div className="expansionColumns">
@@ -94,6 +98,7 @@ export function InspectionDetailPanel({
                     <strong>{entry.submittedResult ? INSPECTION_RESULT_LABELS[entry.submittedResult] || entry.submittedResult : "PENDING"}</strong>
                     <span>{formatStamp(entry.submittedAt)} by {entry.inspectorDisplayName || entry.submittedBy}</span>
                     <small>{entry.commentIds.length} comments raised in this round</small>
+                    {entry.notes ? <small className="timelineNotes">Notes: {entry.notes}</small> : null}
                   </div>
                 </div>
               ))
@@ -157,7 +162,7 @@ export function InspectionDetailPanel({
                           type="button"
                           className="commentCheckboxLabel"
                           onClick={() => void handleResolveComment(comment.id)}
-                          disabled={submitting || resolvingCommentId === comment.id}
+                          disabled={writeBlocked || submitting || resolvingCommentId === comment.id}
                         >
                           {resolvingCommentId === comment.id ? "Resolving..." : "Resolve"}
                         </button>
@@ -174,7 +179,7 @@ export function InspectionDetailPanel({
                             color: 'var(--nb-text-muted)' 
                           }}
                           onClick={() => { setRemarkModalCommentId(comment.id); setRemarkText(comment.resolveRemark || ""); }}
-                          disabled={submitting || resolvingCommentId === comment.id}
+                          disabled={writeBlocked || submitting || resolvingCommentId === comment.id}
                         >
                           {comment.resolveRemark ? 'Remark!' : 'Remark'}
                         </button>
@@ -185,7 +190,7 @@ export function InspectionDetailPanel({
                         className="commentCheckboxLabel"
                         style={{ background: '#fef2f2', color: '#b91c1c', border: '1px solid #fee2e2' }}
                         onClick={() => void handleReopenComment(comment.id)}
-                        disabled={submitting}
+                        disabled={writeBlocked || submitting}
                       >
                         Reopen
                       </button>
@@ -210,6 +215,7 @@ export function InspectionDetailPanel({
             {preview ? <span className="badge">NEXT: {preview.nextWorkflowLabel.toUpperCase()}</span> : null}
           </div>
 
+          {writeBlockedReason ? <div className="alert warning" role="status" style={{ margin: '12px 0' }}>{writeBlockedReason}</div> : null}
           {submitError ? <div className="alert error" style={{ margin: '12px 0' }}>{submitError}</div> : null}
           {clientNotice ? <div className="alert success" style={{ margin: '12px 0' }}>{clientNotice}</div> : null}
 
@@ -229,7 +235,7 @@ export function InspectionDetailPanel({
                       value={result}
                       checked={selectedResult === result}
                       onChange={() => setSelectedResult(result)}
-                      disabled={submitting}
+                      disabled={writeBlocked || submitting}
                     />
                     <span>{result}</span>
                   </label>
@@ -259,7 +265,7 @@ export function InspectionDetailPanel({
                     ? "Allowed for QCC / OWC / RJ."
                     : "Disabled for AA and CX."
                 }
-                disabled={!canAddComments || submitting}
+                disabled={writeBlocked || !canAddComments || submitting}
               />
             </label>
 
@@ -276,7 +282,7 @@ export function InspectionDetailPanel({
               </div>
             ) : null}
 
-            <button className="submitButton" type="submit" disabled={submitting || loading}>
+            <button className="submitButton" type="submit" disabled={writeBlocked || submitting || loading}>
               {submitting ? "SUBMITTING..." : mode === "api" ? "SUBMIT RESULT" : "SUBMIT IN DEMO MODE"}
             </button>
           </form>

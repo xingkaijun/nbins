@@ -13,6 +13,8 @@ import { Login } from "./pages/Login";
 import { Observations } from "./pages/Observations";
 import { Ncrs } from "./pages/Ncrs";
 import { Fats } from "./pages/Fats";
+import { InspectionDetailPage } from "./pages/InspectionDetailPage";
+import { INSPECTION_DETAIL_ROUTE } from "./inspection-sync";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 
 const routerBasename = import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
@@ -37,6 +39,7 @@ export function App() {
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Projects />} />
                   <Route path="dashboard" element={<Dashboard />} />
+                  <Route path={INSPECTION_DETAIL_ROUTE} element={<InspectionDetailPage />} />
                   <Route path="reports" element={<Reports />} />
                   <Route path="import" element={<Import />} />
                   <Route path="observations" element={<Observations />} />

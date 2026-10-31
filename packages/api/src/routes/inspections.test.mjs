@@ -6,209 +6,41 @@ import {
   INSPECTION_DETAIL_SUMMARY_SQL,
   INSPECTION_LIST_SUMMARY_SQL
 } from "../persistence/d1-inspection-sql.ts";
-import { createSeedInspectionStorageSnapshot } from "../persistence/seed.ts";
+import { createBaselineInspectionStorage } from "../test-support/baseline-fixture.mjs";
+import { SqliteD1Database, createSqliteD1Env } from "../test-support/sqlite-d1.mjs";
 
-class FakePreparedStatement {
-  #db;
-  #sql;
-  #params = [];
-
-  constructor(db, sql) {
-    this.#db = db;
-    this.#sql = sql;
-  }
-
-  bind(...params) {
-    this.#params = params;
-    return this;
-  }
-
-  async all() {
-    return { results: this.#db.select(this.#sql, this.#params) };
-  }
-
-  async run() {
-    this.#db.execute(this.#sql, this.#params);
-    return { success: true };
-  }
-}
-
-class FakeD1Database {
-  constructor() {
-    this.tables = {
-      users: [],
-      projects: [],
-      project_members: [],
-      ships: [],
-      inspection_items: [],
-      inspection_rounds: [],
-      comments: []
-    };
-    this.executedSql = [];
-    this.deletedTables = [];
-    this.updatedTables = [];
-    this.insertedTables = [];
-  }
-
-  prepare(sql) {
-    return new FakePreparedStatement(this, sql);
-  }
-
-  async batch(statements) {
-    for (const statement of statements) {
-      await statement.run();
-    }
-
-    return [];
-  }
-
-  select(sql, params) {
-    this.executedSql.push(sql);
-    if (sql.includes('FROM "inspection_items" AS item')) {
-      const items =
-        params.length === 0
-          ? this.tables.inspection_items
-          : this.tables.inspection_items.filter((record) => record.id === params[0]);
-
-      return items.map((item) => {
-        const ship = this.tables.ships.find((record) => record.id === item.shipId);
-        const project = ship
-          ? this.tables.projects.find((record) => record.id === ship.projectId)
-          : null;
-
-        if (!ship || !project) {
-          throw new Error(`Missing joined rows for inspection item ${item.id}`);
-        }
-
-        return {
-          item_id: item.id,
-          item_shipId: item.shipId,
-          item_itemName: item.itemName,
-          item_itemNameNormalized: item.itemNameNormalized,
-          item_discipline: item.discipline,
-          item_workflowStatus: item.workflowStatus,
-          item_lastRoundResult: item.lastRoundResult,
-          item_resolvedResult: item.resolvedResult,
-          item_currentRound: item.currentRound,
-          item_openCommentsCount: item.openCommentsCount,
-          item_version: item.version,
-          item_source: item.source,
-          item_createdAt: item.createdAt,
-          item_updatedAt: item.updatedAt,
-          ship_id: ship.id,
-          ship_projectId: ship.projectId,
-          ship_hullNumber: ship.hullNumber,
-          ship_shipName: ship.shipName,
-          ship_shipType: ship.shipType,
-          ship_status: ship.status,
-          ship_createdAt: ship.createdAt,
-          ship_updatedAt: ship.updatedAt,
-          project_id: project.id,
-          project_name: project.name,
-          project_code: project.code,
-          project_status: project.status,
-          project_owner: project.owner,
-          project_shipyard: project.shipyard,
-          project_class: project.class,
-          project_reportRecipients: project.reportRecipients,
-          project_ncrRecipients: project.ncrRecipients,
-          project_createdAt: project.createdAt,
-          project_updatedAt: project.updatedAt
-        };
-      });
-    }
-
-    const countMatch = sql.match(/SELECT COUNT\(\*\) AS "count" FROM "([^"]+)"/);
-
-    if (countMatch) {
-      const [, tableName] = countMatch;
-      const rows = [...this.tables[tableName]];
-      return [{ count: this.#filterRows(sql, params, rows).length }];
-    }
-
-    const [, tableName] = sql.match(/FROM "([^"]+)"/) ?? [];
-    const rows = [...this.tables[tableName]];
-    return this.#filterRows(sql, params, rows);
-  }
-
-  #filterRows(sql, params, rows) {
-    const inMatch = sql.match(/WHERE "([^"]+)" IN \(([^)]+)\)/);
-
-    if (inMatch) {
-      const [, column] = inMatch;
-      return rows.filter((row) => params.includes(row[column]));
-    }
-
-    const whereMatches = [...sql.matchAll(/"([^"]+)" = \?/g)];
-
-    if (whereMatches.length === 0) {
-      return rows;
-    }
-
-    return rows.filter((row) =>
-      whereMatches.every((match, index) => row[match[1]] === params[index])
-    );
-  }
-
-  execute(sql, params) {
-    const deleteMatch = sql.match(/DELETE FROM "([^"]+)"/);
-
-    if (deleteMatch) {
-      this.deletedTables.push(deleteMatch[1]);
-      this.tables[deleteMatch[1]] = [];
-      return;
-    }
-
-    const updateMatch = sql.match(/UPDATE "([^"]+)"\s+SET\s+(.+?)\s+WHERE "id" = \?/s);
-
-    if (updateMatch) {
-      const [, tableName, rawAssignments] = updateMatch;
-      const assignments = rawAssignments
-        .split(",")
-        .map((assignment) => assignment.trim())
-        .map((assignment) => assignment.match(/"([^"]+)"/)?.[1] ?? null);
-      const id = params[params.length - 1];
-      const row = this.tables[tableName].find((entry) => entry.id === id);
-
-      if (!row) {
-        throw new Error(`Missing row ${tableName}.${id}`);
-      }
-
-      assignments.forEach((column, index) => {
-        row[column] = params[index];
-      });
-      this.updatedTables.push(tableName);
-      return;
-    }
-
-    const insertMatch = sql.match(/INSERT INTO "([^"]+)" \(([^)]+)\)/);
-
-    if (!insertMatch) {
-      throw new Error(`Unsupported SQL: ${sql}`);
-    }
-
-    const [, tableName, rawColumns] = insertMatch;
-    const columns = rawColumns.split(",").map((column) => column.trim().replaceAll('"', ""));
-    const row = Object.fromEntries(columns.map((column, index) => [column, params[index]]));
-    this.tables[tableName].push(row);
-    this.insertedTables.push(tableName);
-  }
-}
+// Every request runs on the real D1 storage over an in-memory SQLite with the
+// real schema (../test-support/sqlite-d1.mjs), seeded with the baseline fixture
+// these tests were written against. The mock storage driver they used to fall
+// back to was removed in commit 84b37ac. Like the old per-app mock, state lives
+// as long as the app object, so sequential requests on one app see each other.
+const SEED_GATE_SQL = "SELECT COUNT(*) as cnt FROM users";
 
 function createTestApp() {
-  return createApp();
+  const app = createApp();
+  const env = createSqliteD1Env(createBaselineInspectionStorage());
+
+  return {
+    env,
+    request(input, init, requestEnv) {
+      return app.request(input, init, requestEnv ?? env);
+    }
+  };
 }
 
-async function loginAndCreateAuthHeader(app, env = {}) {
+const LI_SI = { username: "li.si", password: "nbins-dev-li-2026" };
+// wang.wu is the member of project-cssc-series with the CCS discipline, i.e. the
+// inspector the API allows to write insp-003 (membership + discipline checks
+// in routes/inspections.ts).
+const WANG_WU = { username: "wang.wu", password: "nbins-dev-wang-2026" };
+
+async function loginAndCreateAuthHeader(app, env, credentials = LI_SI) {
   const response = await app.request(
     "http://localhost/api/auth/login",
     {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        username: "li.si",
-        password: "nbins-dev-li-2026"
-      })
+      body: JSON.stringify(credentials)
     },
     env
   );
@@ -226,38 +58,44 @@ async function createAuthHeaderForUser(claims, env = {}) {
   };
 }
 
-function seedFakeD1Database(db, seed = createSeedInspectionStorageSnapshot()) {
-  for (const user of seed.users) {
-    db.tables.users.push({
-      ...user,
-      disciplines: JSON.stringify(user.disciplines),
-      accessibleProjectIds: JSON.stringify(user.accessibleProjectIds)
-    });
-  }
+/** Adds insp-001 (PAINT, ship H-2748 in project-hd-lng) next to insp-002. */
+function withSecondHdLngItem(seed) {
+  seed.inspectionItems.push({
+    id: "insp-001",
+    shipId: "ship-h2748",
+    itemName: "Ballast Tank Coating Inspection",
+    itemNameNormalized: "ballast tank coating inspection",
+    discipline: "PAINT",
+    workflowStatus: "pending",
+    lastRoundResult: null,
+    resolvedResult: null,
+    currentRound: 1,
+    openCommentsCount: 0,
+    version: 1,
+    source: "manual",
+    createdAt: "2026-04-02T09:00:00.000Z",
+    updatedAt: "2026-04-02T09:00:00.000Z"
+  });
+  seed.inspectionRounds.push({
+    id: "round-insp-001-r1",
+    inspectionItemId: "insp-001",
+    roundNumber: 1,
+    rawItemName: "Ballast Tank Coating Inspection",
+    plannedDate: "2026-04-05",
+    actualDate: null,
+    yardQc: "Li Si",
+    result: null,
+    inspectedBy: null,
+    notes: null,
+    source: "manual",
+    createdAt: "2026-04-02T09:00:00.000Z",
+    updatedAt: "2026-04-02T09:00:00.000Z"
+  });
+  return seed;
+}
 
-  for (const project of seed.projects) {
-    db.tables.projects.push({ ...project, reportRecipients: JSON.stringify(project.reportRecipients), ncrRecipients: JSON.stringify(project.ncrRecipients) });
-  }
-
-  for (const member of seed.projectMembers) {
-    db.tables.project_members.push({ ...member });
-  }
-
-  for (const ship of seed.ships) {
-    db.tables.ships.push({ ...ship });
-  }
-
-  for (const item of seed.inspectionItems) {
-    db.tables.inspection_items.push({ ...item });
-  }
-
-  for (const round of seed.inspectionRounds) {
-    db.tables.inspection_rounds.push({ ...round });
-  }
-
-  for (const comment of seed.comments) {
-    db.tables.comments.push({ ...comment });
-  }
+function seedFakeD1Database(db, seed = createBaselineInspectionStorage()) {
+  db.seed(seed);
 }
 
 test("GET /api/inspections returns 401 without bearer token", async () => {
@@ -320,7 +158,7 @@ test("GET /api/inspections/:id returns 401 without bearer token", async () => {
   assert.equal(payload.error, "Authorization header must use Bearer token");
 });
 
-test("GET /api/inspections/:id keeps mock as the default runtime driver", async () => {
+test("GET /api/inspections/:id serves the seeded item through the D1 driver", async () => {
   const app = createTestApp();
   const headers = await loginAndCreateAuthHeader(app);
   const response = await app.request("http://localhost/api/inspections/insp-002", { headers });
@@ -332,7 +170,7 @@ test("GET /api/inspections/:id keeps mock as the default runtime driver", async 
   assert.equal(payload.data.version, 3);
 });
 
-test("default mock driver preserves writes across sequential requests", async () => {
+test("D1 storage preserves writes across sequential requests", async () => {
   const app = createTestApp();
   const headers = await createAuthHeaderForUser({
     id: "user-inspector-wang",
@@ -405,7 +243,7 @@ test("PUT /api/inspections/:id/rounds/current/result returns 401 without bearer 
 
 test("PUT /api/inspections/:id/rounds/current/result accepts QCC with comments", async () => {
   const app = createTestApp();
-  const headers = await loginAndCreateAuthHeader(app);
+  const headers = await loginAndCreateAuthHeader(app, undefined, WANG_WU);
   const response = await app.request(
     "http://localhost/api/inspections/insp-003/rounds/current/result",
     {
@@ -437,7 +275,7 @@ test("PUT /api/inspections/:id/rounds/current/result accepts QCC with comments",
 
 test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", async () => {
   const app = createApp();
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   seedFakeD1Database(db);
 
   db.deletedTables = [];
@@ -447,7 +285,7 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   const headers = await loginAndCreateAuthHeader(app, {
     D1_DRIVER: "d1",
     DB: db
-  });
+  }, WANG_WU);
   db.executedSql = [];
 
   const response = await app.request(
@@ -480,8 +318,23 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
   assert.deepEqual(db.deletedTables, []);
   assert.deepEqual(db.updatedTables, ["inspection_rounds", "inspection_items"]);
   assert.deepEqual(db.insertedTables, ["comments"]);
-  assert.deepEqual(db.executedSql.slice(0, 7), [
+  // 1) Authorization: user by id, then the membership gate (project_members +
+  //    one narrow detail read of the target item, routes/inspections.ts). Each
+  //    storage resolve runs the seed gate COUNT (d1-seeded-inspection-storage.ts).
+  const writeStart = db.executedSql.indexOf('SELECT * FROM "inspection_items" WHERE "id" = ?');
+  assert.deepEqual(db.executedSql.slice(0, writeStart), [
+    SEED_GATE_SQL,
     'SELECT * FROM "users" WHERE "id" = ?',
+    SEED_GATE_SQL,
+    'SELECT * FROM "project_members" WHERE "userId" = ?',
+    SEED_GATE_SQL,
+    INSPECTION_DETAIL_SUMMARY_SQL,
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
+    'SELECT * FROM "comments" WHERE "inspectionItemId" = ?',
+    'SELECT * FROM "users" WHERE "id" IN (?)'
+  ]);
+  // 2) The write itself: only narrow reads of the affected item, then the reload.
+  assert.deepEqual(db.executedSql.slice(writeStart, writeStart + 6), [
     'SELECT * FROM "inspection_items" WHERE "id" = ?',
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ? AND "roundNumber" = ?',
     'SELECT COUNT(*) AS "count" FROM "comments" WHERE "inspectionItemId" = ? AND "status" = ?',
@@ -489,7 +342,7 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
     'SELECT * FROM "comments" WHERE "inspectionItemId" = ?'
   ]);
-  assert.equal(db.executedSql[7], 'SELECT * FROM "users" WHERE "id" IN (?)');
+  assert.equal(db.executedSql[writeStart + 6], 'SELECT * FROM "users" WHERE "id" IN (?)');
   assert.equal(
     db.executedSql.some((sql) =>
       /^SELECT \* FROM "(users|projects|ships|inspection_items|inspection_rounds|comments)"$/.test(sql)
@@ -516,7 +369,7 @@ test("PUT /api/inspections/:id/rounds/current/result uses narrow D1 writes", asy
 
 test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   const app = createApp();
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   seedFakeD1Database(db);
 
   db.executedSql = [];
@@ -542,7 +395,9 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
   assert.deepEqual(
     db.executedSql,
     [
+      SEED_GATE_SQL,
       'SELECT * FROM "users" WHERE "id" = ?',
+      SEED_GATE_SQL,
       'SELECT * FROM "project_members" WHERE "userId" = ?',
       INSPECTION_DETAIL_SUMMARY_SQL,
       'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
@@ -562,8 +417,9 @@ test("GET /api/inspections/:id uses narrow D1 reads", async () => {
 
 test("GET /api/inspections uses narrow D1 reads", async () => {
   const app = createApp();
-  const db = new FakeD1Database();
-  seedFakeD1Database(db);
+  const db = new SqliteD1Database();
+  // Second item in li.si's project so ordering and project filtering are both visible.
+  seedFakeD1Database(db, withSecondHdLngItem(createBaselineInspectionStorage()));
 
   db.executedSql = [];
   const headers = await loginAndCreateAuthHeader(app, {
@@ -589,11 +445,15 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
     ),
     false
   );
+  // Rounds are fetched for every item the list SQL returns (3 seeded items);
+  // project filtering then happens in the repository.
   assert.deepEqual(db.executedSql, [
+    SEED_GATE_SQL,
     'SELECT * FROM "users" WHERE "id" = ?',
+    SEED_GATE_SQL,
     'SELECT * FROM "project_members" WHERE "userId" = ?',
     INSPECTION_LIST_SUMMARY_SQL,
-    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?, ?, ?, ?)'
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?, ?)'
   ]);
   assert.equal(db.executedSql.filter((sql) => sql === INSPECTION_LIST_SUMMARY_SQL).length, 1);
   assert.equal(
@@ -612,7 +472,7 @@ test("GET /api/inspections uses narrow D1 reads", async () => {
 
 test("GET /api/inspections/:id returns 404 in D1 when the item is outside project membership", async () => {
   const app = createApp();
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   seedFakeD1Database(db);
 
   db.executedSql = [];
@@ -632,7 +492,9 @@ test("GET /api/inspections/:id returns 404 in D1 when the item is outside projec
   assert.equal(payload.ok, false);
   assert.equal(payload.error, "Inspection item not found");
   assert.deepEqual(db.executedSql, [
+    SEED_GATE_SQL,
     'SELECT * FROM "users" WHERE "id" = ?',
+    SEED_GATE_SQL,
     'SELECT * FROM "project_members" WHERE "userId" = ?',
     INSPECTION_DETAIL_SUMMARY_SQL,
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
@@ -643,8 +505,8 @@ test("GET /api/inspections/:id returns 404 in D1 when the item is outside projec
 
 test("GET /api/inspections returns an empty list when the user has no project memberships", async () => {
   const app = createApp();
-  const db = new FakeD1Database();
-  const seed = createSeedInspectionStorageSnapshot();
+  const db = new SqliteD1Database();
+  const seed = createBaselineInspectionStorage();
   seed.users.push({
     id: "user-no-membership",
     username: "no.membership",
@@ -683,19 +545,21 @@ test("GET /api/inspections returns an empty list when the user has no project me
   assert.equal(payload.ok, true);
   assert.deepEqual(payload.data.items, []);
   assert.equal(payload.data.summary.openComments, 0);
+  // Membership is now read once per request (it used to be read twice).
   assert.deepEqual(db.executedSql, [
+    SEED_GATE_SQL,
     'SELECT * FROM "users" WHERE "id" = ?',
-    'SELECT * FROM "project_members" WHERE "userId" = ?',
+    SEED_GATE_SQL,
     'SELECT * FROM "project_members" WHERE "userId" = ?',
     INSPECTION_LIST_SUMMARY_SQL,
-    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?, ?, ?, ?)'
+    'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" IN (?, ?)'
   ]);
 });
 
 test("GET /api/inspections/:id returns 404 when the user has no project memberships", async () => {
   const app = createApp();
-  const db = new FakeD1Database();
-  const seed = createSeedInspectionStorageSnapshot();
+  const db = new SqliteD1Database();
+  const seed = createBaselineInspectionStorage();
   seed.users.push({
     id: "user-no-membership",
     username: "no.membership",
@@ -733,9 +597,11 @@ test("GET /api/inspections/:id returns 404 when the user has no project membersh
   assert.equal(response.status, 404);
   assert.equal(payload.ok, false);
   assert.equal(payload.error, "Inspection item not found");
+  // Membership is now read once per request (it used to be read twice).
   assert.deepEqual(db.executedSql, [
+    SEED_GATE_SQL,
     'SELECT * FROM "users" WHERE "id" = ?',
-    'SELECT * FROM "project_members" WHERE "userId" = ?',
+    SEED_GATE_SQL,
     'SELECT * FROM "project_members" WHERE "userId" = ?',
     INSPECTION_DETAIL_SUMMARY_SQL,
     'SELECT * FROM "inspection_rounds" WHERE "inspectionItemId" = ?',
@@ -746,7 +612,7 @@ test("GET /api/inspections/:id returns 404 when the user has no project membersh
 
 test("PUT /api/inspections/:id/rounds/current/result accepts CX without adding comments", async () => {
   const app = createTestApp();
-  const headers = await loginAndCreateAuthHeader(app);
+  const headers = await loginAndCreateAuthHeader(app, undefined, WANG_WU);
   const response = await app.request(
     "http://localhost/api/inspections/insp-003/rounds/current/result",
     {
@@ -939,7 +805,7 @@ test("PUT /api/inspections/:id/comments/:commentId/resolve resolves a comment an
       method: "PUT",
       headers: { ...headers, "content-type": "application/json" },
       body: JSON.stringify({
-        resolvedBy: "user-li-si",
+        resolvedBy: "user-inspector-li",
         expectedVersion: initialVersion
       })
     }
@@ -948,7 +814,10 @@ test("PUT /api/inspections/:id/comments/:commentId/resolve resolves a comment an
 
   assert.equal(resolveResponse.status, 200);
   assert.equal(resolvePayload.ok, true);
-  assert.equal(resolvePayload.data.openCommentCount, initialPayload.data.openCommentCount - 1);
+  // The resolve endpoint answers with ResolveCommentResponse = { item: InspectionItemDetailResponse }
+  // (packages/shared/src/inspection-detail.ts), so the updated detail is under data.item.
+  assert.equal(typeof initialPayload.data.openCommentCount, "number");
+  assert.equal(resolvePayload.data.item.openCommentCount, initialPayload.data.openCommentCount - 1);
 
   // 3. 验证持久化状态
   const finalResponse = await app.request("http://localhost/api/inspections/insp-002", { headers });
@@ -956,7 +825,13 @@ test("PUT /api/inspections/:id/comments/:commentId/resolve resolves a comment an
   const resolvedComment = finalPayload.data.comments.find(c => c.id === targetComment.id);
 
   assert.equal(resolvedComment.status, "closed");
-  assert.equal(resolvedComment.resolvedBy, "user-li-si");
+  // closedBy stores the user id (FK to users); the API shows that user's display
+  // name (inspection-detail-mapper.ts: closedBy?.displayName ?? record.closedBy).
+  assert.equal(resolvedComment.resolvedBy, "Li Si");
+  assert.equal(
+    app.env.DB.tables.comments.find((record) => record.id === targetComment.id).closedBy,
+    "user-inspector-li"
+  );
   assert.equal(finalPayload.data.version, initialVersion + 1);
 });
 

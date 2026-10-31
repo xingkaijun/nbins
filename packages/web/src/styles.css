@@ -381,6 +381,84 @@ tbody tr.record-row.isSelected {
   border-left: 2px solid var(--nb-accent);
 }
 
+/* Item link that opens the standalone detail page in a new tab */
+.rowOpenLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: inherit;
+  border-radius: 4px;
+}
+.rowOpenLink:hover strong {
+  text-decoration: underline;
+}
+.rowOpenLink:focus-visible {
+  outline: 2px solid var(--nb-accent);
+  outline-offset: 2px;
+}
+.rowOpenIcon {
+  flex-shrink: 0;
+  color: var(--nb-text-muted);
+}
+.rowOpenLink:hover .rowOpenIcon,
+.rowOpenLink:focus-visible .rowOpenIcon {
+  color: var(--nb-accent);
+}
+
+/* Standalone inspection page (/inspections/:itemId) */
+.inspectionPageNav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.inspectionPageBack {
+  font-weight: 700;
+  color: var(--nb-accent);
+}
+.inspectionPageBack:focus-visible {
+  outline: 2px solid var(--nb-accent);
+  outline-offset: 2px;
+}
+.inspectionPageId {
+  font-size: 10px;
+  color: var(--nb-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.inspectionPageBody {
+  background: var(--nb-panel);
+  border: 1px solid var(--nb-border);
+  border-radius: 12px;
+}
+.inspectionPageContextGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+  margin: 0 0 12px;
+}
+.inspectionPageContextItem {
+  padding: 6px 10px;
+  margin: 0;
+}
+.inspectionPageContextItem dt {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+.inspectionPageContextItem dd {
+  margin: 2px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+}
+.timelineNotes {
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 /* Expansion Panel inside Table */
 .expansion-row {
   background: #fafcfd;

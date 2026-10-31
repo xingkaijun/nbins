@@ -1,37 +1,25 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  COMMENT_STATUSES,
-  DISCIPLINES,
-  INSPECTION_RESULTS,
   INSPECTION_RESULT_LABELS,
-  type InspectionItemComment,
-  type InspectionItemDetailResponse,
-  type InspectionListItem,
-  type InspectionResult,
-  syncListItemWithDetail
+  type InspectionListItem
 } from "@nbins/shared";
-import { ApiError, fetchInspectionList, fetchInspectionDetail, fetchProjects, type ProjectRecord } from "../api";
+import { fetchInspectionList, fetchInspectionDetail, fetchProjects, type ProjectRecord } from "../api";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
-import { type DetailTransportMode, useInspectionDetail } from "../useInspectionDetail";
+import type { DetailTransportMode } from "../useInspectionDetail";
 import { generateInspectionChecklistPdf, generateInspectionReport, generateInspectionChecklistAsciiPdf } from "../utils/pdf-generator";
-import { useAuth } from "../auth-context";
-
-const resultOptions = INSPECTION_RESULTS;
 import {
-  commentStatusLabels,
+  buildInspectionDetailHref,
+  isBroadcastChannelSupported,
+  openInspectionInNewTab,
+  subscribeInspectionUpdates
+} from "../inspection-sync";
+import {
   resultTone,
-  formatStamp,
-  buildCommentDrafts,
-  buildSubmissionPreview,
-  createSubmittedComments,
-  createLocalResolvedDetail,
-  createLocalReopenedDetail,
-  createLocalRemarkDetail,
-  createLocalSubmissionDetail,
-  buildActualDate,
   syncDashboardItem
 } from "./dashboard/dashboard-helpers";
-import { InspectionDetailPanel } from "./dashboard/InspectionDetailPanel";
+
+/** Elements inside a row that have their own click behaviour. */
+const ROW_INTERACTIVE_SELECTOR = "a, button, input, select, textarea, label";
 
 export function Dashboard() {
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
@@ -41,10 +29,13 @@ export function Dashboard() {
   const [dataGeneratedAt, setDataGeneratedAt] = useState<string>(new Date().toISOString());
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
   
-  const [expandedRowId, setExpandedRowId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
+  // Bumped to force a list refetch (fallback sync when BroadcastChannel is unavailable).
+  const [listReloadToken, setListReloadToken] = useState(0);
+  // Last row opened in a new tab, highlighted so the user keeps their place in the list.
+  const [lastOpenedId, setLastOpenedId] = useState<string | null>(null);
 
   // Load projects
   useEffect(() => {
@@ -74,7 +65,6 @@ export function Dashboard() {
     async function loadList() {
       if (!selectedProjectId) {
         setListItems([]);
-        setExpandedRowId(null);
         setSelectedIds(new Set());
         setDataGeneratedAt(new Date().toISOString());
         setListLoading(false);
@@ -92,7 +82,6 @@ export function Dashboard() {
         if (!active) return;
         setListMode("api");
         setListItems([]);
-        setExpandedRowId(null);
         setSelectedIds(new Set());
         setDataGeneratedAt(new Date().toISOString());
       } finally {
@@ -101,60 +90,39 @@ export function Dashboard() {
     }
     void loadList();
     return () => { active = false; };
-  }, [selectedProjectId]);
-  const [selectedResult, setSelectedResult] = useState<InspectionResult>("QCC");
-  const [commentText, setCommentText] = useState("");
-  const [clientNotice, setClientNotice] = useState<string | null>(null);
-  const { session } = useAuth();
-  // Using dynamic logged-in user to prevent Foreign Key constraints error
-  const currentUserId = session?.user.id || "admin";
-  const currentUserDisplayName = session?.user.displayName || "Admin";
+  }, [selectedProjectId, listReloadToken]);
 
+  // Keep the list in sync with saves made on /inspections/:itemId in other tabs.
+  // Primary: BroadcastChannel (see inspection-sync.ts for why). Fallback for
+  // browsers without BroadcastChannel: refetch the list when this tab becomes
+  // visible again.
+  useEffect(() => {
+    const unsubscribe = subscribeInspectionUpdates(({ detail }) => {
+      setListItems((current) => syncDashboardItem(current, detail));
+    });
+
+    if (isBroadcastChannelSupported()) {
+      return unsubscribe;
+    }
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        setListReloadToken((token) => token + 1);
+      }
+    }
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      unsubscribe();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
   const localToday = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
   const [filterDate, setFilterDate] = useState<string>(localToday);
   const [filterMode, setFilterMode] = useState<"date" | "pending" | "open-comments">("date");
   const [filterHull, setFilterHull] = useState<string>("ALL");
   const [filterDiscipline, setFilterDiscipline] = useState<string>("ALL");
-  const [resolvingCommentId, setResolvingCommentId] = useState<string | null>(null);
-  const [remarkModalCommentId, setRemarkModalCommentId] = useState<string | null>(null);
-  const [remarkText, setRemarkText] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
-
-  const fallbackDetail = undefined;
-  const {
-    detail: selectedDetail,
-    mode,
-    loading,
-    error,
-    submitError,
-    submitting,
-    refresh,
-    applyLocalDetail,
-    submit,
-    resolveComment,
-    addRemark,
-    reopenComment
-  } = useInspectionDetail({
-    inspectionItemId: expandedRowId ?? "",
-    fallbackDetail
-  });
-
-  const draftComments = useMemo(() => buildCommentDrafts(commentText), [commentText]);
-  const canAddComments = selectedResult === "QCC" || selectedResult === "OWC" || selectedResult === "RJ";
-
-  const openCommentCount = selectedDetail?.comments.filter((comment) => comment.status === "open").length ?? 0;
-  const hasExistingOpenComments = openCommentCount > 0;
-
-  const preview = selectedDetail
-    ? buildSubmissionPreview(selectedDetail, selectedResult, draftComments)
-    : null;
-
-  useEffect(() => {
-    if (selectedDetail) {
-      setSelectedResult(selectedDetail.lastRoundResult ?? "QCC");
-    }
-  }, [selectedDetail?.id, selectedDetail?.lastRoundResult]);
-
   const currentProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
@@ -210,13 +178,43 @@ export function Dashboard() {
     return acc;
   }, {} as Record<string, number>);
 
-  function handleToggleRow(id: string): void {
-    if (expandedRowId === id) {
-      setExpandedRowId(null);
-    } else {
-      setExpandedRowId(id);
-      setCommentText("");
-      setClientNotice(null);
+  /**
+   * Row click opens the item in a new tab (window.open). Clicks on the checkbox,
+   * the report button or the item link keep their own behaviour, and a text
+   * selection drag does not open anything.
+   */
+  function handleRowClick(event: React.MouseEvent<HTMLTableRowElement>, id: string): void {
+    const target = event.target as HTMLElement | null;
+    if (target?.closest(ROW_INTERACTIVE_SELECTOR)) {
+      return;
+    }
+    if (window.getSelection()?.toString()) {
+      return;
+    }
+    setLastOpenedId(id);
+    openInspectionInNewTab(id);
+  }
+
+  /** Middle click on the row behaves like middle click on a link. */
+  function handleRowAuxClick(event: React.MouseEvent<HTMLTableRowElement>, id: string): void {
+    if (event.button !== 1) {
+      return;
+    }
+    const target = event.target as HTMLElement | null;
+    if (target?.closest(ROW_INTERACTIVE_SELECTOR)) {
+      return;
+    }
+    event.preventDefault();
+    setLastOpenedId(id);
+    openInspectionInNewTab(id);
+  }
+
+  /** The item link is a real <a target="_blank">; Space opens it too (Enter is native). */
+  function handleOpenLinkKeyDown(event: React.KeyboardEvent<HTMLAnchorElement>, id: string): void {
+    if (event.key === " " || event.key === "Spacebar") {
+      event.preventDefault();
+      setLastOpenedId(id);
+      openInspectionInNewTab(id);
     }
   }
 
@@ -291,196 +289,6 @@ export function Dashboard() {
       alert("Failed to fetch full detail for PDF report.");
     }
   }
-
-
-  function persistLocalDetail(nextDetail: InspectionItemDetailResponse): void {
-    applyLocalDetail(nextDetail);
-    setListItems((current) => syncDashboardItem(current, nextDetail));
-  }
-
-  function persistResolvedDetail(nextDetail: InspectionItemDetailResponse): void {
-    setListItems((current) => syncDashboardItem(current, nextDetail));
-  }
-
-  async function handleResolveComment(commentId: string): Promise<void> {
-    if (!selectedDetail || resolvingCommentId || submitting) {
-      return;
-    }
-
-    setClientNotice(null);
-    setResolvingCommentId(commentId);
-
-    try {
-      if (mode === "api") {
-        const nextDetail = await resolveComment(
-          commentId,
-          {
-            resolvedBy: currentUserId,
-            expectedVersion: selectedDetail.version
-          },
-          { mode }
-        );
-        persistResolvedDetail(nextDetail);
-        setClientNotice("Comment resolved.");
-      } else {
-        const nextDetail = createLocalResolvedDetail(
-          selectedDetail,
-          commentId,
-          currentUserDisplayName
-        );
-        persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Comment resolved in demo mode.");
-      }
-    } catch (resolveRequestError) {
-      if (mode === "api" && resolveRequestError instanceof ApiError) {
-        if (resolveRequestError.status === 409) {
-          setClientNotice("Version conflict. Please try again.");
-          await refresh();
-          return;
-        }
-        if (resolveRequestError.status === 404) {
-          setClientNotice("Comment not found. It may have been deleted.");
-          return;
-        }
-        if (resolveRequestError.message.toLowerCase().includes("already closed")) {
-          setClientNotice("Comment is already closed.");
-          return;
-        }
-      }
-      
-      if (mode !== "api") {
-        const nextDetail = createLocalResolvedDetail(
-          selectedDetail,
-          commentId,
-          currentUserDisplayName
-        );
-        persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Comment resolved in demo mode.");
-      } else {
-        setClientNotice("Failed to resolve comment. Please try again.");
-      }
-    } finally {
-      setResolvingCommentId(null);
-    }
-  }
-
-  async function handleAddRemark(commentId: string, remark: string): Promise<void> {
-    if (!selectedDetail || submitting) return;
-    setClientNotice(null);
-
-    try {
-      if (mode === "api") {
-        const nextDetail = await addRemark(
-          commentId,
-          { expectedVersion: selectedDetail.version, remark },
-          { mode }
-        );
-        persistResolvedDetail(nextDetail);
-        setClientNotice("Remark added.");
-      } else {
-        const nextDetail = createLocalRemarkDetail(selectedDetail, commentId, remark);
-        persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Remark added in demo mode.");
-      }
-    } catch (err) {
-      if (mode === "api" && err instanceof ApiError && err.status === 409) {
-        await refresh();
-      }
-      setClientNotice("Failed to add remark.");
-    }
-  }
-
-  async function handleReopenComment(commentId: string): Promise<void> {
-    if (!selectedDetail || submitting) return;
-    setClientNotice(null);
-
-    try {
-      if (mode === "api") {
-        const nextDetail = await reopenComment(
-          commentId,
-          { expectedVersion: selectedDetail.version },
-          { mode }
-        );
-        persistResolvedDetail(nextDetail);
-        setClientNotice("Comment reopened.");
-      } else {
-        const nextDetail = createLocalReopenedDetail(selectedDetail, commentId);
-        persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Comment reopened in demo mode.");
-      }
-    } catch (err) {
-      if (mode === "api" && err instanceof ApiError && err.status === 409) {
-        await refresh();
-      }
-      setClientNotice("Failed to reopen comment.");
-    }
-  }
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
-
-    if (!selectedDetail || !preview) {
-      return;
-    }
-
-    const request = {
-      result: selectedResult,
-      actualDate: buildActualDate(selectedDetail),
-      submittedBy: currentUserId,
-      inspectorDisplayName: currentUserDisplayName,
-      notes: null,
-      expectedVersion: selectedDetail.version,
-      comments: canAddComments ? draftComments.map((comment) => ({ message: comment.message })) : []
-      // Note: Ideal request would also include checking ids format to submit to the API backend
-    };
-
-    setClientNotice(null);
-
-    try {
-      const nextMode: DetailTransportMode = mode;
-
-      if (nextMode === "api") {
-        const nextDetail = await submit(request, { mode: nextMode });
-        persistResolvedDetail(nextDetail);
-        setClientNotice("Submitted to API successfully.");
-      } else {
-        const nextDetail = createLocalSubmissionDetail({
-          detail: selectedDetail,
-          selectedResult,
-          preview,
-          canAddComments,
-          draftComments,
-          submittedBy: currentUserDisplayName
-        });
-        persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Submission applied in demo mode.");
-      }
-
-      setCommentText("");
-    } catch (submitRequestError) {
-      if (mode === "api" && submitRequestError instanceof ApiError && submitRequestError.status === 409) {
-        await refresh();
-      }
-
-      if (mode === "api") {
-        setClientNotice(null);
-        return;
-      }
-
-      const nextDetail = createLocalSubmissionDetail({
-        detail: selectedDetail,
-        selectedResult,
-        preview,
-        canAddComments,
-        draftComments,
-        submittedBy: currentUserDisplayName
-      });
-      persistLocalDetail(nextDetail);
-      setCommentText("");
-      setClientNotice("API unavailable. Submission applied in demo mode.");
-    }
-  }
-
   const listTransportLabel = listMode === "api" ? "LIVE API" : "DEMO FALLBACK";
 
   return (
@@ -763,8 +571,10 @@ export function Dashboard() {
                 {displayedItems.length > 0 ? displayedItems.map((item) => (
                   <React.Fragment key={item.id}>
                     <tr
-                      className={`record-row ${item.id === expandedRowId ? "isSelected" : ""}`}
-                      onClick={() => handleToggleRow(item.id)}
+                      className={`record-row ${item.id === lastOpenedId ? "isSelected" : ""}`}
+                      title="Click to open details in a new tab"
+                      onClick={(e) => handleRowClick(e, item.id)}
+                      onAuxClick={(e) => handleRowAuxClick(e, item.id)}
                     >
                       <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                         <input 
@@ -781,7 +591,18 @@ export function Dashboard() {
                       <td>{item.plannedDate}</td>
                       <td>R{item.currentRound}</td>
                       <td>
-                        <strong>{item.itemName}</strong>
+                        <a
+                          className="rowOpenLink"
+                          href={buildInspectionDetailHref(item.id)}
+                          target="_blank"
+                          rel="noopener"
+                          aria-label={`Open ${item.hullNumber} ${item.itemName} details in a new tab`}
+                          onClick={() => setLastOpenedId(item.id)}
+                          onKeyDown={(e) => handleOpenLinkKeyDown(e, item.id)}
+                        >
+                          <strong>{item.itemName}</strong>
+                          <svg className="rowOpenIcon" aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                        </a>
                       </td>
                       <td>
                         <span className={`resultBadge ${resultTone(item.currentResult)}`}>
@@ -793,6 +614,7 @@ export function Dashboard() {
                         <button 
                           type="button"
                           title="Generate Report"
+                          aria-label={`Generate PDF report for ${item.hullNumber} ${item.itemName}`}
                           onClick={(e) => handleDownloadPdf(e, item.id)}
                           style={{
                              background: 'transparent',
@@ -813,91 +635,19 @@ export function Dashboard() {
                         </button>
                       </td>
                     </tr>
-                    
-                    {/* Expansion Row */}
-                    {expandedRowId === item.id && (
-                      <tr className="expansion-row">
-                        <td colSpan={9}>
-                          <div className="expansion-panel-inner">
-                            {loading ? <div className="alert neutral">Loading inspection details...</div> : null}
-                            {error ? <div className="alert warning">{error}</div> : null}
-
-                            {selectedDetail ? (
-                              <InspectionDetailPanel
-                                selectedDetail={selectedDetail}
-                                mode={mode}
-                                submitting={submitting}
-                                loading={loading}
-                                openCommentCount={openCommentCount}
-                                resolvingCommentId={resolvingCommentId}
-                                handleResolveComment={handleResolveComment}
-                                handleReopenComment={handleReopenComment}
-                                setRemarkModalCommentId={setRemarkModalCommentId}
-                                setRemarkText={setRemarkText}
-                                handleSubmit={handleSubmit}
-                                selectedResult={selectedResult}
-                                setSelectedResult={setSelectedResult}
-                                commentText={commentText}
-                                setCommentText={setCommentText}
-                                canAddComments={canAddComments}
-                                hasExistingOpenComments={hasExistingOpenComments}
-                                submitError={submitError}
-                                clientNotice={clientNotice}
-                                preview={preview}
-                              />
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
                   </React.Fragment>
                 )) : (
-                  <tr><td colSpan={8} className="emptyState">No inspections match current filters.</td></tr>
+                  <tr>
+                    <td colSpan={9} className="emptyState" role="status">
+                      {listLoading ? "Loading inspections..." : "No inspections match current filters."}
+                    </td>
+                  </tr>
                 )}
               </tbody>
             </table>
           </div>
         </section>
       </main>
-
-      {remarkModalCommentId && (
-        <div className="modalOverlay" onClick={() => setRemarkModalCommentId(null)}>
-          <div className="modalDialog" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 12px 0', fontSize: '15px' }}>Add remark to comment</h3>
-            <textarea
-              className="remarkTextarea"
-              placeholder="Enter remark..."
-              value={remarkText}
-              onChange={(e) => setRemarkText(e.target.value)}
-              rows={4}
-              autoFocus
-            />
-            <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '12px' }}>
-              <button
-                type="button"
-                className="cancelBtn"
-                onClick={() => setRemarkModalCommentId(null)}
-              >
-                Cancel
-              </button>
-              <button
-                type="button"
-                className="submitBtn"
-                disabled={submitting}
-                onClick={() => {
-                  const commentId = remarkModalCommentId;
-                  setRemarkModalCommentId(null);
-                  if (commentId) {
-                    void handleAddRemark(commentId, remarkText.trim());
-                  }
-                }}
-              >
-                Confirm
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }

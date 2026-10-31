@@ -257,8 +257,9 @@ function createInspectionRoutes(
         c.req.param("id"),
         allowedProjectIds
       );
+      // Unknown item or outside the user's projects: 404, same as GET /:id (no existence leak).
       if (!detail) {
-        return c.json({ ok: false, error: "forbidden" }, 403);
+        return c.json({ ok: false, error: "Inspection item not found" }, 404);
       }
       if (authUser.role === "inspector" && !authUser.disciplines.includes(detail.discipline)) {
         return c.json({ ok: false, error: "forbidden" }, 403);
@@ -319,8 +320,9 @@ function createInspectionRoutes(
       c.req.param("id"),
       allowedProjectIds
     );
+    // Unknown item or outside the user's projects: 404, same as GET /:id (no existence leak).
     if (!detail) {
-      return c.json({ ok: false, error: "forbidden" }, 403);
+      return c.json({ ok: false, error: "Inspection item not found" }, 404);
     }
     if (authUser.role === "inspector" && !authUser.disciplines.includes(detail.discipline)) {
       return c.json({ ok: false, error: "forbidden" }, 403);
@@ -374,8 +376,9 @@ function createInspectionRoutes(
       c.req.param("id"),
       allowedProjectIds
     );
+    // Unknown item or outside the user's projects: 404, same as GET /:id (no existence leak).
     if (!detail) {
-      return c.json({ ok: false, error: "forbidden" }, 403);
+      return c.json({ ok: false, error: "Inspection item not found" }, 404);
     }
     if (authUser.role === "inspector" && !authUser.disciplines.includes(detail.discipline)) {
       return c.json({ ok: false, error: "forbidden" }, 403);
@@ -489,8 +492,9 @@ function createInspectionRoutes(
         c.req.param("id"),
         allowedProjectIds
       );
+      // Unknown item or outside the user's projects: 404, same as GET /:id (no existence leak).
       if (!detail) {
-        return c.json({ ok: false, error: "forbidden" }, 403);
+        return c.json({ ok: false, error: "Inspection item not found" }, 404);
       }
       if (authUser.role === "inspector" && !authUser.disciplines.includes(detail.discipline)) {
         return c.json({ ok: false, error: "forbidden" }, 403);

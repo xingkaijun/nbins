@@ -11,7 +11,8 @@ const TABLE_ORDER = [
   "ncrs",
   "ncrIndex",
   "observationTypes",
-  "observations"
+  "observations",
+  "fatIndex"
 ] as const satisfies ReadonlyArray<keyof SchemaDefinition>;
 
 function quoteIdentifier(value: string): string {

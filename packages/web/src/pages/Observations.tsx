@@ -23,6 +23,7 @@ import type { ProjectRecord, ShipRecord } from "../api";
 import { exportObservationsPdf, exportObservationsExcel, exportObservationsAsciiPdf } from "../utils/export-tools";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 import { useAuth } from "../auth-context";
+import { buildInspectionDetailHref, openInspectionInNewTab, subscribeInspectionUpdates } from "../inspection-sync";
 
 type ActiveTab = "observations" | "inspection-comments" | "highlighted";
 
@@ -245,6 +246,21 @@ export function Observations() {
   }, [selectedProjectId, selectedShipId, activeTab, filterType, filterDiscipline, filterStatus, hasStarted]);
 
   useEffect(() => { if (hasStarted) void loadData(); }, [loadData, hasStarted]);
+
+  // Inspection items opened from the comment list live in their own tab
+  // (/inspections/:itemId). When one of them is saved there, reload the comment
+  // list so status / closed date / new-round comments show up here too.
+  const loadDataRef = React.useRef(loadData);
+  loadDataRef.current = loadData;
+  const commentItemIdsRef = React.useRef<Set<string>>(new Set());
+  commentItemIdsRef.current = new Set(comments.map((cm) => cm.inspectionItemId));
+  useEffect(() => {
+    return subscribeInspectionUpdates(({ itemId }) => {
+      if (commentItemIdsRef.current.has(itemId)) {
+        void loadDataRef.current();
+      }
+    });
+  }, []);
 
   // ---- 新增单条 ----
   const handleSubmit = async (e: React.FormEvent) => {
@@ -764,7 +780,26 @@ export function Observations() {
                       <td style={tdStyle}>{cm.localId}</td>
                       <td style={tdStyle}>{cm.hullNumber}</td>
                       <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
-                      <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{cm.inspectionItemName}</td>
+                      <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <a
+                          className="rowOpenLink"
+                          style={{ maxWidth: "100%" }}
+                          href={buildInspectionDetailHref(cm.inspectionItemId)}
+                          target="_blank"
+                          rel="noopener"
+                          title="Open inspection item in a new tab"
+                          aria-label={`Open inspection item ${cm.hullNumber} ${cm.inspectionItemName} in a new tab`}
+                          onKeyDown={(e) => {
+                            if (e.key === " " || e.key === "Spacebar") {
+                              e.preventDefault();
+                              openInspectionInNewTab(cm.inspectionItemId);
+                            }
+                          }}
+                        >
+                          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{cm.inspectionItemName}</span>
+                          <svg className="rowOpenIcon" aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                        </a>
+                      </td>
                       <td style={tdStyle}>R{cm.roundNumber}</td>
                       <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{cm.content}</td>
                       <td style={tdStyle}>{cm.authorName}</td>

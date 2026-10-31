@@ -5,200 +5,8 @@ import {
   INSPECTION_DETAIL_SUMMARY_SQL,
   INSPECTION_LIST_SUMMARY_SQL
 } from "./d1-inspection-sql.ts";
-import { createBaselineInspectionStorage } from "./mock-inspection-db.ts";
-
-class FakePreparedStatement {
-  #db;
-  #sql;
-  #params = [];
-
-  constructor(db, sql) {
-    this.#db = db;
-    this.#sql = sql;
-  }
-
-  bind(...params) {
-    this.#params = params;
-    return this;
-  }
-
-  async all() {
-    return { results: this.#db.select(this.#sql, this.#params) };
-  }
-
-  async run() {
-    this.#db.execute(this.#sql, this.#params);
-    return { success: true };
-  }
-}
-
-class FakeD1Database {
-  constructor() {
-    this.tables = {
-      users: [],
-      projects: [],
-      project_members: [],
-      ships: [],
-      inspection_items: [],
-      inspection_rounds: [],
-      comments: []
-    };
-    this.executedSql = [];
-    this.deletedTables = [];
-    this.updatedTables = [];
-    this.insertedTables = [];
-  }
-
-  prepare(sql) {
-    return new FakePreparedStatement(this, sql);
-  }
-
-  async batch(statements) {
-    for (const statement of statements) {
-      await statement.run();
-    }
-
-    return [];
-  }
-
-  select(sql, params) {
-    return this.#selectInternal(sql, params);
-  }
-
-  #selectInternal(sql, params) {
-    this.executedSql.push(sql);
-    if (sql.includes('FROM "inspection_items" AS item')) {
-      const items =
-        params.length === 0
-          ? this.tables.inspection_items
-          : this.tables.inspection_items.filter((record) => record.id === params[0]);
-
-      return items.map((item) => {
-        const ship = this.tables.ships.find((record) => record.id === item.shipId);
-        const project = ship
-          ? this.tables.projects.find((record) => record.id === ship.projectId)
-          : null;
-
-        if (!ship || !project) {
-          throw new Error(`Missing joined rows for inspection item ${item.id}`);
-        }
-
-        return {
-          item_id: item.id,
-          item_shipId: item.shipId,
-          item_itemName: item.itemName,
-          item_itemNameNormalized: item.itemNameNormalized,
-          item_discipline: item.discipline,
-          item_workflowStatus: item.workflowStatus,
-          item_lastRoundResult: item.lastRoundResult,
-          item_resolvedResult: item.resolvedResult,
-          item_currentRound: item.currentRound,
-          item_openCommentsCount: item.openCommentsCount,
-          item_version: item.version,
-          item_source: item.source,
-          item_createdAt: item.createdAt,
-          item_updatedAt: item.updatedAt,
-          ship_id: ship.id,
-          ship_projectId: ship.projectId,
-          ship_hullNumber: ship.hullNumber,
-          ship_shipName: ship.shipName,
-          ship_shipType: ship.shipType,
-          ship_status: ship.status,
-          ship_createdAt: ship.createdAt,
-          ship_updatedAt: ship.updatedAt,
-          project_id: project.id,
-          project_name: project.name,
-          project_code: project.code,
-          project_status: project.status,
-          project_owner: project.owner,
-          project_shipyard: project.shipyard,
-          project_class: project.class,
-          project_reportRecipients: project.reportRecipients,
-          project_ncrRecipients: project.ncrRecipients,
-          project_createdAt: project.createdAt,
-          project_updatedAt: project.updatedAt
-        };
-      });
-    }
-
-    const countMatch = sql.match(/SELECT COUNT\(\*\) AS "count" FROM "([^"]+)"/);
-
-    if (countMatch) {
-      const [, tableName] = countMatch;
-      const rows = [...this.tables[tableName]];
-      return [{ count: this.#filterRows(sql, params, rows).length }];
-    }
-
-    const [, tableName] = sql.match(/FROM "([^"]+)"/) ?? [];
-    const rows = [...this.tables[tableName]];
-    return this.#filterRows(sql, params, rows);
-  }
-
-  #filterRows(sql, params, rows) {
-    const inMatch = sql.match(/WHERE "([^"]+)" IN \(([^)]+)\)/);
-
-    if (inMatch) {
-      const [, column] = inMatch;
-      return rows.filter((row) => params.includes(row[column]));
-    }
-
-    const whereMatches = [...sql.matchAll(/"([^"]+)" = \?/g)];
-
-    if (whereMatches.length === 0) {
-      return rows;
-    }
-
-    return rows.filter((row) =>
-      whereMatches.every((match, index) => row[match[1]] === params[index])
-    );
-  }
-
-  execute(sql, params) {
-    this.executedSql.push(sql);
-
-    const deleteMatch = sql.match(/DELETE FROM "([^"]+)"/);
-
-    if (deleteMatch) {
-      this.deletedTables.push(deleteMatch[1]);
-      this.tables[deleteMatch[1]] = [];
-      return;
-    }
-
-    const updateMatch = sql.match(/UPDATE "([^"]+)"\s+SET\s+(.+?)\s+WHERE "id" = \?/s);
-
-    if (updateMatch) {
-      const [, tableName, rawAssignments] = updateMatch;
-      const assignments = rawAssignments
-        .split(",")
-        .map((assignment) => assignment.trim())
-        .map((assignment) => assignment.match(/"([^"]+)"/)?.[1] ?? null);
-      const id = params[params.length - 1];
-      const row = this.tables[tableName].find((entry) => entry.id === id);
-
-      if (!row) {
-        throw new Error(`Missing row ${tableName}.${id}`);
-      }
-
-      assignments.forEach((column, index) => {
-        row[column] = params[index];
-      });
-      this.updatedTables.push(tableName);
-      return;
-    }
-
-    const insertMatch = sql.match(/INSERT INTO "([^"]+)" \(([^)]+)\)/);
-
-    if (!insertMatch) {
-      throw new Error(`Unsupported SQL: ${sql}`);
-    }
-
-    const [, tableName, rawColumns] = insertMatch;
-    const columns = rawColumns.split(",").map((column) => column.trim().replaceAll('"', ""));
-    const row = Object.fromEntries(columns.map((column, index) => [column, params[index]]));
-    this.tables[tableName].push(row);
-    this.insertedTables.push(tableName);
-  }
-}
+import { createBaselineInspectionStorage } from "../test-support/baseline-fixture.mjs";
+import { SqliteD1Database } from "../test-support/sqlite-d1.mjs";
 
 function assertUsesSingleJoinedDetailSummaryQuery(executedSql) {
   assert.equal(
@@ -237,7 +45,7 @@ function assertUsesSingleJoinedListSummaryQuery(executedSql) {
 }
 
 test("D1InspectionStorage reads and writes repository snapshots", async () => {
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -248,7 +56,7 @@ test("D1InspectionStorage reads and writes repository snapshots", async () => {
 });
 
 test("D1InspectionStorage readProjectMembersByUserId uses a narrow membership query", async () => {
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -272,7 +80,7 @@ test("D1InspectionStorage readProjectMembersByUserId uses a narrow membership qu
 });
 
 test("D1InspectionStorage submitCurrentRoundResult updates only affected tables", async () => {
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -307,10 +115,12 @@ test("D1InspectionStorage submitCurrentRoundResult updates only affected tables"
         createdInRoundId: "round-insp-003-r2",
         closedInRoundId: null,
         authorId: "user-inspector-wang",
+        localId: 2,
         content: "Monitor one repaired weld during close-out.",
         status: "open",
         closedBy: null,
         closedAt: null,
+        resolveRemark: null,
         createdAt: "2026-04-03T11:00:00.000Z",
         updatedAt: "2026-04-03T11:00:00.000Z"
       }
@@ -332,7 +142,7 @@ test("D1InspectionStorage submitCurrentRoundResult updates only affected tables"
 });
 
 test("D1InspectionStorage readInspectionDetail selects only item-scoped records", async () => {
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -368,7 +178,7 @@ test("D1InspectionStorage readInspectionDetail selects only item-scoped records"
 });
 
 test("D1InspectionStorage readInspectionDetail returns empty users without issuing user query", async () => {
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -391,7 +201,7 @@ test("D1InspectionStorage readInspectionDetail returns empty users without issui
 });
 
 test("D1InspectionStorage readInspectionList uses a single joined summary query", async () => {
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -409,7 +219,7 @@ test("D1InspectionStorage readInspectionList uses a single joined summary query"
 });
 
 test("D1InspectionStorage readSubmissionContext selects only item-scoped records", async () => {
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 
@@ -439,7 +249,7 @@ test("D1InspectionStorage readSubmissionContext selects only item-scoped records
 });
 
 test("D1InspectionStorage readSubmittedInspectionDetail narrows the post-submit summary read", async () => {
-  const db = new FakeD1Database();
+  const db = new SqliteD1Database();
   const storage = new D1InspectionStorage(db);
   const baseline = createBaselineInspectionStorage();
 

@@ -3,6 +3,15 @@ import assert from "node:assert/strict";
 import { Hono } from "hono";
 import { createRequireAuth, createRequireRole, extractBearerToken } from "./auth.ts";
 import { issueAccessToken } from "./auth/jwt.ts";
+import { createBaselineInspectionStorage } from "./test-support/baseline-fixture.mjs";
+import { createSqliteD1Env } from "./test-support/sqlite-d1.mjs";
+
+// requireAuth re-reads the user from storage on every request (role and
+// disciplines come from D1, not from the token), so requests carry a real D1
+// binding on an in-memory SQLite seeded with the baseline fixture.
+function createEnv() {
+  return createSqliteD1Env(createBaselineInspectionStorage());
+}
 
 function createProtectedApp() {
   const app = new Hono();
@@ -77,7 +86,7 @@ test("protected route exposes verified auth user on request context", async () =
 
   const response = await app.request("http://localhost/protected/profile", {
     headers: { authorization: `Bearer ${token}` }
-  });
+  }, createEnv());
   const payload = await response.json();
 
   assert.equal(response.status, 200);
@@ -101,7 +110,7 @@ test("admin route returns 403 when authenticated user lacks required role", asyn
 
   const response = await app.request("http://localhost/admin/users", {
     headers: { authorization: `Bearer ${token}` }
-  });
+  }, createEnv());
   const payload = await response.json();
 
   assert.equal(response.status, 403);
@@ -121,7 +130,7 @@ test("admin route succeeds when authenticated user has required role", async () 
 
   const response = await app.request("http://localhost/admin/users", {
     headers: { authorization: `Bearer ${token}` }
-  });
+  }, createEnv());
   const payload = await response.json();
 
   assert.equal(response.status, 200);
@@ -131,4 +140,21 @@ test("admin route succeeds when authenticated user has required role", async () 
       requestedBy: "user-admin-chen"
     }
   });
+});
+
+test("protected route returns 401 for a valid token whose user is not in D1", async () => {
+  const app = createProtectedApp();
+  const token = await issueAccessToken({
+    id: "user-deleted",
+    role: "admin",
+    disciplines: []
+  }, {});
+
+  const response = await app.request("http://localhost/protected/profile", {
+    headers: { authorization: `Bearer ${token}` }
+  }, createEnv());
+  const payload = await response.json();
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(payload, { ok: false, error: "Invalid access token" });
 });
