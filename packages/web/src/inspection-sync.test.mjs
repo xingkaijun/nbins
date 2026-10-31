@@ -8,9 +8,12 @@ import {
   inspectionDetailRoutePath,
   isBroadcastChannelSupported,
   openInspectionInNewTab,
+  CURRENT_TAB_ID,
   publishInspectionUpdate,
   subscribeInspectionUpdates
 } from "./inspection-sync.ts";
+
+const INSPECTION_SYNC_CHANNEL = "nbins.inspections";
 
 const routePattern = `/${INSPECTION_DETAIL_ROUTE}`;
 
@@ -96,4 +99,20 @@ test("saved detail is broadcast to subscribers in other contexts", async () => {
   assert.equal(message.type, "inspection-updated");
   assert.equal(message.itemId, "insp-ship-A1-0");
   assert.deepEqual(message.detail, detail);
+  assert.equal(message.sourceTabId, CURRENT_TAB_ID);
+});
+
+test("ignoreOwnTab skips this tab's own updates but keeps updates from other tabs", async () => {
+  const detail = { id: "insp-own", version: 1, workflowStatus: "open", comments: [] };
+  const seen = [];
+  const unsubscribe = subscribeInspectionUpdates((message) => seen.push(message.sourceTabId), { ignoreOwnTab: true });
+
+  publishInspectionUpdate(detail);
+  const other = new BroadcastChannel(INSPECTION_SYNC_CHANNEL);
+  other.postMessage({ type: "inspection-updated", itemId: "insp-own", detail, sentAt: new Date().toISOString(), sourceTabId: "tab-other" });
+
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  unsubscribe();
+  other.close();
+  assert.deepEqual(seen, ["tab-other"]);
 });

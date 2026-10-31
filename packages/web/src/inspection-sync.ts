@@ -27,6 +27,16 @@ export interface InspectionUpdatedMessage {
   itemId: string;
   detail: InspectionItemDetailResponse;
   sentAt: string;
+  /** Id of the tab (JS realm) that published the update. */
+  sourceTabId?: string;
+}
+
+/** BroadcastChannel also delivers to other channel objects in the same tab; this id lets a page skip its own updates. */
+export const CURRENT_TAB_ID = `tab-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+
+export interface SubscribeInspectionUpdatesOptions {
+  /** Skip updates this same tab published (the page already applied them locally). */
+  ignoreOwnTab?: boolean;
 }
 
 export function isBroadcastChannelSupported(): boolean {
@@ -81,7 +91,8 @@ export function publishInspectionUpdate(detail: InspectionItemDetailResponse): v
     type: "inspection-updated",
     itemId: detail.id,
     detail,
-    sentAt: new Date().toISOString()
+    sentAt: new Date().toISOString(),
+    sourceTabId: CURRENT_TAB_ID
   };
 
   try {
@@ -92,7 +103,8 @@ export function publishInspectionUpdate(detail: InspectionItemDetailResponse): v
 }
 
 export function subscribeInspectionUpdates(
-  handler: (message: InspectionUpdatedMessage) => void
+  handler: (message: InspectionUpdatedMessage) => void,
+  options: SubscribeInspectionUpdatesOptions = {}
 ): () => void {
   if (!isBroadcastChannelSupported()) {
     return () => {};
@@ -103,6 +115,9 @@ export function subscribeInspectionUpdates(
     const data = event.data as Partial<InspectionUpdatedMessage> | null;
 
     if (data && data.type === "inspection-updated" && typeof data.itemId === "string" && data.detail) {
+      if (options.ignoreOwnTab && data.sourceTabId === CURRENT_TAB_ID) {
+        return;
+      }
       handler(data as InspectionUpdatedMessage);
     }
   };

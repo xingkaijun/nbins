@@ -17,6 +17,7 @@ import {
 import { useAuth } from "../auth-context";
 import { ImageUploader } from "../components/ImageUploader";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
+import { useToast } from "../components/Toast";
 
 
 function resultColor(result: string | null): string {
@@ -69,6 +70,7 @@ function needsEdit(item: FatItemResponse): boolean {
 }
 
 export function Fats() {
+  const toast = useToast();
   const { session } = useAuth();
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
@@ -204,7 +206,7 @@ export function Fats() {
       setCreateMaker("");
       setCreateInspectionDate("");
     } catch (err: any) {
-      alert(`Failed to create FAT: ${err?.message || "Unknown error"}`);
+      toast.error(`Failed to create FAT: ${err?.message || "Unknown error"}`);
     } finally {
       setCreating(false);
     }
@@ -212,7 +214,7 @@ export function Fats() {
 
   async function handleDeleteFat(item: FatItemResponse): Promise<void> {
     const reference = item.formattedSerial || `#${item.serialNo}`;
-    const confirmed = window.confirm(`确认删除 ${reference} 吗？此操作不可撤销。`);
+    const confirmed = window.confirm(`Delete ${reference}? This cannot be undone.`);
     if (!confirmed) return;
 
     try {
@@ -226,7 +228,7 @@ export function Fats() {
       });
       setExpandedId((current) => (current === item.id ? null : current));
     } catch (deleteError: any) {
-      alert(`Failed to delete FAT: ${deleteError?.message || "Unknown error"}`);
+      toast.error(`Failed to delete FAT: ${deleteError?.message || "Unknown error"}`);
     } finally {
       setDeletingId((current) => (current === item.id ? null : current));
     }
@@ -264,7 +266,7 @@ export function Fats() {
       setSuccessMessage("Changes saved successfully");
       setTimeout(() => setSuccessMessage(null), 3000);
     } catch (reviewError: any) {
-      alert(`Failed to save changes: ${reviewError?.message || "Unknown error"}`);
+      toast.error(`Failed to save changes: ${reviewError?.message || "Unknown error"}`);
     } finally {
       setSavingId(null);
     }
@@ -293,7 +295,7 @@ export function Fats() {
       });
       updateLocalItem(updated);
     } catch (e: any) {
-      alert(`Failed to close comment: ${e?.message || "Unknown error"}`);
+      toast.error(`Failed to close comment: ${e?.message || "Unknown error"}`);
     } finally {
       setSavingId(null);
     }
@@ -320,7 +322,7 @@ export function Fats() {
       });
       updateLocalItem(updated);
     } catch (e: any) {
-      alert(`Failed to reopen comment: ${e?.message || "Unknown error"}`);
+      toast.error(`Failed to reopen comment: ${e?.message || "Unknown error"}`);
     } finally {
       setSavingId(null);
     }
@@ -336,7 +338,7 @@ export function Fats() {
       updateLocalItem(updated);
     } catch (imageError: any) {
       updateLocalItem({ ...item, imageAttachments: previousImages });
-      alert(`Failed to save images: ${imageError?.message || "Unknown error"}`);
+      toast.error(`Failed to save images: ${imageError?.message || "Unknown error"}`);
     } finally {
       setSavingImagesId((current) => (current === item.id ? null : current));
     }
@@ -348,7 +350,7 @@ export function Fats() {
       const { exportFatToPdf } = await import("../utils/fat-export");
       await exportFatToPdf(item);
     } catch (pdfError: any) {
-      alert(`Failed to generate PDF: ${pdfError?.message || "Unknown error"}`);
+      toast.error(`Failed to generate PDF: ${pdfError?.message || "Unknown error"}`);
     } finally {
       setPdfBusyId((current) => (current === item.id ? null : current));
     }
@@ -431,7 +433,7 @@ export function Fats() {
             <h3 style={{ margin: "0 0 16px", fontSize: 18, fontWeight: 700, color: "var(--nb-text)" }}>Create New FAT</h3>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
               <label style={labelStyle}>
-                EQUIPMENT (设备)
+                EQUIPMENT
                 <input
                   autoFocus
                   value={createTitle}
@@ -442,7 +444,7 @@ export function Fats() {
                 />
               </label>
               <label style={labelStyle}>
-                MAKER (厂家)
+                MAKER
                 <input
                   value={createMaker}
                   onChange={(e) => setCreateMaker(e.target.value)}
@@ -452,7 +454,7 @@ export function Fats() {
                 />
               </label>
               <label style={labelStyle}>
-                DISCIPLINE (专业)
+                DISCIPLINE
                 <select
                   value={createDiscipline}
                   onChange={(e) => setCreateDiscipline(e.target.value)}
@@ -464,7 +466,7 @@ export function Fats() {
                 </select>
               </label>
               <label style={labelStyle}>
-                INSPECTION DATE (检验日期)
+                INSPECTION DATE
                 <input
                   type="date"
                   value={createInspectionDate}

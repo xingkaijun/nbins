@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { DISCIPLINES } from '@nbins/shared';
 import { fetchProjects, fetchShips, batchImportInspections } from '../api.ts';
 import { useProjectContext } from '../project-context';
+import { useToast } from "../components/Toast";
 
 /** A single staging row — parsed from text but NOT yet in DB */
 interface StagingRow {
@@ -20,6 +21,7 @@ let _uid = 0;
 function nextUid() { return `stg-${Date.now()}-${++_uid}`; }
 
 export function Import() {
+  const toast = useToast();
   const { selectedProjectId } = useProjectContext();
   const [projects, setProjects] = useState<any[]>([]);
   const [ships, setShips] = useState<any[]>([]);
@@ -209,10 +211,10 @@ export function Import() {
       if (newRows.length > 0) {
         setStaging(prev => [...prev, ...newRows]);
       } else {
-        alert("No valid items found in the Excel file.");
+        toast.error("No valid items found in the Excel file.");
       }
     } catch (err: any) {
-      alert("Failed to parse Excel file: " + err.message);
+      toast.error("Failed to parse Excel file: " + err.message);
     }
   };
 
@@ -264,7 +266,7 @@ export function Import() {
   };
 
   const handleClearStaging = () => {
-    if (staging.length === 0 || !confirm("确定要清空暂存清单吗？")) return;
+    if (staging.length === 0 || !confirm("Clear the staging list?")) return;
     setStaging([]);
     setEditingUid(null);
   };
@@ -279,7 +281,7 @@ export function Import() {
   // ── 最终提交入库 ──
   const handleImport = async () => {
     if (staging.length === 0 || !selectedProjectId) return;
-    if (!confirm(`确认提交 ${staging.length} 条报检记录至数据库？`)) return;
+    if (!confirm(`Submit ${staging.length} inspection records to the database?`)) return;
 
     setIsImporting(true);
     let successCount = 0;
@@ -311,7 +313,7 @@ export function Import() {
       setEditingUid(null);
       setTimeout(() => setImportResult(null), 3000);
     } catch (e: any) {
-      alert("Import Failed: " + String(e));
+      toast.error("Import Failed: " + String(e));
     } finally {
       setIsImporting(false);
     }
@@ -352,7 +354,7 @@ export function Import() {
       {/* ── 成功提示 ── */}
       {importResult && (
         <div className="alert success" style={{ marginTop: 16 }}>
-          ✅ 成功导入 {importResult.success} 条报检记录。
+          ✅ Imported {importResult.success} inspection records.
         </div>
       )}
 
@@ -476,8 +478,8 @@ export function Import() {
               color: 'var(--nb-text-muted)', gap: 8
             }}>
               <span style={{ fontSize: 28, opacity: 0.3 }}>📋</span>
-              <span style={{ fontSize: 11, fontWeight: 600 }}>暂存清单为空</span>
-              <span style={{ fontSize: 10 }}>在左侧粘贴数据并点击 Parse 后，条目将出现在此处</span>
+              <span style={{ fontSize: 11, fontWeight: 600 }}>Staging list is empty</span>
+              <span style={{ fontSize: 10 }}>Paste data on the left and click Parse; items will appear here</span>
             </div>
           ) : (
             <>

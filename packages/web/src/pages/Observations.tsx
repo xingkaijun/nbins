@@ -23,9 +23,18 @@ import type { ProjectRecord, ShipRecord } from "../api";
 import { exportObservationsPdf, exportObservationsExcel, exportObservationsAsciiPdf } from "../utils/export-tools";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 import { useAuth } from "../auth-context";
-import { buildInspectionDetailHref, openInspectionInNewTab, subscribeInspectionUpdates } from "../inspection-sync";
+import { publishInspectionUpdate, subscribeInspectionUpdates } from "../inspection-sync";
+import { mergeCommentFromDetail } from "../comment-permissions";
+import { useToast } from "../components/Toast";
+import { CommentDetailModal } from "../components/CommentDetailModal";
 
 type ActiveTab = "observations" | "inspection-comments" | "highlighted";
+
+const OBSERVATION_TABS = [
+  { key: "observations", label: "Punch List" },
+  { key: "inspection-comments", label: "Inspection Comments" },
+  { key: "highlighted", label: "Highlight Comments" }
+] as const;
 
 export function Observations() {
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
@@ -54,6 +63,10 @@ export function Observations() {
 
   // 手动加载控制
   const [hasStarted, setHasStarted] = useState(false);
+
+  const toast = useToast();
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [activeCommentId, setActiveCommentId] = useState<string | null>(null);
 
   // 新增表单
   const [showForm, setShowForm] = useState(false);
@@ -115,7 +128,7 @@ export function Observations() {
         }
       }
     } catch (err: any) {
-      alert("Toggle highlight failed: " + (err.message || String(err)));
+      toast.error("Toggle highlight failed: " + (err.message || String(err)));
       console.error(err);
     }
   };
@@ -125,13 +138,16 @@ export function Observations() {
     try {
       // 先获取inspection item的详细信息以获得正确的版本号
       const detail = await fetchInspectionDetail(comment.inspectionItemId);
-      await resolveInspectionComment(comment.inspectionItemId, comment.id, {
+      const response = await resolveInspectionComment(comment.inspectionItemId, comment.id, {
         resolvedBy: currentUserId,
         expectedVersion: detail.version
       });
-      void loadData();
+      // Update the row in place (no reload) and tell other open tabs.
+      setComments((prev) => prev.map((c) => (c.id === comment.id ? mergeCommentFromDetail(c, response.item) : c)));
+      publishInspectionUpdate(response.item);
+      toast.success(`Comment #${comment.localId} closed.`);
     } catch (err: any) {
-      alert("Close comment failed: " + (err.message || "Unknown error"));
+      toast.error("Close comment failed: " + (err.message || "Unknown error"));
     }
   };
 
@@ -140,12 +156,14 @@ export function Observations() {
     try {
       // 先获取inspection item的详细信息以获得正确的版本号
       const detail = await fetchInspectionDetail(comment.inspectionItemId);
-      await reopenInspectionComment(comment.inspectionItemId, comment.id, {
+      const response = await reopenInspectionComment(comment.inspectionItemId, comment.id, {
         expectedVersion: detail.version
       });
-      void loadData();
+      setComments((prev) => prev.map((c) => (c.id === comment.id ? mergeCommentFromDetail(c, response.item) : c)));
+      publishInspectionUpdate(response.item);
+      toast.success(`Comment #${comment.localId} reopened.`);
     } catch (err: any) {
-      alert("Reopen comment failed: " + (err.message || "Unknown error"));
+      toast.error("Reopen comment failed: " + (err.message || "Unknown error"));
     }
   };
 
@@ -221,9 +239,25 @@ export function Observations() {
   }, []);
 
   // ---- 加载数据 ----
+  /** WAI-ARIA tabs: Left/Right (and Home/End) move between tabs and select them. */
+  const handleTabKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+    const keys = OBSERVATION_TABS.map((tab) => tab.key);
+    const index = keys.indexOf(activeTab);
+    let next = -1;
+    if (event.key === "ArrowRight") next = (index + 1) % keys.length;
+    else if (event.key === "ArrowLeft") next = (index - 1 + keys.length) % keys.length;
+    else if (event.key === "Home") next = 0;
+    else if (event.key === "End") next = keys.length - 1;
+    if (next < 0) return;
+    event.preventDefault();
+    setActiveTab(keys[next]);
+    document.getElementById(`obs-tab-${keys[next]}`)?.focus();
+  };
+
   const loadData = useCallback(async () => {
     if (!selectedProjectId || !hasStarted) return;
     setLoading(true);
+    setLoadError(null);
     try {
       if (activeTab === "observations" || activeTab === "highlighted") {
         const filters: Record<string, string> = { projectId: selectedProjectId };
@@ -242,24 +276,32 @@ export function Observations() {
         const data = await fetchInspectionComments(filters);
         setComments(data);
       }
-    } catch { /* ignore */ } finally { setLoading(false); }
+    } catch (err) {
+      // Surface the failure (with a Retry) instead of showing a silently empty list.
+      setLoadError(err instanceof Error && err.message ? err.message : "Failed to load the list.");
+    } finally { setLoading(false); }
   }, [selectedProjectId, selectedShipId, activeTab, filterType, filterDiscipline, filterStatus, hasStarted]);
 
   useEffect(() => { if (hasStarted) void loadData(); }, [loadData, hasStarted]);
 
-  // Inspection items opened from the comment list live in their own tab
-  // (/inspections/:itemId). When one of them is saved there, reload the comment
-  // list so status / closed date / new-round comments show up here too.
+  // When an inspection item that has comments in this list is saved elsewhere
+  // (its detail tab, the dashboard), reload so status / new-round comments show up.
   const loadDataRef = React.useRef(loadData);
   loadDataRef.current = loadData;
   const commentItemIdsRef = React.useRef<Set<string>>(new Set());
   commentItemIdsRef.current = new Set(comments.map((cm) => cm.inspectionItemId));
   useEffect(() => {
+    // Updates from this tab (comment modal) are already applied locally; only other tabs trigger a reload.
     return subscribeInspectionUpdates(({ itemId }) => {
       if (commentItemIdsRef.current.has(itemId)) {
         void loadDataRef.current();
       }
-    });
+    }, { ignoreOwnTab: true });
+  }, []);
+
+  const activeComment = activeCommentId ? comments.find((cm) => cm.id === activeCommentId) ?? null : null;
+  const handleCommentChanged = useCallback((updated: InspectionCommentView) => {
+    setComments((current) => current.map((cm) => (cm.id === updated.id ? updated : cm)));
   }, []);
 
   // ---- 新增单条 ----
@@ -294,7 +336,7 @@ export function Observations() {
       setShowForm(false);
       void loadData();
     } catch (err: any) { 
-      alert("Submit failed: " + (err.message || "Unknown error")); 
+      toast.error("Submit failed: " + (err.message || "Unknown error")); 
     } finally { 
       setSubmitting(false); 
     }
@@ -327,20 +369,20 @@ export function Observations() {
       });
       setEditingItem(null);
       void loadData();
-    } catch (err: any) { alert("Update failed: " + (err.message || "Unknown error")); }
+    } catch (err: any) { toast.error("Update failed: " + (err.message || "Unknown error")); }
     finally { setEditSubmitting(false); }
   };
 
   // ---- 关闭意见 ----
   const handleClose = async (id: string) => {
     try { await closeObservation(id); void loadData(); }
-    catch (err: any) { alert("Close failed: " + (err.message || "Unknown error")); }
+    catch (err: any) { toast.error("Close failed: " + (err.message || "Unknown error")); }
   };
 
   // ---- 重新打开意见 ----
   const handleReopen = async (id: string) => {
     try { await reopenObservation(id); void loadData(); }
-    catch (err: any) { alert("Reopen failed: " + (err.message || "Unknown error")); }
+    catch (err: any) { toast.error("Reopen failed: " + (err.message || "Unknown error")); }
   };
 
   // ---- 导出相关 ----
@@ -391,7 +433,7 @@ export function Observations() {
       const exportMode: "observations" | "inspection-comments" = activeTab === "highlighted" ? "observations" : activeTab;
       await exportObservationsExcel(items, comments, getProjectName() || "All Projects", exportMode, shipInfo, projectInfo);
     } catch (err: any) {
-      alert("Export Excel failed: " + (err.message || String(err)));
+      toast.error("Export Excel failed: " + (err.message || String(err)));
       console.error(err);
     }
   };
@@ -405,7 +447,7 @@ export function Observations() {
       setNewTypeCode(""); setNewTypeLabel(""); setShowTypeForm(false);
       const data = await fetchObservationTypes();
       if (data.length > 0) setTypes(data);
-    } catch (err: any) { alert("Add type failed: " + (err.message || "Unknown error")); }
+    } catch (err: any) { toast.error("Add type failed: " + (err.message || "Unknown error")); }
   };
 
   // ---- 粘贴解析 ----
@@ -446,7 +488,7 @@ export function Observations() {
       });
       setShowImport(false); setPasteText(""); setParsedRows([]);
       void loadData();
-    } catch (err: any) { alert("Import failed: " + (err.message || "Unknown error")); }
+    } catch (err: any) { toast.error("Import failed: " + (err.message || "Unknown error")); }
     finally { setImportSubmitting(false); }
   };
 
@@ -492,10 +534,25 @@ export function Observations() {
 
       {/* Tabs & Actions */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 16, borderBottom: "2px solid var(--nb-border, #e2e8f0)" }}>
-        <div style={{ display: "flex", gap: 0 }}>
-          <button onClick={() => setActiveTab("observations")} style={tabStyle(activeTab === "observations")}>Punch List</button>
-          <button onClick={() => setActiveTab("inspection-comments")} style={tabStyle(activeTab === "inspection-comments")}>Inspection Comments</button>
-          <button onClick={() => setActiveTab("highlighted")} style={tabStyle(activeTab === "highlighted")}>Highlight Comments</button>
+        <div role="tablist" aria-label="Punch list views" className="obsTabs" onKeyDown={handleTabKeyDown}>
+          {OBSERVATION_TABS.map((tab) => {
+            const selected = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                role="tab"
+                id={`obs-tab-${tab.key}`}
+                aria-selected={selected}
+                aria-controls="obs-tabpanel"
+                tabIndex={selected ? 0 : -1}
+                onClick={() => setActiveTab(tab.key)}
+                className="obsTab"
+              >
+                {tab.label}
+              </button>
+            );
+          })}
         </div>
         {activeTab === "observations" && (
           <div style={{ paddingBottom: 6 }}>
@@ -596,15 +653,15 @@ export function Observations() {
               <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid var(--nb-border)", borderRadius: 6 }}>
                 <table style={{ width: "100%", fontSize: 12, borderCollapse: "collapse" }}>
                   <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "1px solid var(--nb-border)" }}>
-                    <th style={thStyle}>S/N</th><th style={thStyle}>Disc</th><th style={thStyle}>Location</th><th style={thStyle}>Date</th><th style={thStyle}>Content</th><th style={thStyle}>Remark</th><th style={thStyle}>Status</th>
+                    <th className="obsTh">S/N</th><th className="obsTh">Disc</th><th className="obsTh">Location</th><th className="obsTh">Date</th><th className="obsTh">Content</th><th className="obsTh">Remark</th><th className="obsTh">Status</th>
                   </tr></thead>
                   <tbody>
                     {parsedRows.map(r => (
                       <tr key={r.idx} style={{ borderBottom: "1px solid var(--nb-border)", background: r.valid ? "transparent" : "#fef2f2" }}>
-                        <td style={tdStyle}>{r.idx}</td><td style={tdStyle}>{r.discipline}</td><td style={tdStyle}>{r.location}</td>
-                        <td style={tdStyle}>{r.date}</td><td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.content}</td>
-                        <td style={tdStyle}>{r.remark}</td>
-                        <td style={tdStyle}>{r.valid ? <span style={{ color: "#22c55e" }}>✓</span> : <span style={{ color: "#ef4444" }}>{r.errors.join(", ")}</span>}</td>
+                        <td className="obsTd">{r.idx}</td><td className="obsTd">{r.discipline}</td><td className="obsTd">{r.location}</td>
+                        <td className="obsTd">{r.date}</td><td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis" }}>{r.content}</td>
+                        <td className="obsTd">{r.remark}</td>
+                        <td className="obsTd">{r.valid ? <span style={{ color: "#22c55e" }}>✓</span> : <span style={{ color: "#ef4444" }}>{r.errors.join(", ")}</span>}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -656,7 +713,17 @@ export function Observations() {
         </form>
       )}
 
+      {loadError ? (
+        <div className="inlineError" role="alert">
+          <span>Could not load the list: {loadError}</span>
+          <button type="button" className="nbButton" onClick={() => void loadData()} disabled={loading}>
+            {loading ? "Retrying…" : "Retry"}
+          </button>
+        </div>
+      ) : null}
+
       {/* 主内容区 */}
+      <div role="tabpanel" id="obs-tabpanel" aria-labelledby={`obs-tab-${activeTab}`} tabIndex={0} className="obsTabPanel">
       {!hasStarted ? (
         <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
           <p style={{ fontSize: 14 }}>Select filters and click START to load data</p>
@@ -679,12 +746,12 @@ export function Observations() {
             <p style={{ fontSize: 12 }}>Click "+ New Punch Item" or "Paste Import" to start adding.</p>
           </div>
         ) : (
-          <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
-            <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+          <div className="obsTableWrap">
+            <table className="obsTable">
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
-                <th style={thStyle}>S/N</th><th style={thStyle}>Type</th><th style={thStyle}>Discipline</th>
-                <th style={thStyle}>Location</th><th style={thStyle}>Issued At</th><th style={thStyle}>Content</th>
-                <th style={thStyle}>Author</th><th style={thStyle}>Status</th><th style={thStyle}>Closed By</th><th style={thStyle}>Action</th>
+                <th className="obsTh">S/N</th><th className="obsTh">Type</th><th className="obsTh">Discipline</th>
+                <th className="obsTh">Location</th><th className="obsTh">Issued At</th><th className="obsTh">Content</th>
+                <th className="obsTh">Author</th><th className="obsTh">Status</th><th className="obsTh">Closed By</th><th className="obsTh">Action</th>
               </tr></thead>
               <tbody>
                 {filteredItems.map(item => {
@@ -692,17 +759,17 @@ export function Observations() {
                   return (
                   <tr key={item.id} style={{ 
                     borderBottom: "1px solid var(--nb-border)",
-                    background: isHighlighted ? "#dbeafe" : "transparent"
+                    background: isHighlighted ? "#dbeafe" : "#fff"
                   }}>
-                    <td style={tdStyle}>{item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : item.serialNo}</td>
-                    <td style={tdStyle}><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
-                    <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
-                    <td style={tdStyle}>{item.location || "—"}</td>
-                    <td style={tdStyle}>{item.date}</td>
+                    <td className="obsTd">{item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : item.serialNo}</td>
+                    <td className="obsTd"><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
+                    <td className="obsTd"><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
+                    <td className="obsTd">{item.location || "—"}</td>
+                    <td className="obsTd">{item.date}</td>
                     <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{item.content}</td>
-                    <td style={tdStyle}>{item.authorName ?? item.authorId}</td>
-                    <td style={tdStyle}><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
-                    <td style={tdStyle}>
+                    <td className="obsTd">{item.authorName ?? item.authorId}</td>
+                    <td className="obsTd"><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
+                    <td className="obsTd">
                       {item.closedBy && item.closedAt ? (
                         <div style={{ fontSize: 11 }}>
                           <div style={{ fontWeight: 600 }}>{item.closedByName ?? item.closedBy}</div>
@@ -710,7 +777,7 @@ export function Observations() {
                         </div>
                       ) : "—"}
                     </td>
-                    <td style={tdStyle}>
+                    <td className="obsTd">
                       <div style={{ display: "flex", gap: 4 }}>
                         <button onClick={() => handleEditClick(item)} style={{ ...btnStyle("secondary"), fontSize: 10, padding: "3px 6px" }}>Edit</button>
                         <button 
@@ -755,12 +822,12 @@ export function Observations() {
             <p style={{ fontSize: 12 }}>Inspection comments are generated from the inspection submission workflow.</p>
           </div>
         ) : (
-          <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
-            <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+          <div className="obsTableWrap">
+            <table className="obsTable">
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
-                <th style={thStyle}>S/N</th><th style={thStyle}>Ship</th><th style={thStyle}>Discipline</th>
-                <th style={thStyle}>Inspection Item</th><th style={thStyle}>Round</th><th style={thStyle}>Content</th>
-                <th style={thStyle}>Author</th><th style={thStyle}>Issued At</th><th style={thStyle}>Status</th><th style={thStyle}>Closed At</th><th style={thStyle}>Action</th>
+                <th className="obsTh">S/N</th><th className="obsTh">Ship</th><th className="obsTh">Discipline</th>
+                <th className="obsTh">Inspection Item</th><th className="obsTh">Round</th><th className="obsTh">Content</th>
+                <th className="obsTh">Author</th><th className="obsTh">Issued At</th><th className="obsTh">Status</th><th className="obsTh">Closed At</th><th className="obsTh">Action</th>
               </tr></thead>
               <tbody>
                 {filteredComments.map((cm, index) => {
@@ -771,42 +838,41 @@ export function Observations() {
                   return (
                     <tr 
                       key={cm.id} 
+                      className="commentRow"
+                      title="Click to view this comment"
+                      onClick={(event) => {
+                        if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+                        setActiveCommentId(cm.id);
+                      }}
                       style={{ 
                         borderTop: isNewItem ? "3px solid #1e293b" : "none",
                         borderBottom: "1px solid var(--nb-border)",
-                        background: isHighlighted ? "#dbeafe" : "transparent"
+                        background: isHighlighted ? "#dbeafe" : "#fff"
                       }}
                     >
-                      <td style={tdStyle}>{cm.localId}</td>
-                      <td style={tdStyle}>{cm.hullNumber}</td>
-                      <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
+                      <td className="obsTd">{cm.localId}</td>
+                      <td className="obsTd">{cm.hullNumber}</td>
+                      <td className="obsTd"><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
                       <td style={{ ...tdStyle, maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                        <a
-                          className="rowOpenLink"
-                          style={{ maxWidth: "100%" }}
-                          href={buildInspectionDetailHref(cm.inspectionItemId)}
-                          target="_blank"
-                          rel="noopener"
-                          title="Open inspection item in a new tab"
-                          aria-label={`Open inspection item ${cm.hullNumber} ${cm.inspectionItemName} in a new tab`}
-                          onKeyDown={(e) => {
-                            if (e.key === " " || e.key === "Spacebar") {
-                              e.preventDefault();
-                              openInspectionInNewTab(cm.inspectionItemId);
-                            }
-                          }}
-                        >
-                          <span style={{ overflow: "hidden", textOverflow: "ellipsis" }}>{cm.inspectionItemName}</span>
-                          <svg className="rowOpenIcon" aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
-                        </a>
+<span className="cellEllipsis" title={cm.inspectionItemName}>{cm.inspectionItemName}</span>
                       </td>
-                      <td style={tdStyle}>R{cm.roundNumber}</td>
-                      <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{cm.content}</td>
-                      <td style={tdStyle}>{cm.authorName}</td>
-                      <td style={tdStyle}>{cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—"}</td>
-                      <td style={tdStyle}><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
-                      <td style={tdStyle}>{cm.closedAt ? new Date(cm.closedAt).toLocaleDateString("en-CA") : "—"}</td>
-                      <td style={tdStyle}>
+                      <td className="obsTd">R{cm.roundNumber}</td>
+                      <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>
+                        <button
+                          type="button"
+                          className="commentOpenButton"
+                          aria-haspopup="dialog"
+                          aria-label={`Open comment #${cm.localId}: ${cm.content}`}
+                          onClick={() => setActiveCommentId(cm.id)}
+                        >
+                          {cm.content}
+                        </button>
+                      </td>
+                      <td className="obsTd">{cm.authorName}</td>
+                      <td className="obsTd">{cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—"}</td>
+                      <td className="obsTd"><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
+                      <td className="obsTd">{cm.closedAt ? new Date(cm.closedAt).toLocaleDateString("en-CA") : "—"}</td>
+                      <td className="obsTd">
                         <div style={{ display: "flex", gap: 4 }}>
                           <button 
                             onClick={() => handleToggleHighlight(cm.id, false)} 
@@ -847,41 +913,60 @@ export function Observations() {
               <p style={{ fontSize: 12 }}>Click the star icon (☆) on any item in Punch List or Inspection Comments to highlight it.</p>
             </div>
           ) : (
-            <div style={{ border: "1px solid var(--nb-border)", borderRadius: 10, overflow: "hidden" }}>
-              <table style={{ width: "100%", fontSize: 13, borderCollapse: "collapse" }}>
+            <div className="obsTableWrap">
+              <table className="obsTable">
                 <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
-                  <th style={thStyle}>S/N</th>
-                  <th style={thStyle}>Type / Inspection Item</th>
-                  <th style={thStyle}>Discipline</th>
-                  <th style={thStyle}>Location</th>
-                  <th style={thStyle}>Issued At</th>
-                  <th style={thStyle}>Content</th>
-                  <th style={thStyle}>Author</th>
-                  <th style={thStyle}>Status</th>
+                  <th className="obsTh">S/N</th>
+                  <th className="obsTh">Type / Inspection Item</th>
+                  <th className="obsTh">Discipline</th>
+                  <th className="obsTh">Location</th>
+                  <th className="obsTh">Issued At</th>
+                  <th className="obsTh">Content</th>
+                  <th className="obsTh">Author</th>
+                  <th className="obsTh">Status</th>
                 </tr></thead>
                 <tbody>
                   {highlightedItems.map(item => (
                     <tr key={item.id} style={{ borderBottom: "1px solid var(--nb-border)", background: "#dbeafe" }}>
-                      <td style={tdStyle}>{item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : item.serialNo}</td>
-                      <td style={tdStyle}><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
-                      <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
-                      <td style={tdStyle}>{item.location || "—"}</td>
-                      <td style={tdStyle}>{item.date}</td>
+                      <td className="obsTd">{item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : item.serialNo}</td>
+                      <td className="obsTd"><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
+                      <td className="obsTd"><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
+                      <td className="obsTd">{item.location || "—"}</td>
+                      <td className="obsTd">{item.date}</td>
                       <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{item.content}</td>
-                      <td style={tdStyle}>{item.authorName ?? item.authorId}</td>
-                      <td style={tdStyle}><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
+                      <td className="obsTd">{item.authorName ?? item.authorId}</td>
+                      <td className="obsTd"><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
                     </tr>
                   ))}
                   {highlightedComments.map(cm => (
-                    <tr key={cm.id} style={{ borderBottom: "1px solid var(--nb-border)", background: "#dbeafe" }}>
-                      <td style={tdStyle}>{cm.localId}</td>
-                      <td style={tdStyle}>{cm.inspectionItemName}</td>
-                      <td style={tdStyle}><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
-                      <td style={tdStyle}>—</td>
-                      <td style={tdStyle}>{cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—"}</td>
-                      <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{cm.content}</td>
-                      <td style={tdStyle}>{cm.authorName}</td>
-                      <td style={tdStyle}><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
+                    <tr
+                      key={cm.id}
+                      className="commentRow"
+                      title="Click to view this comment"
+                      onClick={(event) => {
+                        if ((event.target as HTMLElement).closest("a, button, input, select, textarea")) return;
+                        setActiveCommentId(cm.id);
+                      }}
+                      style={{ borderBottom: "1px solid var(--nb-border)", background: "#dbeafe" }}
+                    >
+                      <td className="obsTd">{cm.localId}</td>
+                      <td className="obsTd">{cm.inspectionItemName}</td>
+                      <td className="obsTd"><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
+                      <td className="obsTd">—</td>
+                      <td className="obsTd">{cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—"}</td>
+                      <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>
+                        <button
+                          type="button"
+                          className="commentOpenButton"
+                          aria-haspopup="dialog"
+                          aria-label={`Open comment #${cm.localId}: ${cm.content}`}
+                          onClick={() => setActiveCommentId(cm.id)}
+                        >
+                          {cm.content}
+                        </button>
+                      </td>
+                      <td className="obsTd">{cm.authorName}</td>
+                      <td className="obsTd"><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
                     </tr>
                   ))}
                 </tbody>
@@ -889,6 +974,16 @@ export function Observations() {
             </div>
           );
         })()
+      ) : null}
+      </div>
+
+      {activeComment ? (
+        <CommentDetailModal
+          comment={activeComment}
+          user={session?.user ?? null}
+          onClose={() => setActiveCommentId(null)}
+          onChange={handleCommentChanged}
+        />
       ) : null}
 
       {/* 编辑弹窗 */}

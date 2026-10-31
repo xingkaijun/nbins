@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { executeSql, exportDatabase, importDatabase, exportProject, importProject, deleteProject, fetchProjects } from '../api.ts';
 import jsPDF from 'jspdf';
+import { useToast } from "../components/Toast";
 
 export function SqlConsole() {
+  const toast = useToast();
   const [secret, setSecret] = useState(() => sessionStorage.getItem('sqlSecret') || '');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [loginDraft, setLoginDraft] = useState('');
@@ -59,7 +61,7 @@ export function SqlConsole() {
       if (!ok) {
         setIsAuthenticated(false);
         sessionStorage.removeItem('sqlSecret');
-        setLoginError('口令验证失败，请检查后重试');
+        setLoginError('Passphrase check failed. Please try again.');
         setSecret('');
         return;
       }
@@ -83,7 +85,7 @@ export function SqlConsole() {
       sessionStorage.setItem('sqlSecret', loginDraft);
       setSecret(loginDraft);
     } else {
-      setLoginError('口令错误，请确认你输入的是 SQL_CONSOLE_SECRET 的值');
+      setLoginError('Wrong passphrase. Enter the value of SQL_CONSOLE_SECRET.');
     }
   };
 
@@ -121,7 +123,7 @@ export function SqlConsole() {
     // 显示大小提示
     const sizeKb = Math.round(jsonStr.length / 1024);
     const sizeStr = sizeKb > 1024 ? `${(sizeKb / 1024).toFixed(1)} MB` : `${sizeKb} KB`;
-    setStatusMsg(`已下载 ${filename} (${sizeStr})`);
+    setStatusMsg(`Downloaded ${filename} (${sizeStr})`);
     setTimeout(() => setStatusMsg(''), 4000);
   };
 
@@ -164,21 +166,21 @@ export function SqlConsole() {
       const data = JSON.parse(text);
 
       if (importMode === 'db') {
-        if (!confirm("⚠️ 警告：这将清空并覆盖整个数据库。确认继续？")) return;
+        if (!confirm("⚠️ Warning: this will wipe and overwrite the entire database. Continue?")) return;
         setLoading(true);
         await importDatabase(data, secret);
-        setStatusMsg('数据库导入成功！');
+        setStatusMsg('Database imported.');
         setTimeout(() => setStatusMsg(''), 4000);
       } else if (importMode === 'project') {
         if (!data.projects?.[0]) {
-          setError("文件格式不正确：缺少 projects 表数据");
+          setError("Invalid file: the projects table data is missing.");
           return;
         }
         const code = data.projects[0].code;
-        if (!confirm(`⚠️ 警告：这将覆盖项目 [${code}] 的所有数据。确认继续？`)) return;
+        if (!confirm(`⚠️ Warning: this will overwrite all data of project [${code}]. Continue?`)) return;
         setLoading(true);
         await importProject(data, secret);
-        setStatusMsg(`项目 [${code}] 导入成功！`);
+        setStatusMsg(`Project [${code}] imported.`);
         setTimeout(() => setStatusMsg(''), 4000);
         // Refresh projects
         const updated = await fetchProjects();
@@ -202,9 +204,9 @@ export function SqlConsole() {
     if (!selectedProjectId) return;
     const code = projects.find(p => p.id === selectedProjectId)?.code || 'unknown';
     
-    const confirmName = prompt(`删除项目 ${code} 及其全部关联数据（船舶、检验、意见等）。\n请输入项目代号以确认：`);
+    const confirmName = prompt(`Delete project ${code} and all its data (ships, inspections, comments, etc.).\nType the project code to confirm:`);
     if (confirmName !== code) {
-      if (confirmName !== null) alert("代号不匹配，已取消删除。");
+      if (confirmName !== null) toast.error("Project code did not match. Deletion cancelled.");
       return;
     }
     
@@ -212,7 +214,7 @@ export function SqlConsole() {
     setError('');
     try {
       await deleteProject(selectedProjectId, secret);
-      setStatusMsg(`项目 ${code} 已删除`);
+      setStatusMsg(`Project ${code} deleted.`);
       setTimeout(() => setStatusMsg(''), 4000);
       const updated = await fetchProjects();
       setProjects(updated);
@@ -669,18 +671,18 @@ export function SqlConsole() {
               <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"></path>
             </svg>
             <h2 style={{ margin: '8px 0 0', fontSize: 16, fontWeight: 800 }}>SQL Console</h2>
-            <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--nb-text-muted)' }}>需要输入控制台口令以继续</p>
+            <p style={{ margin: '4px 0 0', fontSize: 10, color: 'var(--nb-text-muted)' }}>Enter the console passphrase to continue</p>
           </div>
           {loginError && <div className="alert error" style={{ marginBottom: 12 }}>{loginError}</div>}
           <input 
             type="password" 
-            placeholder="SQL_CONSOLE_SECRET 的值" 
+            placeholder="Value of SQL_CONSOLE_SECRET" 
             value={loginDraft} 
             onChange={e => setLoginDraft(e.target.value)} 
             onKeyDown={e => e.key === 'Enter' && handleLogin()}
             style={{ width: '100%', padding: '10px 12px', border: '1px solid var(--nb-border)', borderRadius: '8px', marginBottom: '12px', fontSize: 12 }}
           />
-          <button className="submitButton" onClick={handleLogin} style={{ width: '100%' }}>验证并进入</button>
+          <button className="submitButton" onClick={handleLogin} style={{ width: '100%' }}>Verify and enter</button>
         </div>
       </div>
     );
@@ -745,7 +747,7 @@ export function SqlConsole() {
               placeholder="SELECT * FROM users;"
             />
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-              <span style={{ fontSize: 10, color: 'var(--nb-text-muted)' }}>Ctrl+Enter 执行</span>
+              <span style={{ fontSize: 10, color: 'var(--nb-text-muted)' }}>Ctrl+Enter to run</span>
               <button className="submitButton" onClick={handleExecute} disabled={loading}>{loading ? "Executing..." : "Execute ▶"}</button>
             </div>
           </div>

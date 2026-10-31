@@ -1,5 +1,25 @@
 import React from 'react';
 
+/**
+ * Placeholder table rows shown while a list loads. The rows are hidden from
+ * assistive technology; announce the loading state separately (role="status").
+ */
+export function SkeletonRows({ rows = 6, columns }: { rows?: number; columns: number }) {
+  return (
+    <>
+      {Array.from({ length: rows }, (_, row) => (
+        <tr key={row} className="skeletonRow" aria-hidden="true">
+          {Array.from({ length: columns }, (_, column) => (
+            <td key={column}>
+              <span className="skeleton-box skeletonCell" style={{ width: `${55 + ((row * 7 + column * 13) % 40)}%` }} />
+            </td>
+          ))}
+        </tr>
+      ))}
+    </>
+  );
+}
+
 export function PageSkeleton() {
   return (
     <div className="workspace">

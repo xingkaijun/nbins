@@ -16,6 +16,7 @@ import { Fats } from "./pages/Fats";
 import { InspectionDetailPage } from "./pages/InspectionDetailPage";
 import { INSPECTION_DETAIL_ROUTE } from "./inspection-sync";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import { ToastProvider } from "./components/Toast";
 
 const routerBasename = import.meta.env.BASE_URL === "/" ? undefined : import.meta.env.BASE_URL.replace(/\/$/, "");
 
@@ -30,6 +31,7 @@ function AdminGuard() {
 export function App() {
   return (
     <BrowserRouter basename={routerBasename}>
+      <ToastProvider>
       <AuthProvider>
         <ProjectProvider>
           <ErrorBoundary>
@@ -54,6 +56,7 @@ export function App() {
           </ErrorBoundary>
         </ProjectProvider>
       </AuthProvider>
+      </ToastProvider>
     </BrowserRouter>
   );
 }

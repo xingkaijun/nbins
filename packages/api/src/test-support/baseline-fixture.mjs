@@ -226,6 +226,7 @@ export function createBaselineInspectionStorage() {
         closedBy: null,
         closedAt: null,
         resolveRemark: null,
+        isHighlighted: 0,
         createdAt: NOW,
         updatedAt: NOW
       },
@@ -241,6 +242,7 @@ export function createBaselineInspectionStorage() {
         closedBy: null,
         closedAt: null,
         resolveRemark: null,
+        isHighlighted: 0,
         createdAt: NOW,
         updatedAt: NOW
       },
@@ -256,6 +258,7 @@ export function createBaselineInspectionStorage() {
         closedBy: null,
         closedAt: null,
         resolveRemark: null,
+        isHighlighted: 0,
         createdAt: "2026-04-01T08:00:00.000Z",
         updatedAt: "2026-04-01T08:00:00.000Z"
       }

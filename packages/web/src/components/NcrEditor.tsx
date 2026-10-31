@@ -4,6 +4,7 @@ import { PG_LOGO_B64 } from "../utils/pg-logo-b64";
 import { compressImageToWebP } from "../utils/image-compression";
 import { uploadMedia } from "../api";
 import { DISCIPLINES } from "@nbins/shared";
+import { useToast } from "./Toast";
 
 interface AttachmentPhoto {
   id: string;
@@ -43,6 +44,7 @@ export function NcrEditor({
   onPublish,
   onClose
 }: NcrEditorProps) {
+  const toast = useToast();
   const [subject, setSubject] = useState("");
   const [content, setContent] = useState("");
   const [toRecipient, setToRecipient] = useState("");
@@ -79,7 +81,7 @@ export function NcrEditor({
       );
       setAttachments((prev) => [...prev, ...newAttachments]);
     } catch (err: any) {
-      alert("Failed to compress image");
+      toast.error("Failed to compress image");
     } finally {
       setIsPublishing(false);
     }
@@ -91,15 +93,15 @@ export function NcrEditor({
 
   const handlePublish = async () => {
     if (!shipId) {
-      alert("Please select a ship before creating an NCR.");
+      toast.error("Please select a ship before creating an NCR.");
       return;
     }
     if (!discipline) {
-      alert("Please select a discipline for the NCR.");
+      toast.error("Please select a discipline for the NCR.");
       return;
     }
     if (!subject.trim() || !content.trim()) {
-      alert("Subject and Description are required.");
+      toast.error("Subject and Description are required.");
       return;
     }
 
@@ -124,7 +126,7 @@ export function NcrEditor({
       });
     } catch (err: any) {
       console.error(err);
-      alert(`Submit failed: ${err?.message || String(err)}`);
+      toast.error(`Submit failed: ${err?.message || String(err)}`);
     } finally {
       setIsPublishing(false);
     }

@@ -91,6 +91,7 @@ CREATE TABLE IF NOT EXISTS "comments" (
   "closedBy" TEXT REFERENCES "users"("id"),
   "closedAt" TEXT,
   "resolveRemark" TEXT,
+  "isHighlighted" INTEGER NOT NULL DEFAULT 0,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );
@@ -164,6 +165,7 @@ CREATE TABLE IF NOT EXISTS "observations" (
   "status" TEXT NOT NULL DEFAULT 'open',
   "closedBy" TEXT REFERENCES "users"("id"),
   "closedAt" TEXT,
+  "isHighlighted" INTEGER NOT NULL DEFAULT 0,
   "createdAt" TEXT NOT NULL,
   "updatedAt" TEXT NOT NULL
 );

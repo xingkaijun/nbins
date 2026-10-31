@@ -187,3 +187,47 @@ test("web app at the root base still routes /api and /health to the API", async 
     cleanup();
   }
 });
+
+test("fresh database has isHighlighted; comment highlight persists across a remark", async () => {
+  const { request, cleanup, db } = setup();
+  try {
+    const token = await login(request);
+    const auth = { authorization: `Bearer ${token}` };
+    const json = { ...auth, "content-type": "application/json" };
+
+    for (const table of ["comments", "observations"]) {
+      const columns = db.sqlite.prepare(`PRAGMA table_info("${table}")`).all().map((column) => column.name);
+      assert.ok(columns.includes("isHighlighted"), `${table} has isHighlighted: ${columns.join(",")}`);
+    }
+
+    const list = await request("/api/observations/inspection-comments", { headers: auth });
+    assert.equal(list.status, 200, await list.clone().text());
+    const comments = (await list.json()).data;
+    assert.ok(comments.length > 0, "seed provides inspection comments");
+    const target = comments.find((comment) => comment.status === "open") ?? comments[0];
+    assert.equal(target.isHighlighted, 0);
+
+    const highlight = await request(`/api/inspections/${target.inspectionItemId}/comments/${target.id}/highlight`, {
+      method: "PUT",
+      headers: json,
+      body: JSON.stringify({ isHighlighted: 1 })
+    });
+    assert.equal(highlight.status, 200, await highlight.clone().text());
+
+    // A later remark on the same comment must not reset the highlight.
+    const detail = await (await request(`/api/inspections/${target.inspectionItemId}`, { headers: auth })).json();
+    const remark = await request(`/api/inspections/${target.inspectionItemId}/comments/${target.id}/remark`, {
+      method: "PUT",
+      headers: json,
+      body: JSON.stringify({ expectedVersion: detail.data.version, remark: "checked" })
+    });
+    assert.equal(remark.status, 200, await remark.clone().text());
+
+    const after = (await (await request("/api/observations/inspection-comments", { headers: auth })).json()).data;
+    const updated = after.find((comment) => comment.id === target.id);
+    assert.equal(updated.isHighlighted, 1);
+    assert.equal(updated.resolveRemark, "checked");
+  } finally {
+    cleanup();
+  }
+});
