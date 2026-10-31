@@ -10,6 +10,35 @@
   --nb-border: rgba(189, 201, 198, 0.4);
   --nb-accent: #006a63;
   --nb-accent-soft: #9cf2e8;
+  /* Design tokens (previously repeated as inline style literals) */
+  --nb-surface: #f8fafc;
+  --nb-surface-strong: #f1f5f9;
+  --nb-primary: #0f766e;
+  --nb-ink: #0f172a;
+  --nb-slate: #475569;
+  --nb-slate-soft: #64748b;
+  --nb-line: #e2e8f0;
+  --nb-focus-ring: 0 0 0 3px rgba(13, 148, 136, 0.18);
+  --nb-success-bg: #f0fdf4;
+  --nb-success-border: #dcfce3;
+  --nb-success-text: #15803d;
+  --nb-success-ink: #166534;
+  --nb-warn-bg: #fffbeb;
+  --nb-warn-border: #fef3c7;
+  --nb-warn-text: #b45309;
+  --nb-warn-ink: #92400e;
+  --nb-orange-bg: #fff7ed;
+  --nb-orange-border: #ffedd5;
+  --nb-orange-text: #c2410c;
+  --nb-orange-ink: #9a3412;
+  --nb-danger-bg: #fff1f2;
+  --nb-danger-border: #ffe4e6;
+  --nb-danger-text: #e11d48;
+  --nb-danger-ink: #9f1239;
+  --nb-radius-sm: 6px;
+  --nb-radius-md: 10px;
+  --nb-radius-pill: 999px;
+  --nb-shadow-pop: 0 24px 64px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(148, 163, 184, 0.12);
 }
 
 h1, h2, h3, h4, h5, h6, .brand, .font-headline {
@@ -76,6 +105,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16px;
   padding: 10px 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   background: rgba(15, 118, 110, 0.85);
@@ -127,7 +157,12 @@ a {
 }
 
 .pill {
-  padding: 6px 16px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 6px 14px;
   color: rgba(204, 251, 241, 0.7);
   font-size: 11px; 
   font-weight: 800;
@@ -181,6 +216,250 @@ a {
   font-size: 10px;
   font-weight: 800;
   letter-spacing: -0.02em;
+  white-space: nowrap;
+}
+
+.contextChip {
+  flex-shrink: 0;
+}
+
+/* ---- Top bar layout: brand | capsule slot (collapses to icons) | user chip ---- */
+.topbarBrand {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-width: 0;
+  flex-shrink: 0;
+}
+
+.topbarLogo {
+  background: #fff;
+  padding: 6px 8px;
+  border-radius: var(--nb-radius-md);
+  border: 1px solid rgba(148, 163, 184, 0.2);
+  flex-shrink: 0;
+}
+
+.topbarLogo img {
+  height: 40px;
+  width: auto;
+  object-fit: contain;
+  display: block;
+}
+
+.topbarTagline {
+  margin-top: 2px;
+  color: rgba(204, 251, 241, 0.6);
+}
+
+.topbarProject {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: 12px;
+  padding-left: 24px;
+  border-left: 1px solid rgba(255, 255, 255, 0.15);
+  height: 36px;
+  min-width: 0;
+}
+
+.topbarProjectDot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--nb-accent-soft);
+  flex-shrink: 0;
+}
+
+.topbarProjectText {
+  min-width: 0;
+}
+
+.topbarProjectLabel {
+  margin: 0;
+  font-size: 8px;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  font-weight: 800;
+  color: rgba(204, 251, 241, 0.6);
+}
+
+.topbarProjectName {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 800;
+  font-family: 'Space Grotesk', sans-serif;
+  color: #fff;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.topbarNavSlot {
+  position: relative;
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.topbarPrimaryNav {
+  margin-right: auto;
+  margin-left: auto;
+}
+
+.topbarNavSlot .navPills {
+  flex-shrink: 0;
+}
+
+/* Measuring copy: same classes as the real pills, never visible or focusable. */
+.topbarMeasureClip {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  visibility: hidden;
+  pointer-events: none;
+}
+
+.topbarMeasure {
+  display: flex;
+  gap: 12px;
+  width: max-content;
+}
+
+.pillIcon {
+  flex-shrink: 0;
+}
+
+.topbarNavSlot.isCompact > .navPills .pillLabel {
+  display: none;
+}
+
+.topbarNavSlot.isCompact > .navPills .pill {
+  padding: 7px 9px;
+  position: relative;
+}
+
+.pill:focus-visible {
+  outline: 2px solid #ffffff;
+  outline-offset: 2px;
+}
+
+/* Tooltip for icon-only pills (hover and keyboard focus). */
+.topbarNavSlot.isCompact .pill[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 8px;
+  border-radius: var(--nb-radius-sm);
+  background: var(--nb-ink);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+  white-space: nowrap;
+  box-shadow: 0 6px 16px rgba(15, 23, 42, 0.25);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  z-index: 50;
+}
+
+.topbarNavSlot.isCompact .pill[data-tooltip]:hover::after,
+.topbarNavSlot.isCompact .pill[data-tooltip]:focus-visible::after {
+  opacity: 1;
+}
+
+@media (max-width: 1360px) {
+  .topbarTagline {
+    display: none;
+  }
+  .brand {
+    font-size: 0.95rem;
+    max-width: 190px;
+    line-height: 1.15;
+  }
+  .topbarProject {
+    margin-left: 0;
+    padding-left: 16px;
+  }
+  .topbarProjectName {
+    max-width: 150px;
+  }
+}
+
+@media (max-width: 1100px) {
+  .topbar {
+    padding: 8px 14px;
+    gap: 12px;
+  }
+  .topbarBrand {
+    gap: 10px;
+  }
+  .topbarLogo img {
+    height: 32px;
+  }
+  .topbarProjectLabel {
+    display: none;
+  }
+}
+
+/* Narrow: brand + user on the first row, the capsule bar gets the full second row. */
+@media (max-width: 900px) {
+  .topbar {
+    flex-wrap: wrap;
+  }
+  .topbarBrand {
+    flex: 1 1 auto;
+  }
+  .topbarNavSlot {
+    order: 3;
+    flex: 1 1 100%;
+    justify-content: space-between;
+  }
+  .topbarPrimaryNav {
+    margin-left: 0;
+  }
+}
+
+@media (max-width: 560px) {
+  .shell {
+    padding: 6px;
+  }
+  .topbar {
+    padding: 8px 10px;
+    border-radius: var(--nb-radius-md);
+  }
+  .brand {
+    font-size: 0.8rem;
+    max-width: 130px;
+  }
+  .topbarProject {
+    display: none;
+  }
+  .topbarNavSlot {
+    gap: 6px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .topbarNavSlot.isCompact > .navPills .pill {
+    padding: 7px 8px;
+  }
+  /* Touch screens: no hover tooltips; the accessible name is still on the button. */
+  .topbarNavSlot.isCompact .pill[data-tooltip]::after {
+    display: none;
+  }
 }
 
 .workspace {

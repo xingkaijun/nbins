@@ -24,6 +24,7 @@ import { ImageUploader } from "../components/ImageUploader";
 import { ImageGallery } from "../components/ImageGallery";
 import { RelatedFileUploader } from "../components/RelatedFileUploader";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
+import { useToast } from "../components/Toast";
 
 
 function badgeColor(status: NcrItemResponse["status"]): string {
@@ -59,6 +60,7 @@ function createReviewDraft(item: NcrItemResponse): NcrReviewDraft {
 }
 
 export function Ncrs() {
+  const toast = useToast();
   const { session } = useAuth();
   const canApprove = session?.user.role === "admin" || session?.user.role === "manager";
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
@@ -196,7 +198,7 @@ export function Ncrs() {
       setEditorSerial(serialData);
       setShowEditor(true);
     } catch (err: any) {
-      alert(`Failed to fetch next serial: ${err?.message || "Unknown error"}`);
+      toast.error(`Failed to fetch next serial: ${err?.message || "Unknown error"}`);
     }
   }
 
@@ -224,22 +226,22 @@ export function Ncrs() {
     setReviewDrafts((current) => ({ ...current, [created.id]: createReviewDraft(created) }));
     setShowEditor(false);
     setExpandedId(created.id);
-    alert("NCR 已提交，状态为待审批。请口头通知 manager 审核、修改并发布。");
+    toast.success("NCR submitted for approval. Please ask a manager to review, edit and publish it.");
   }
 
   async function handlePublish(id: string): Promise<void> {
     try {
       const updated = await approveNcr(id, { approved: true });
       updateLocalItem(updated);
-      alert("NCR 已发布，正式 PDF 已同步生成。");
+      toast.success("NCR published. The official PDF has been generated.");
     } catch (approveError: any) {
-      alert(`Failed to publish NCR: ${approveError?.message || "Unknown error"}`);
+      toast.error(`Failed to publish NCR: ${approveError?.message || "Unknown error"}`);
     }
   }
 
   async function handleDeleteNcr(item: NcrItemResponse): Promise<void> {
     const reference = item.formattedSerial || `#${item.serialNo}`;
-    const confirmed = window.confirm(`确认删除 ${reference} 吗？此操作不可撤销。`);
+    const confirmed = window.confirm(`Delete ${reference}? This cannot be undone.`);
     if (!confirmed) {
       return;
     }
@@ -257,9 +259,9 @@ export function Ncrs() {
       setSavingReviewId((current) => (current === item.id ? null : current));
       setSavingImagesId((current) => (current === item.id ? null : current));
       setPdfBusyId((current) => (current === item.id ? null : current));
-      alert("NCR 已删除。");
+      toast.success("NCR deleted.");
     } catch (deleteError: any) {
-      alert(`Failed to delete NCR: ${deleteError?.message || "Unknown error"}`);
+      toast.error(`Failed to delete NCR: ${deleteError?.message || "Unknown error"}`);
     } finally {
       setDeletingId((current) => (current === item.id ? null : current));
     }
@@ -270,7 +272,7 @@ export function Ncrs() {
       const updated = await closeNcr(id, { closed });
       updateLocalItem(updated);
     } catch (err: any) {
-      alert(`Failed to ${closed ? "close" : "open"} NCR: ${err?.message || "Unknown error"}`);
+      toast.error(`Failed to ${closed ? "close" : "open"} NCR: ${err?.message || "Unknown error"}`);
     }
   }
 
@@ -285,7 +287,7 @@ export function Ncrs() {
       updateLocalItem(updated);
       console.log("Reply updated successfully.");
     } catch (err: any) {
-      alert(`Failed to update reply: ${err?.message || "Unknown error"}`);
+      toast.error(`Failed to update reply: ${err?.message || "Unknown error"}`);
     }
   }
 
@@ -306,7 +308,7 @@ export function Ncrs() {
       });
       updateLocalItem(updated);
     } catch (reviewError: any) {
-      alert(`Failed to save review changes: ${reviewError?.message || "Unknown error"}`);
+      toast.error(`Failed to save review changes: ${reviewError?.message || "Unknown error"}`);
     } finally {
       setSavingReviewId(null);
     }
@@ -322,7 +324,7 @@ export function Ncrs() {
       updateLocalItem(updated);
     } catch (imageError: any) {
       updateLocalItem({ ...item, imageAttachments: previousImages, attachments: previousImages });
-      alert(`Failed to save images: ${imageError?.message || "Unknown error"}`);
+      toast.error(`Failed to save images: ${imageError?.message || "Unknown error"}`);
     } finally {
       setSavingImagesId((current) => (current === item.id ? null : current));
     }
@@ -334,7 +336,7 @@ export function Ncrs() {
       const { exportNcrToPdf } = await import("../utils/ncr-export");
       await exportNcrToPdf(item);
     } catch (pdfError: any) {
-      alert(`Failed to generate PDF: ${pdfError?.message || "Unknown error"}`);
+      toast.error(`Failed to generate PDF: ${pdfError?.message || "Unknown error"}`);
     } finally {
       setPdfBusyId((current) => (current === item.id ? null : current));
     }

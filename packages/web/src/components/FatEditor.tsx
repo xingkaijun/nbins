@@ -5,6 +5,7 @@ import { compressImageToWebP } from "../utils/image-compression";
 import { uploadMedia } from "../api";
 import { DISCIPLINES } from "@nbins/shared";
 import type { FatComment } from "@nbins/shared";
+import { useToast } from "./Toast";
 
 interface AttachmentPhoto {
   id: string;
@@ -51,6 +52,7 @@ export function FatEditor({
   onSubmit,
   onClose
 }: FatEditorProps) {
+  const toast = useToast();
   const [subject, setSubject] = useState("");
   const [maker, setMaker] = useState("");
   const [content, setContent] = useState("");
@@ -90,7 +92,7 @@ export function FatEditor({
       );
       setAttachments((prev) => [...prev, ...newAttachments]);
     } catch {
-      alert("Failed to compress image");
+      toast.error("Failed to compress image");
     } finally {
       setIsSubmitting(false);
     }
@@ -104,15 +106,15 @@ export function FatEditor({
 
   const handleSubmit = async () => {
     if (!shipId) {
-      alert("Please select a ship before creating a FAT.");
+      toast.error("Please select a ship before creating a FAT.");
       return;
     }
     if (!discipline) {
-      alert("Please select a discipline for the FAT.");
+      toast.error("Please select a discipline for the FAT.");
       return;
     }
     if (!subject.trim() || !content.trim()) {
-      alert("Subject and Content are required.");
+      toast.error("Subject and Content are required.");
       return;
     }
 
@@ -150,7 +152,7 @@ export function FatEditor({
       });
     } catch (err: any) {
       console.error(err);
-      alert(`Submit failed: ${err?.message || String(err)}`);
+      toast.error(`Submit failed: ${err?.message || String(err)}`);
     } finally {
       setIsSubmitting(false);
     }

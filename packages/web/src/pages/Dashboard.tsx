@@ -1,4 +1,6 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Download, ExternalLink, Search, X } from "lucide-react";
 import {
   INSPECTION_RESULT_LABELS,
   type InspectionListItem
@@ -17,14 +19,37 @@ import {
   resultTone,
   syncDashboardItem
 } from "./dashboard/dashboard-helpers";
+import {
+  ALL,
+  PAGE_SIZE_OPTIONS,
+  clearDashboardFilters,
+  filterDashboardItems,
+  hasActiveFilters,
+  paginate,
+  parseDashboardFilters,
+  serializeDashboardFilters,
+  updateDashboardFilters,
+  type DashboardFilters
+} from "../dashboard-filters";
+import { useToast } from "../components/Toast";
+import { SkeletonRows } from "../components/Skeleton";
+import { EmptyState } from "../components/EmptyState";
+import { Pagination } from "../components/Pagination";
 
 /** Elements inside a row that have their own click behaviour. */
 const ROW_INTERACTIVE_SELECTOR = "a, button, input, select, textarea, label";
+const TABLE_COLUMNS = 9;
+
+function pad2(value: number): string {
+  return value.toString().padStart(2, "0");
+}
 
 export function Dashboard() {
+  const toast = useToast();
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
   const [listItems, setListItems] = useState<InspectionListItem[]>([]);
   const [listLoading, setListLoading] = useState(true);
+  const [listError, setListError] = useState<string | null>(null);
   const [listMode, setListMode] = useState<DetailTransportMode>("api");
   const [dataGeneratedAt, setDataGeneratedAt] = useState<string>(new Date().toISOString());
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
@@ -72,6 +97,7 @@ export function Dashboard() {
       }
 
       setListLoading(true);
+      setListError(null);
       try {
         const response = await fetchInspectionList(selectedProjectId);
         if (!active) return;
@@ -80,6 +106,7 @@ export function Dashboard() {
         setListMode("api");
       } catch (err) {
         if (!active) return;
+        setListError(err instanceof Error && err.message ? err.message : "Failed to load inspections.");
         setListMode("api");
         setListItems([]);
         setSelectedIds(new Set());
@@ -118,11 +145,24 @@ export function Dashboard() {
     };
   }, []);
   const localToday = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
-  const [filterDate, setFilterDate] = useState<string>(localToday);
-  const [filterMode, setFilterMode] = useState<"date" | "pending" | "open-comments">("date");
-  const [filterHull, setFilterHull] = useState<string>("ALL");
-  const [filterDiscipline, setFilterDiscipline] = useState<string>("ALL");
-  const [searchKeyword, setSearchKeyword] = useState("");
+  // Filters live in the URL (?mode=&date=&hull=&disc=&q=&page=&size=) so a
+  // refresh, a shared link or Back restores the same view.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const filters = useMemo(() => parseDashboardFilters(searchParams, localToday), [searchParams, localToday]);
+  const { mode: filterMode, date: filterDate, hull: filterHull, discipline: filterDiscipline, keyword: searchKeyword } = filters;
+
+  const applyFilters = useCallback((next: DashboardFilters) => {
+    setSearchParams((current) => serializeDashboardFilters(next, localToday, current), { replace: true });
+  }, [localToday, setSearchParams]);
+
+  const changeFilters = useCallback((patch: Partial<DashboardFilters>) => {
+    applyFilters(updateDashboardFilters(filters, patch));
+  }, [applyFilters, filters]);
+
+  const resetFilters = useCallback(() => {
+    applyFilters(clearDashboardFilters(filters, localToday));
+  }, [applyFilters, filters, localToday]);
+
   const currentProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
@@ -140,32 +180,12 @@ export function Dashboard() {
     return Array.from(new Set(listItems.map(i => i.discipline))).sort();
   }, [currentProject, listItems]);
 
-  const displayedItems = listItems.filter(item => {
-    // 根据筛选模式应用不同的逻辑
-    if (filterMode === "pending") {
-      // 显示所有pending的项目（workflowStatus === "pending"）
-      if (item.workflowStatus !== "pending") return false;
-    } else if (filterMode === "open-comments") {
-      // 显示所有Comments列不是0的项目
-      if (item.openComments === 0) return false;
-    } else {
-      // date模式：搜索时忽略日期筛选，否则按日期过滤
-      if (!searchKeyword && filterDate && item.plannedDate !== filterDate) return false;
-    }
-    
-    if (filterHull !== "ALL" && item.hullNumber !== filterHull) return false;
-    if (filterDiscipline !== "ALL" && item.discipline !== filterDiscipline) return false;
-    if (searchKeyword) {
-      const kw = searchKeyword.toLowerCase();
-      const matched = item.itemName.toLowerCase().includes(kw)
-        || item.hullNumber.toLowerCase().includes(kw)
-        || item.discipline.toLowerCase().includes(kw)
-        || (item.currentResult || "").toLowerCase().includes(kw)
-        || item.yardQc?.toLowerCase().includes(kw);
-      if (!matched) return false;
-    }
-    return true;
-  });
+  const displayedItems = useMemo(() => filterDashboardItems(listItems, filters), [listItems, filters]);
+  const pageSlice = useMemo(
+    () => paginate(displayedItems, filters.page, filters.pageSize),
+    [displayedItems, filters.page, filters.pageSize]
+  );
+  const filtersActive = hasActiveFilters(filters, localToday);
 
   const acceptedCount = displayedItems.filter(item => item.currentResult === "AA").length;
   const qcRecheckCount = displayedItems.filter(item => item.currentResult === "QCC").length;
@@ -253,7 +273,7 @@ export function Dashboard() {
         await generateBatchZip(itemsToExport, `NbIns_Batch_Reports_${filterDate || 'All'}.zip`);
       }
     } catch (err) {
-      alert("Batch export failed.");
+      toast.error(err, "Batch export failed.");
       console.error(err);
     } finally {
       setIsExporting(false);
@@ -279,109 +299,73 @@ export function Dashboard() {
 
   async function handleDownloadPdf(e: React.MouseEvent, itemId: string) {
     e.stopPropagation();
-    alert("Generating report...");
+    toast.info("Generating report...");
     try {
       const response = await fetchInspectionDetail(itemId);
       if (response) {
         await generateInspectionReport(response);
       }
     } catch (err) {
-      alert("Failed to fetch full detail for PDF report.");
+      toast.error(err instanceof Error && err.message
+        ? `Failed to generate the PDF report: ${err.message}`
+        : "Failed to fetch full detail for PDF report.");
     }
   }
   const listTransportLabel = listMode === "api" ? "LIVE API" : "DEMO FALLBACK";
+  const isTodayView = filterMode === "date" && filterDate === localToday;
+  const heading = filterMode === "pending" ? "ALL PENDING"
+    : filterMode === "open-comments" ? "ALL WITH OPEN COMMENTS"
+    : filterDate === localToday ? "TODAY QUEUE"
+    : filterDate ? `HISTORY: ${filterDate}`
+    : "ALL DATES";
+  const allDisplayedSelected = selectedIds.size > 0 && displayedItems.every((item) => selectedIds.has(item.id));
 
   return (
     <>
       <main className="workspace">
         <section className="hero">
-          <div>
+          <div className="heroMain">
             <p className="eyebrow">INSPECTION WORKSPACE</p>
             {currentProject && (
-              <p style={{ fontSize: '16px', color: 'var(--nb-text)', margin: '4px 0 8px', fontWeight: 600 }}>
+              <p className="heroProject">
                 Project: {currentProject.name} ({currentProject.code})
               </p>
             )}
-            <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-              <h2>
-                {filterMode === "pending" ? "ALL PENDING" 
-                  : filterMode === "open-comments" ? "ALL WITH OPEN COMMENTS"
-                  : filterDate === localToday ? "TODAY QUEUE" 
-                  : `HISTORY: ${filterDate}`}
-              </h2>
+            <div className="heroFilters">
+              <h2>{heading}</h2>
               <input
                 type="date"
+                className="nbDateInput"
+                aria-label="Planned date"
                 value={filterDate}
-                onChange={(e) => {
-                  setFilterDate(e.target.value);
-                  setFilterMode("date");
-                }}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid var(--nb-border)',
-                  borderRadius: '10px',
-                  fontWeight: 800,
-                  fontSize: '11px',
-                  background: '#fff',
-                  cursor: 'pointer',
-                  color: 'var(--nb-text)'
-                }}
+                onChange={(e) => changeFilters({ date: e.target.value, mode: "date" })}
               />
-              <button
-                onClick={() => {
-                  setFilterDate(localToday);
-                  setFilterMode("date");
-                }}
-                style={{
-                  padding: '6px 14px',
-                  border: filterMode === "date" && filterDate === localToday ? '2px solid var(--nb-accent)' : '1px solid var(--nb-border)',
-                  borderRadius: '8px',
-                  fontWeight: 700,
-                  fontSize: '11px',
-                  background: filterMode === "date" && filterDate === localToday ? 'var(--nb-accent)' : '#fff',
-                  color: filterMode === "date" && filterDate === localToday ? '#fff' : 'var(--nb-text)',
-                  cursor: 'pointer',
-                  letterSpacing: '0.02em',
-                  transition: 'all 0.15s'
-                }}
-              >
-                TODAY
-              </button>
-              <button
-                onClick={() => setFilterMode("pending")}
-                style={{
-                  padding: '6px 14px',
-                  border: filterMode === "pending" ? '2px solid var(--nb-accent)' : '1px solid var(--nb-border)',
-                  borderRadius: '8px',
-                  fontWeight: 700,
-                  fontSize: '11px',
-                  background: filterMode === "pending" ? 'var(--nb-accent)' : '#fff',
-                  color: filterMode === "pending" ? '#fff' : 'var(--nb-text)',
-                  cursor: 'pointer',
-                  letterSpacing: '0.02em',
-                  transition: 'all 0.15s'
-                }}
-              >
-                ALL PENDING
-              </button>
-              <button
-                onClick={() => setFilterMode("open-comments")}
-                style={{
-                  padding: '6px 14px',
-                  border: filterMode === "open-comments" ? '2px solid var(--nb-accent)' : '1px solid var(--nb-border)',
-                  borderRadius: '8px',
-                  fontWeight: 700,
-                  fontSize: '11px',
-                  background: filterMode === "open-comments" ? 'var(--nb-accent)' : '#fff',
-                  color: filterMode === "open-comments" ? '#fff' : 'var(--nb-text)',
-                  cursor: 'pointer',
-                  letterSpacing: '0.02em',
-                  transition: 'all 0.15s',
-                  whiteSpace: 'nowrap'
-                }}
-              >
-                ALL WITH OPEN COMMENTS
-              </button>
+              <div className="modeButtons" role="group" aria-label="List mode">
+                <button
+                  type="button"
+                  className={`modeButton${isTodayView ? " isActive" : ""}`}
+                  aria-pressed={isTodayView}
+                  onClick={() => changeFilters({ date: localToday, mode: "date" })}
+                >
+                  TODAY
+                </button>
+                <button
+                  type="button"
+                  className={`modeButton${filterMode === "pending" ? " isActive" : ""}`}
+                  aria-pressed={filterMode === "pending"}
+                  onClick={() => changeFilters({ mode: "pending" })}
+                >
+                  ALL PENDING
+                </button>
+                <button
+                  type="button"
+                  className={`modeButton${filterMode === "open-comments" ? " isActive" : ""}`}
+                  aria-pressed={filterMode === "open-comments"}
+                  onClick={() => changeFilters({ mode: "open-comments" })}
+                >
+                  ALL WITH OPEN COMMENTS
+                </button>
+              </div>
             </div>
           </div>
           <div className="heroMeta">
@@ -393,166 +377,152 @@ export function Dashboard() {
         <section className="summaryGrid">
           <article className="summaryCard">
             <p>TODAY QUEUE</p>
-            <strong>{todayQueueCount.toString().padStart(2, "0")}</strong>
+            <strong>{pad2(todayQueueCount)}</strong>
           </article>
           
           <article className="summaryCard">
             <p>DISCIPLINES IN FOCUS</p>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '4px', marginTop: '12px' }}>
+            <div className="disciplineChips">
                {Object.entries(disciplineCounts).map(([key, val]) => (
-                 <span key={key} style={{ fontSize: '10px', background: 'var(--nb-surface)', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--nb-border)'}}>
-                   {key}: <b style={{ color: 'var(--nb-text)'}}>{val}</b>
+                 <span key={key} className="disciplineChip">
+                   {key}: <b>{val}</b>
                  </span>
                ))}
             </div>
           </article>
 
-          <article className="summaryCard" style={{ borderColor: '#dcfce3', backgroundColor: '#f0fdf4' }}>
-            <p style={{ color: '#166534' }}>ACCEPTED</p>
-            <strong style={{ color: '#15803d' }}>{acceptedCount.toString().padStart(2, "0")}</strong>
+          <article className="summaryCard summaryCard--success">
+            <p>ACCEPTED</p>
+            <strong>{pad2(acceptedCount)}</strong>
           </article>
 
-          <article className="summaryCard" style={{ borderColor: '#fef3c7', backgroundColor: '#fffbeb' }}>
-            <p style={{ color: '#92400e' }}>QC RECHECK</p>
-            <strong style={{ color: '#b45309' }}>{qcRecheckCount.toString().padStart(2, "0")}</strong>
+          <article className="summaryCard summaryCard--warn">
+            <p>QC RECHECK</p>
+            <strong>{pad2(qcRecheckCount)}</strong>
           </article>
 
-          <article className="summaryCard" style={{ borderColor: '#ffedd5', backgroundColor: '#fff7ed' }}>
-            <p style={{ color: '#9a3412' }}>REINSPECTION</p>
-            <strong style={{ color: '#c2410c' }}>{reinspectionCount.toString().padStart(2, "0")}</strong>
+          <article className="summaryCard summaryCard--orange">
+            <p>REINSPECTION</p>
+            <strong>{pad2(reinspectionCount)}</strong>
           </article>
 
-          <article className="summaryCard" style={{ borderColor: '#ffe4e6', backgroundColor: '#fff1f2' }}>
-            <p style={{ color: '#9f1239' }}>REJECTED</p>
-            <strong style={{ color: '#e11d48' }}>{rejectedCount.toString().padStart(2, "0")}</strong>
+          <article className="summaryCard summaryCard--danger">
+            <p>REJECTED</p>
+            <strong>{pad2(rejectedCount)}</strong>
           </article>
         </section>
 
         <section className="fullWidthTable">
-          <div className="tableTools" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                <p className="eyebrow" style={{ margin: 0 }}>ACTIVE INSPECTIONS ({displayedItems.length}){searchKeyword && <span style={{ color: 'var(--nb-accent)', fontWeight: 600 }}> — search across all dates</span>}</p>
+          <div className="tableTools dashboardTools">
+             <div className="dashboardToolsFilters">
+                <p className="eyebrow dashboardCount">
+                  ACTIVE INSPECTIONS ({displayedItems.length})
+                  {searchKeyword && <span className="dashboardSearchHint"> — search across all dates</span>}
+                </p>
                 <select 
                   className="filterSelect" 
+                  aria-label="Hull"
                   value={filterHull} 
-                  onChange={(e) => setFilterHull(e.target.value)}
+                  onChange={(e) => changeFilters({ hull: e.target.value })}
                 >
-                  <option value="ALL">ALL HULLS</option>
+                  <option value={ALL}>ALL HULLS</option>
                   {hullOptions.map(h => <option key={h} value={h}>{h}</option>)}
+                  {filterHull !== ALL && !hullOptions.includes(filterHull) ? <option value={filterHull}>{filterHull}</option> : null}
                 </select>
                 <select 
                   className="filterSelect" 
+                  aria-label="Discipline"
                   value={filterDiscipline} 
-                  onChange={(e) => setFilterDiscipline(e.target.value)}
+                  onChange={(e) => changeFilters({ discipline: e.target.value })}
                 >
-                  <option value="ALL">ALL DISCIPLINES</option>
+                  <option value={ALL}>ALL DISCIPLINES</option>
                   {disciplineOptions.map(d => <option key={d} value={d}>{d}</option>)}
+                  {filterDiscipline !== ALL && !disciplineOptions.includes(filterDiscipline) ? <option value={filterDiscipline}>{filterDiscipline}</option> : null}
                 </select>
-                <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
-                  <svg style={{ position: 'absolute', left: 8, pointerEvents: 'none', color: 'var(--nb-text-muted)' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <div className="searchField">
+                  <Search size={12} strokeWidth={2.5} className="searchFieldIcon" aria-hidden="true" />
                   <input
-                    type="text"
+                    type="search"
+                    className="searchFieldInput"
+                    aria-label="Search inspections"
                     placeholder="Search name, hull, or result..."
                     value={searchKeyword}
-                    onChange={(e) => setSearchKeyword(e.target.value)}
-                    style={{
-                      padding: '4px 8px 4px 26px',
-                      border: '1px solid var(--nb-border)',
-                      borderRadius: '6px',
-                      fontSize: '10px',
-                      fontWeight: 700,
-                      background: '#fff',
-                      color: 'var(--nb-text)',
-                      width: '240px',
-                      outline: 'none',
-                    }}
+                    onChange={(e) => changeFilters({ keyword: e.target.value })}
                   />
                   {searchKeyword && (
                     <button
-                      onClick={() => setSearchKeyword('')}
-                      style={{ position: 'absolute', right: 4, background: 'none', border: 'none', cursor: 'pointer', color: 'var(--nb-text-muted)', fontSize: 12, padding: 2, lineHeight: 1 }}
-                    >✕</button>
+                      type="button"
+                      className="searchFieldClear"
+                      aria-label="Clear search"
+                      onClick={() => changeFilters({ keyword: "" })}
+                    >
+                      <X size={12} aria-hidden="true" />
+                    </button>
                   )}
                 </div>
+                {filtersActive ? (
+                  <button type="button" className="nbLinkButton" onClick={resetFilters}>
+                    Clear filters
+                  </button>
+                ) : null}
              </div>
-             <div style={{ display: 'flex', gap: '8px' }}>
+             <div className="dashboardToolsActions">
                 <button 
                   type="button" 
-                  className="admin-btn"
+                  className={`exportButton exportButton--accent${selectedIds.size > 0 ? " isReady" : ""}`}
                   onClick={() => void handleBatchExport()} 
                   disabled={isExporting || selectedIds.size === 0}
-                  style={{
-                    background: selectedIds.size > 0 ? 'var(--nb-accent)' : '#ffffff',
-                    color: selectedIds.size > 0 ? '#ffffff' : 'var(--nb-text-muted)',
-                    border: `1px solid ${selectedIds.size > 0 ? 'var(--nb-accent)' : 'var(--nb-border)'}`,
-                    boxShadow: selectedIds.size > 0 ? '0 4px 12px rgba(13, 148, 136, 0.18)' : 'none',
-                    fontSize: '9px',
-                    fontWeight: 800,
-                    padding: '6px 12px',
-                    borderRadius: '999px'
-                  }}
                 >
                   {isExporting ? `EXPORTING ${exportProgress.current}/${exportProgress.total}...` : `BATCH EXPORT (${selectedIds.size})`}
                 </button>
                 <button
                   type="button"
-                  className="admin-btn"
+                  className={`exportButton exportButton--ink${displayedItems.length > 0 ? " isReady" : ""}`}
                   onClick={handleExportChecklist}
                   disabled={displayedItems.length === 0}
-                  style={{
-                    background: displayedItems.length > 0 ? '#0f172a' : '#ffffff',
-                    color: displayedItems.length > 0 ? '#ffffff' : 'var(--nb-text-muted)',
-                    border: `1px solid ${displayedItems.length > 0 ? '#0f172a' : 'var(--nb-border)'}`,
-                    boxShadow: displayedItems.length > 0 ? '0 4px 12px rgba(15, 23, 42, 0.12)' : 'none',
-                    fontSize: '9px',
-                    fontWeight: 800,
-                    padding: '6px 12px',
-                    borderRadius: '999px'
-                  }}
                 >
                   EXPORT CHECKLIST ({displayedItems.length})
                 </button>
                 <button
                   type="button"
-                  className="admin-btn"
+                  className={`exportButton exportButton--slate${displayedItems.length > 0 ? " isReady" : ""}`}
                   onClick={handleExportAsciiChecklist}
                   disabled={displayedItems.length === 0}
-                  style={{
-                    background: displayedItems.length > 0 ? '#475569' : '#ffffff',
-                    color: displayedItems.length > 0 ? '#ffffff' : 'var(--nb-text-muted)',
-                    border: `1px solid ${displayedItems.length > 0 ? '#475569' : 'var(--nb-border)'}`,
-                    boxShadow: displayedItems.length > 0 ? '0 4px 12px rgba(71, 85, 105, 0.12)' : 'none',
-                    fontSize: '9px',
-                    fontWeight: 800,
-                    padding: '6px 12px',
-                    borderRadius: '999px',
-                    marginLeft: '8px'
-                  }}
                 >
                   ASCII CHECKLIST
                 </button>
              </div>
           </div>
+          {listLoading ? <p className="srOnly" role="status">Loading inspections…</p> : null}
+          {listError && !listLoading ? (
+            <div className="inlineError" role="alert">
+              <span>Could not load inspections: {listError}</span>
+              <button type="button" className="nbButton" onClick={() => setListReloadToken((token) => token + 1)}>
+                Retry
+              </button>
+            </div>
+          ) : null}
           <div className="tableWrap">
-            <table className="dashboardTable">
+            <table className="dashboardTable responsiveTable" aria-busy={listLoading}>
               <colgroup>
-                <col style={{ width: '44px' }} />
-                <col style={{ width: '92px' }} />
-                <col style={{ width: '108px' }} />
-                <col style={{ width: '118px' }} />
-                <col style={{ width: '64px' }} />
+                <col className="colCheckbox" />
+                <col className="colHull" />
+                <col className="colDiscipline" />
+                <col className="colDate" />
+                <col className="colRound" />
                 <col />
-                <col style={{ width: '96px' }} />
-                <col style={{ width: '84px' }} />
-                <col style={{ width: '64px' }} />
+                <col className="colResult" />
+                <col className="colComments" />
+                <col className="colReport" />
               </colgroup>
               <thead>
                 <tr>
-                  <th className="dashboardColCheckbox" style={{ textAlign: 'center' }}>
+                  <th className="dashboardColCheckbox alignCenter">
                     <input 
                       type="checkbox" 
-                      style={{ cursor: 'pointer' }}
-                      checked={selectedIds.size > 0 && selectedIds.size === displayedItems.length} 
+                      className="nbCheckbox"
+                      aria-label={`Select all ${displayedItems.length} filtered inspections`}
+                      checked={allDisplayedSelected} 
                       onChange={handleSelectAll} 
                     />
                   </th>
@@ -563,34 +533,37 @@ export function Dashboard() {
                   <th className="dashboardItemCol">Inspection Item</th>
                   <th className="dashboardCompactCol">Result</th>
                   <th className="dashboardCompactCol">Comments</th>
-                  <th className="dashboardColReport" style={{ textAlign: 'center' }}>Report</th>
+                  <th className="dashboardColReport alignCenter">Report</th>
                 </tr>
               </thead>
 
               <tbody>
-                {displayedItems.length > 0 ? displayedItems.map((item) => (
-                  <React.Fragment key={item.id}>
+                {listLoading && listItems.length === 0 ? (
+                  <SkeletonRows rows={8} columns={TABLE_COLUMNS} />
+                ) : pageSlice.items.length > 0 ? pageSlice.items.map((item) => (
                     <tr
+                      key={item.id}
                       className={`record-row ${item.id === lastOpenedId ? "isSelected" : ""}`}
                       title="Click to open details in a new tab"
                       onClick={(e) => handleRowClick(e, item.id)}
                       onAuxClick={(e) => handleRowAuxClick(e, item.id)}
                     >
-                      <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <td className="alignCenter cellCheckbox" onClick={(e) => e.stopPropagation()}>
                         <input 
                           type="checkbox" 
-                          style={{ cursor: 'pointer' }}
+                          className="nbCheckbox"
+                          aria-label={`Select ${item.hullNumber} ${item.itemName}`}
                           checked={selectedIds.has(item.id)} 
                           onChange={(e) => handleSelectRow(e, item.id)} 
                         />
                       </td>
-                      <td>
+                      <td data-label="Hull">
                         <strong>{item.hullNumber}</strong>
                       </td>
-                      <td>{item.discipline}</td>
-                      <td>{item.plannedDate}</td>
-                      <td>R{item.currentRound}</td>
-                      <td>
+                      <td data-label="Discipline">{item.discipline}</td>
+                      <td data-label="Planned">{item.plannedDate}</td>
+                      <td data-label="Round">R{item.currentRound}</td>
+                      <td data-label="Item" className="cellPrimary">
                         <a
                           className="rowOpenLink"
                           href={buildInspectionDetailHref(item.id)}
@@ -601,51 +574,65 @@ export function Dashboard() {
                           onKeyDown={(e) => handleOpenLinkKeyDown(e, item.id)}
                         >
                           <strong>{item.itemName}</strong>
-                          <svg className="rowOpenIcon" aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                          <ExternalLink className="rowOpenIcon" aria-hidden="true" focusable="false" size={12} strokeWidth={2.5} />
                         </a>
                       </td>
-                      <td>
+                      <td data-label="Result">
                         <span className={`resultBadge ${resultTone(item.currentResult)}`}>
                           {item.currentResult ? INSPECTION_RESULT_LABELS[item.currentResult] || item.currentResult : "PENDING"}
                         </span>
                       </td>
-                      <td>{item.openComments}</td>
-                      <td style={{ textAlign: 'center' }}>
+                      <td data-label="Comments">{item.openComments}</td>
+                      <td className="alignCenter cellReport">
                         <button 
                           type="button"
+                          className="nbIconButton nbIconButton--ghost"
                           title="Generate Report"
                           aria-label={`Generate PDF report for ${item.hullNumber} ${item.itemName}`}
                           onClick={(e) => handleDownloadPdf(e, item.id)}
-                          style={{
-                             background: 'transparent',
-                             border: 'none',
-                             cursor: 'pointer',
-                             padding: '6px',
-                             borderRadius: '6px',
-                             color: 'var(--nb-text-muted)',
-                             transition: 'all 0.2s',
-                             display: 'inline-flex',
-                             alignItems: 'center',
-                             justifyContent: 'center'
-                          }}
-                          onMouseOver={(e) => { e.currentTarget.style.color = 'var(--nb-primary)'; e.currentTarget.style.background = '#f1f5f9'; }}
-                          onMouseOut={(e) => { e.currentTarget.style.color = 'var(--nb-text-muted)'; e.currentTarget.style.background = 'transparent'; }}
                         >
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                          <Download size={15} strokeWidth={2.5} aria-hidden="true" />
                         </button>
                       </td>
                     </tr>
-                  </React.Fragment>
                 )) : (
-                  <tr>
-                    <td colSpan={9} className="emptyState" role="status">
-                      {listLoading ? "Loading inspections..." : "No inspections match current filters."}
+                  <tr className="emptyRow">
+                    <td colSpan={TABLE_COLUMNS}>
+                      {listError ? (
+                        <EmptyState title="Inspections could not be loaded." description="Use Retry above to try again." />
+                      ) : filtersActive ? (
+                        <EmptyState
+                          title="No inspections match current filters."
+                          description={listItems.length > 0 ? `${listItems.length} inspections in this project are hidden by the filters.` : undefined}
+                          actionLabel="Clear filters"
+                          onAction={resetFilters}
+                        />
+                      ) : (
+                        <EmptyState
+                          title="Nothing planned for today."
+                          description={listItems.length > 0 ? "Pick another date, or switch to ALL PENDING." : "This project has no inspections yet."}
+                        />
+                      )}
                     </td>
                   </tr>
                 )}
               </tbody>
             </table>
           </div>
+          {displayedItems.length > PAGE_SIZE_OPTIONS[0] || pageSlice.pageCount > 1 ? (
+            <Pagination
+              label="Inspection list pages"
+              page={pageSlice.page}
+              pageCount={pageSlice.pageCount}
+              from={pageSlice.from}
+              to={pageSlice.to}
+              total={pageSlice.total}
+              pageSize={filters.pageSize}
+              pageSizeOptions={PAGE_SIZE_OPTIONS}
+              onPageChange={(page) => changeFilters({ page })}
+              onPageSizeChange={(pageSize) => changeFilters({ pageSize })}
+            />
+          ) : null}
         </section>
       </main>
     </>
