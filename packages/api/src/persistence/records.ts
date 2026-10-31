@@ -93,6 +93,8 @@ export interface CommentRecord {
   closedBy: string | null;
   closedAt: string | null;
   resolveRemark: string | null;
+  /** 1 = highlighted in Observations → Highlight Comments. Optional so older snapshots/seeds stay valid (treated as 0). */
+  isHighlighted?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -124,6 +126,8 @@ export interface ObservationRecord {
   status: "open" | "closed";
   closedBy: string | null;
   closedAt: string | null;
+  /** 1 = highlighted (Observations → Highlight). Optional; treated as 0 when absent. */
+  isHighlighted?: number;
   createdAt: string;
   updatedAt: string;
 }

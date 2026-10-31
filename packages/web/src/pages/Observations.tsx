@@ -291,11 +291,12 @@ export function Observations() {
   const commentItemIdsRef = React.useRef<Set<string>>(new Set());
   commentItemIdsRef.current = new Set(comments.map((cm) => cm.inspectionItemId));
   useEffect(() => {
+    // Updates from this tab (comment modal) are already applied locally; only other tabs trigger a reload.
     return subscribeInspectionUpdates(({ itemId }) => {
       if (commentItemIdsRef.current.has(itemId)) {
         void loadDataRef.current();
       }
-    });
+    }, { ignoreOwnTab: true });
   }, []);
 
   const activeComment = activeCommentId ? comments.find((cm) => cm.id === activeCommentId) ?? null : null;
@@ -758,7 +759,7 @@ export function Observations() {
                   return (
                   <tr key={item.id} style={{ 
                     borderBottom: "1px solid var(--nb-border)",
-                    background: isHighlighted ? "#dbeafe" : "transparent"
+                    background: isHighlighted ? "#dbeafe" : "#fff"
                   }}>
                     <td className="obsTd">{item.discipline ? `${item.discipline.substring(0, 3).toUpperCase()}-${item.serialNo}` : item.serialNo}</td>
                     <td className="obsTd"><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
@@ -846,7 +847,7 @@ export function Observations() {
                       style={{ 
                         borderTop: isNewItem ? "3px solid #1e293b" : "none",
                         borderBottom: "1px solid var(--nb-border)",
-                        background: isHighlighted ? "#dbeafe" : "transparent"
+                        background: isHighlighted ? "#dbeafe" : "#fff"
                       }}
                     >
                       <td className="obsTd">{cm.localId}</td>

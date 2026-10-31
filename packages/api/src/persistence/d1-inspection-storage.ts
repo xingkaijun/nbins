@@ -333,8 +333,8 @@ export class D1InspectionStorage implements InspectionStorage {
       insertStatements.push(
         this.db
           .prepare(
-            `INSERT INTO "comments" ("id", "inspectionItemId", "createdInRoundId", "closedInRoundId", "authorId", "localId", "content", "status", "closedBy", "closedAt", "resolveRemark", "createdAt", "updatedAt")
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+            `INSERT INTO "comments" ("id", "inspectionItemId", "createdInRoundId", "closedInRoundId", "authorId", "localId", "content", "status", "closedBy", "closedAt", "resolveRemark", "isHighlighted", "createdAt", "updatedAt")
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
           )
           .bind(
             record.id,
@@ -348,6 +348,7 @@ export class D1InspectionStorage implements InspectionStorage {
             record.closedBy,
             record.closedAt,
             record.resolveRemark,
+            record.isHighlighted ?? 0,
             record.createdAt,
             record.updatedAt
           )
@@ -766,6 +767,7 @@ function mapCommentRecord(row: JsonRow): CommentRecord {
     closedBy: nullableStringValue(row.closedBy),
     closedAt: nullableStringValue(row.closedAt),
     resolveRemark: nullableStringValue(row.resolveRemark),
+    isHighlighted: typeof row.isHighlighted === "number" ? row.isHighlighted : 0,
     createdAt: stringValue(row.createdAt),
     updatedAt: stringValue(row.updatedAt)
   };

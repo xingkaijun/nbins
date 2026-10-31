@@ -167,6 +167,7 @@ export const commentsTable = sqliteTable<{
   closedBy: textColumn<string | null>({ nullable: true, references: "users.id" }),
   closedAt: textColumn<string | null>({ nullable: true }),
   resolveRemark: textColumn<string | null>({ nullable: true }),
+  isHighlighted: integerColumn<number>({ default: 0 }),
   createdAt: textColumn<string>(),
   updatedAt: textColumn<string>()
 });
@@ -200,6 +201,7 @@ export const observationsTable = sqliteTable<{
   status: textColumn<"open" | "closed">({ default: "open" }),
   closedBy: textColumn<string | null>({ nullable: true, references: "users.id" }),
   closedAt: textColumn<string | null>({ nullable: true }),
+  isHighlighted: integerColumn<number>({ default: 0 }),
   createdAt: textColumn<string>(),
   updatedAt: textColumn<string>()
 });

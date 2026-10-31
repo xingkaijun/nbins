@@ -84,15 +84,43 @@ export function CommentDetailModal({ comment, user, onClose, onChange }: Comment
     };
   }, []);
 
+  // After an action the button that had focus can disappear (Close comment ↔ Reopen).
+  // Keep focus inside the dialog so Tab and Esc keep working.
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (busy === null && dialog && !dialog.contains(document.activeElement)) {
+      dialog.focus();
+    }
+  }, [busy, comment]);
+
+  function handleEscape() {
+    if (editingContent) {
+      setEditingContent(false);
+      setContentDraft(comment.content);
+      return;
+    }
+    onClose();
+  }
+
+  // Fallback for Esc when focus has left the dialog (e.g. landed on <body>).
+  const escapeRef = useRef(handleEscape);
+  escapeRef.current = handleEscape;
+  useEffect(() => {
+    function onDocumentKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape" && !event.defaultPrevented) {
+        event.preventDefault();
+        escapeRef.current();
+      }
+    }
+    document.addEventListener("keydown", onDocumentKeyDown);
+    return () => document.removeEventListener("keydown", onDocumentKeyDown);
+  }, []);
+
   function handleKeyDown(event: React.KeyboardEvent<HTMLDivElement>) {
     if (event.key === "Escape") {
       event.stopPropagation();
-      if (editingContent) {
-        setEditingContent(false);
-        setContentDraft(comment.content);
-        return;
-      }
-      onClose();
+      event.preventDefault();
+      handleEscape();
       return;
     }
     if (event.key !== "Tab" || !dialogRef.current) {
