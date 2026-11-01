@@ -342,7 +342,7 @@ export function Observations() {
       .map(line => line.trim())
       .filter(line => line.length > 0);
     
-    if (lines.length === 0) return;
+    if (lines.length === 0 || submitting) return;
     
     setSubmitting(true);
     try {
@@ -361,6 +361,7 @@ export function Observations() {
       setFormLocation(""); 
       setFormRemark(""); 
       setShowForm(false);
+      toast.success(lines.length === 1 ? "Saved · 1 item added." : `Saved · ${lines.length} items added.`);
       void loadData();
     } catch (err: any) { 
       toast.error("Submit failed: " + (err.message || "Unknown error")); 
@@ -383,7 +384,7 @@ export function Observations() {
   // ---- 提交编辑 ----
   const handleEditSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!editingItem || !editType || !editContent.trim()) return;
+    if (!editingItem || !editType || !editContent.trim() || editSubmitting) return;
     setEditSubmitting(true);
     try {
       await updateObservation(editingItem.id, {
@@ -395,6 +396,7 @@ export function Observations() {
         remark: editRemark || null,
       });
       setEditingItem(null);
+      toast.success("Saved · changes updated.");
       void loadData();
     } catch (err: any) { toast.error("Update failed: " + (err.message || "Unknown error")); }
     finally { setEditSubmitting(false); }
@@ -402,13 +404,13 @@ export function Observations() {
 
   // ---- 关闭意见 ----
   const handleClose = async (id: string) => {
-    try { await closeObservation(id); void loadData(); }
+    try { await closeObservation(id); toast.success("Item closed."); void loadData(); }
     catch (err: any) { toast.error("Close failed: " + (err.message || "Unknown error")); }
   };
 
   // ---- 重新打开意见 ----
   const handleReopen = async (id: string) => {
-    try { await reopenObservation(id); void loadData(); }
+    try { await reopenObservation(id); toast.success("Item reopened."); void loadData(); }
     catch (err: any) { toast.error("Reopen failed: " + (err.message || "Unknown error")); }
   };
 
@@ -472,6 +474,7 @@ export function Observations() {
     try {
       await createObservationType({ code: newTypeCode.trim().toLowerCase().replace(/\s+/g, "_"), label: newTypeLabel.trim(), sortOrder: types.length });
       setNewTypeCode(""); setNewTypeLabel(""); setShowTypeForm(false);
+      toast.success(`Type "${newTypeLabel.trim()}" added.`);
       const data = await fetchObservationTypes();
       if (data.length > 0) setTypes(data);
     } catch (err: any) { toast.error("Add type failed: " + (err.message || "Unknown error")); }
@@ -500,10 +503,10 @@ export function Observations() {
   const handleImport = async () => {
     if (!selectedShipId) return;
     const validRows = parsedRows.filter(r => r.valid);
-    if (validRows.length === 0) return;
+    if (validRows.length === 0 || importSubmitting) return;
     setImportSubmitting(true);
     try {
-      await batchImportObservations(selectedShipId, {
+      const result = await batchImportObservations(selectedShipId, {
         type: importType,
         items: validRows.map(r => ({
           discipline: r.discipline,
@@ -514,6 +517,9 @@ export function Observations() {
         })),
       });
       setShowImport(false); setPasteText(""); setParsedRows([]);
+      const imported = result?.imported ?? validRows.length;
+      const skipped = parsedRows.length - validRows.length;
+      toast.success(`Imported ${imported} ${imported === 1 ? "row" : "rows"}${skipped > 0 ? ` · ${skipped} invalid skipped` : ""}.`);
       void loadData();
     } catch (err: any) { toast.error("Import failed: " + (err.message || "Unknown error")); }
     finally { setImportSubmitting(false); }
@@ -696,7 +702,7 @@ export function Observations() {
               </div>
               {validCount > 0 && (
                 <button onClick={handleImport} disabled={importSubmitting} style={{ ...btnStyle("primary"), marginTop: 8 }}>
-                  {importSubmitting ? "Importing..." : `Import ${validCount} rows`}
+                  {importSubmitting ? "Importing…" : `Import ${validCount} rows`}
                 </button>
               )}
             </div>
@@ -734,7 +740,7 @@ export function Observations() {
             <input type="text" value={formRemark} onChange={e => setFormRemark(e.target.value)} placeholder="Optional remark" style={{ ...inputStyle, width: "100%" }} />
           </label>
           <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-            <button type="submit" disabled={submitting} style={btnStyle("primary")}>{submitting ? "Submitting..." : "Submit"}</button>
+            <button type="submit" disabled={submitting} style={btnStyle("primary")}>{submitting ? "Saving…" : "Submit"}</button>
             <button type="button" onClick={() => setShowForm(false)} style={btnStyle("secondary")}>Cancel</button>
           </div>
         </form>
@@ -1053,7 +1059,7 @@ export function Observations() {
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 24 }}>
               <button type="button" onClick={() => setEditingItem(null)} style={btnStyle("secondary")}>Cancel</button>
               <button type="submit" disabled={editSubmitting} style={{ ...btnStyle("primary"), background: "var(--nb-accent)", color: "#fff" }}>
-                {editSubmitting ? "Saving..." : "Save Changes"}
+                {editSubmitting ? "Saving…" : "Save Changes"}
               </button>
             </div>
           </form>

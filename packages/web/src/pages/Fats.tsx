@@ -18,6 +18,8 @@ import { useAuth } from "../auth-context";
 import { ImageUploader } from "../components/ImageUploader";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 import { useToast } from "../components/Toast";
+import { useKeyedSaveState } from "../hooks/use-save-state";
+import { saveButtonLabel, saveErrorMessage } from "../save-state";
 
 
 function resultColor(result: string | null): string {
@@ -96,7 +98,8 @@ export function Fats() {
   const [savingImagesId, setSavingImagesId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  // Per-item SUBMIT button: "Saving…" → "Saved ✓" (a second click while saving is ignored).
+  const fatSave = useKeyedSaveState();
 
   const selectedProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
@@ -205,6 +208,7 @@ export function Fats() {
       setCreateTitle("");
       setCreateMaker("");
       setCreateInspectionDate("");
+      toast.success(`FAT created · ${created.formattedSerial || `#${created.serialNo}`}`);
     } catch (err: any) {
       toast.error(`Failed to create FAT: ${err?.message || "Unknown error"}`);
     } finally {
@@ -227,6 +231,7 @@ export function Fats() {
         return next;
       });
       setExpandedId((current) => (current === item.id ? null : current));
+      toast.success(`${reference} deleted.`);
     } catch (deleteError: any) {
       toast.error(`Failed to delete FAT: ${deleteError?.message || "Unknown error"}`);
     } finally {
@@ -252,23 +257,31 @@ export function Fats() {
     const allComments = [...draft.comments, ...newComments];
 
     try {
-      setSavingId(id);
-      const updated = await updateFat(id, {
-        title: draft.title.trim(),
-        discipline: draft.discipline.trim(),
-        content: draft.content.trim(),
-        result: computeResultFromComments(allComments) || null,
-        comments: allComments,
-        maker: draft.maker.trim() || null,
-        inspectionDate: draft.inspectionDate.trim() || null
+      const updated = await fatSave.run(id, async () => {
+        setSavingId(id);
+        try {
+          const saved = await updateFat(id, {
+            title: draft.title.trim(),
+            discipline: draft.discipline.trim(),
+            content: draft.content.trim(),
+            result: computeResultFromComments(allComments) || null,
+            comments: allComments,
+            maker: draft.maker.trim() || null,
+            inspectionDate: draft.inspectionDate.trim() || null
+          });
+          updateLocalItem(saved);
+          return saved;
+        } finally {
+          setSavingId(null);
+        }
       });
-      updateLocalItem(updated);
-      setSuccessMessage("Changes saved successfully");
-      setTimeout(() => setSuccessMessage(null), 3000);
-    } catch (reviewError: any) {
-      toast.error(`Failed to save changes: ${reviewError?.message || "Unknown error"}`);
-    } finally {
-      setSavingId(null);
+      if (updated) {
+        const reference = updated.formattedSerial || `#${updated.serialNo}`;
+        const result = computeResultFromComments(updated.comments ?? allComments);
+        toast.success(result ? `Saved · ${reference} · ${result}` : `Saved · ${reference}`);
+      }
+    } catch (reviewError: unknown) {
+      toast.error(saveErrorMessage("Save FAT", reviewError));
     }
   }
 
@@ -294,6 +307,7 @@ export function Fats() {
         result: computeResultFromComments(updatedComments) || null
       });
       updateLocalItem(updated);
+      toast.success("Comment closed.");
     } catch (e: any) {
       toast.error(`Failed to close comment: ${e?.message || "Unknown error"}`);
     } finally {
@@ -321,6 +335,7 @@ export function Fats() {
         result: computeResultFromComments(updatedComments) || null
       });
       updateLocalItem(updated);
+      toast.success("Comment reopened.");
     } catch (e: any) {
       toast.error(`Failed to reopen comment: ${e?.message || "Unknown error"}`);
     } finally {
@@ -336,6 +351,7 @@ export function Fats() {
       setSavingImagesId(item.id);
       const updated = await updateFat(item.id, { imageAttachments: images });
       updateLocalItem(updated);
+      toast.success("Images saved.");
     } catch (imageError: any) {
       updateLocalItem({ ...item, imageAttachments: previousImages });
       toast.error(`Failed to save images: ${imageError?.message || "Unknown error"}`);
@@ -370,18 +386,6 @@ export function Fats() {
   return (
     <>
       <style>{spinnerKeyframes}</style>
-      {successMessage && (
-        <div style={{
-          position: "fixed", top: 16, right: 16, zIndex: 9999,
-          padding: "10px 20px", borderRadius: 8,
-          background: "#dcfce7", border: "1px solid #86efac", color: "#166534",
-          fontSize: 13, fontWeight: 700,
-          boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-          animation: "fadeIn 0.3s ease"
-        }}>
-          ✓ {successMessage}
-        </div>
-      )}
       <main className="fats-page" style={{ padding: "24px 32px", maxWidth: 1280, margin: "0 auto" }}>
 
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, gap: 16, flexWrap: "wrap" }}>
@@ -820,8 +824,8 @@ export function Fats() {
                             {/* Action Buttons */}
                             {canEdit && (
                               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 12 }}>
-                                <button className="submitButton" style={{ flex: 1 }} type="button" onClick={() => void handleSaveEdit(item.id)} disabled={savingId === item.id}>
-                                  {savingId === item.id ? "SUBMITTING..." : "SUBMIT"}
+                                <button className="submitButton" style={{ flex: 1 }} type="button" onClick={() => void handleSaveEdit(item.id)} disabled={savingId === item.id || fatSave.isSaving(item.id)} aria-busy={fatSave.isSaving(item.id)}>
+                                  {saveButtonLabel(fatSave.stateOf(item.id), "SUBMIT")}
                                 </button>
                                 <button type="button" className="commentCheckboxLabel" style={{ background: "var(--nb-bg)", color: "var(--nb-text-muted)" }} onClick={() => setEditDrafts((current) => ({ ...current, [item.id]: createEditDraft(item) }))}>
                                   Reset

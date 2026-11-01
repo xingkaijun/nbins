@@ -52,6 +52,7 @@ export function NcrEditor({
   const [hasAttachment, setHasAttachment] = useState(false);
   const [discipline, setDiscipline] = useState(userDisciplines[0] || "HULL");
   const [isPublishing, setIsPublishing] = useState(false);
+  const submitLockRef = useRef(false);
   const [attachments, setAttachments] = useState<AttachmentPhoto[]>([]);
 
   const containerRef = useRef<HTMLDivElement>(null);
@@ -66,6 +67,8 @@ export function NcrEditor({
     if (!e.target.files) return;
     const files = Array.from(e.target.files).filter((f) => f.type.startsWith("image/"));
 
+    if (submitLockRef.current) return; // a double click submits once
+    submitLockRef.current = true;
     setIsPublishing(true);
     try {
       const newAttachments = await Promise.all(
@@ -83,6 +86,7 @@ export function NcrEditor({
     } catch (err: any) {
       toast.error("Failed to compress image");
     } finally {
+      submitLockRef.current = false;
       setIsPublishing(false);
     }
   };
@@ -139,7 +143,7 @@ export function NcrEditor({
         <div style={{ display: "flex", gap: 12 }}>
           <button style={btnCancelStyle} onClick={onClose} disabled={isPublishing}>Cancel</button>
           <button style={btnPublishStyle} onClick={() => void handlePublish()} disabled={isPublishing}>
-            {isPublishing ? <Loader2 size={16} className="animate-spin" /> : "Submit for Manager Review"}
+            {isPublishing ? "Saving…" : "Submit for Manager Review"}
           </button>
         </div>
       </div>

@@ -13,6 +13,7 @@ import {
 import { publishInspectionUpdate } from "../inspection-sync";
 import { getCommentActions, mergeCommentFromDetail, type CommentPermissionUser } from "../comment-permissions";
 import { useToast } from "./Toast";
+import { SAVED_FLASH_MS } from "../save-state";
 
 const FOCUSABLE = 'a[href], button:not([disabled]), textarea:not([disabled]), input:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
@@ -52,6 +53,14 @@ export function CommentDetailModal({ comment, user, onClose, onChange }: Comment
   const contextId = useId();
   const dialogRef = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // Synchronous guard: a second click before React re-renders must not send twice.
+  const busyRef = useRef(false);
+  // The action that just succeeded shows "Saved ✓" on its button for a moment.
+  const [justSaved, setJustSaved] = useState<string | null>(null);
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => () => {
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [editingContent, setEditingContent] = useState(false);
   const [contentDraft, setContentDraft] = useState(comment.content);
@@ -144,12 +153,17 @@ export function CommentDetailModal({ comment, user, onClose, onChange }: Comment
   }
 
   async function run(label: string, task: () => Promise<InspectionCommentView>, success: string) {
+    if (busyRef.current) return false;
+    busyRef.current = true;
     setBusy(label);
     setError(null);
     try {
       const updated = await task();
       onChange(updated);
       toast.success(success);
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+      setJustSaved(label);
+      savedTimerRef.current = setTimeout(() => setJustSaved(null), SAVED_FLASH_MS);
       return true;
     } catch (err) {
       const message = errorText(err, `${label} failed.`);
@@ -157,6 +171,7 @@ export function CommentDetailModal({ comment, user, onClose, onChange }: Comment
       toast.error(`${label} failed: ${message}`);
       return false;
     } finally {
+      busyRef.current = false;
       setBusy(null);
     }
   }
@@ -293,7 +308,7 @@ export function CommentDetailModal({ comment, user, onClose, onChange }: Comment
                   Cancel
                 </button>
                 <button type="submit" className="nbButton nbButton--primary" disabled={disabled || contentDraft.trim() === comment.content.trim()}>
-                  {busy === "Save comment" ? "Saving…" : "Save comment"}
+                  {busy === "Save comment" ? "Saving…" : justSaved === "Save comment" ? "Saved ✓" : "Save comment"}
                 </button>
               </div>
             </form>
@@ -365,7 +380,7 @@ export function CommentDetailModal({ comment, user, onClose, onChange }: Comment
           <span className="nbModalFooterSpacer" />
           {actions.canRemark ? (
             <button type="button" className="nbButton" onClick={handleSaveRemark} disabled={disabled || !remarkChanged || !remarkDraft.trim()}>
-              {busy === "Save remark" ? "Saving…" : "Save remark"}
+              {busy === "Save remark" ? "Saving…" : justSaved === "Save remark" ? "Saved ✓" : "Save remark"}
             </button>
           ) : null}
           {actions.canResolve ? (

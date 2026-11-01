@@ -11,6 +11,7 @@ import { buildInspectionListParams, isAbortError, type InspectionListQueryInput 
 import { useDebouncedValue } from "../hooks/use-debounced-value";
 import { useRowFlash } from "../hooks/use-row-flash";
 import { rowsToFlash } from "../row-flash";
+import { createLatestRequestGate } from "../latest-request";
 import { KEYWORD_DEBOUNCE_MS } from "../debounce";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 import type { DetailTransportMode } from "../useInspectionDetail";
@@ -64,6 +65,7 @@ export function Dashboard() {
   const facetsProjectRef = useRef<string | null>(null);
   // A refetch that keeps the rows on screen (cross-tab sync) instead of skeletons.
   const silentReloadRef = useRef(false);
+  const listRequestGateRef = useRef(createLatestRequestGate());
 
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
@@ -130,17 +132,18 @@ export function Dashboard() {
       return;
     }
 
-    // A newer query (filter, page, project) aborts the request still in flight.
-    const controller = new AbortController();
+    // A newer query (filter, page, project) aborts the request still in flight,
+    // and a late answer for an older query is dropped (latest-request.ts).
+    const request = listRequestGateRef.current.begin();
     const silent = silentReloadRef.current;
     silentReloadRef.current = false;
     if (!silent) setListLoading(true);
     setListError(null);
     const wantFacets = facetsProjectRef.current !== selectedProjectId;
 
-    fetchInspectionListPage({ ...listQuery, facets: wantFacets }, { signal: controller.signal })
+    fetchInspectionListPage({ ...listQuery, facets: wantFacets }, { signal: request.signal })
       .then((response) => {
-        if (controller.signal.aborted) return;
+        if (request.isStale()) return;
         setPageData(response);
         setDataGeneratedAt(response.generatedAt);
         setListMode("api");
@@ -150,17 +153,17 @@ export function Dashboard() {
         }
       })
       .catch((err) => {
-        if (controller.signal.aborted || isAbortError(err)) return;
+        if (request.isStale() || isAbortError(err)) return;
         setListError(err instanceof Error && err.message ? err.message : "Failed to load inspections.");
         setListMode("api");
         setPageData(null);
         setDataGeneratedAt(new Date().toISOString());
       })
       .finally(() => {
-        if (!controller.signal.aborted) setListLoading(false);
+        if (!request.isStale()) setListLoading(false);
       });
 
-    return () => controller.abort();
+    return () => request.abort();
     // listQueryKey covers every field of listQuery.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [listQueryKey, listReloadToken]);

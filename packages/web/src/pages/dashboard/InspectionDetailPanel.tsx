@@ -7,6 +7,7 @@ import {
 } from "@nbins/shared";
 import { commentStatusLabels, formatStamp } from "./dashboard-helpers";
 import type { DetailTransportMode } from "../../useInspectionDetail";
+import { saveButtonLabel, type SaveState } from "../../save-state";
 
 interface InspectionDetailPanelProps {
   selectedDetail: InspectionItemDetailResponse;
@@ -26,8 +27,8 @@ interface InspectionDetailPanelProps {
   setCommentText: (text: string) => void;
   canAddComments: boolean;
   hasExistingOpenComments: boolean;
-  submitError: string | null;
-  clientNotice: string | null;
+  /** Submit button state: "Saving…" while the request runs, "Saved ✓" briefly after. Feedback text goes to toasts. */
+  submitState?: SaveState;
   preview: any;
   /** When set, the user may not change this item (see inspection-permissions.ts); controls are disabled. */
   writeBlockedReason?: string | null;
@@ -51,8 +52,7 @@ export function InspectionDetailPanel({
   setCommentText,
   canAddComments,
   hasExistingOpenComments,
-  submitError,
-  clientNotice,
+  submitState = "idle",
   preview,
   writeBlockedReason = null
 }: InspectionDetailPanelProps) {
@@ -216,8 +216,6 @@ export function InspectionDetailPanel({
           </div>
 
           {writeBlockedReason ? <div className="alert warning" role="status" style={{ margin: '12px 0' }}>{writeBlockedReason}</div> : null}
-          {submitError ? <div className="alert error" style={{ margin: '12px 0' }}>{submitError}</div> : null}
-          {clientNotice ? <div className="alert success" style={{ margin: '12px 0' }}>{clientNotice}</div> : null}
 
           <form className="submissionForm" onSubmit={(event) => void handleSubmit(event)}>
             
@@ -282,8 +280,13 @@ export function InspectionDetailPanel({
               </div>
             ) : null}
 
-            <button className="submitButton" type="submit" disabled={writeBlocked || submitting || loading}>
-              {submitting ? "SUBMITTING..." : mode === "api" ? "SUBMIT RESULT" : "SUBMIT IN DEMO MODE"}
+            <button
+              className="submitButton"
+              type="submit"
+              disabled={writeBlocked || submitting || submitState === "saving" || loading}
+              aria-busy={submitState === "saving"}
+            >
+              {saveButtonLabel(submitState, mode === "api" ? "SUBMIT RESULT" : "SUBMIT IN DEMO MODE")}
             </button>
           </form>
         </div>

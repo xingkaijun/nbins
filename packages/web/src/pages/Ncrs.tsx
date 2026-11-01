@@ -25,6 +25,8 @@ import { ImageGallery } from "../components/ImageGallery";
 import { RelatedFileUploader } from "../components/RelatedFileUploader";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 import { useToast } from "../components/Toast";
+import { useKeyedSaveState } from "../hooks/use-save-state";
+import { saveButtonLabel, saveErrorMessage } from "../save-state";
 
 
 function badgeColor(status: NcrItemResponse["status"]): string {
@@ -82,6 +84,8 @@ export function Ncrs() {
   const [reviewDrafts, setReviewDrafts] = useState<Record<string, NcrReviewDraft>>({});
   const [savingReviewId, setSavingReviewId] = useState<string | null>(null);
   const [savingImagesId, setSavingImagesId] = useState<string | null>(null);
+  // Per-NCR buttons (save review, publish, close / re-open): "Saving…" → "Saved ✓", repeat clicks ignored.
+  const ncrSave = useKeyedSaveState();
   const [pdfBusyId, setPdfBusyId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
@@ -231,11 +235,14 @@ export function Ncrs() {
 
   async function handlePublish(id: string): Promise<void> {
     try {
-      const updated = await approveNcr(id, { approved: true });
-      updateLocalItem(updated);
-      toast.success("NCR published. The official PDF has been generated.");
-    } catch (approveError: any) {
-      toast.error(`Failed to publish NCR: ${approveError?.message || "Unknown error"}`);
+      const updated = await ncrSave.run(`publish:${id}`, async () => {
+        const published = await approveNcr(id, { approved: true });
+        updateLocalItem(published);
+        return published;
+      });
+      if (updated) toast.success("NCR published. The official PDF has been generated.");
+    } catch (approveError: unknown) {
+      toast.error(saveErrorMessage("Publish NCR", approveError));
     }
   }
 
@@ -269,10 +276,14 @@ export function Ncrs() {
 
   async function handleCloseNcr(id: string, closed: boolean): Promise<void> {
     try {
-      const updated = await closeNcr(id, { closed });
-      updateLocalItem(updated);
-    } catch (err: any) {
-      toast.error(`Failed to ${closed ? "close" : "open"} NCR: ${err?.message || "Unknown error"}`);
+      const updated = await ncrSave.run(`close:${id}`, async () => {
+        const next = await closeNcr(id, { closed });
+        updateLocalItem(next);
+        return next;
+      });
+      if (updated) toast.success(closed ? "NCR closed." : "NCR re-opened.");
+    } catch (err: unknown) {
+      toast.error(saveErrorMessage(closed ? "Close NCR" : "Re-open NCR", err));
     }
   }
 
@@ -285,7 +296,7 @@ export function Ncrs() {
         verifyDate: data.verifyDate
       });
       updateLocalItem(updated);
-      console.log("Reply updated successfully.");
+      toast.success("Reply saved.");
     } catch (err: any) {
       toast.error(`Failed to update reply: ${err?.message || "Unknown error"}`);
     }
@@ -298,19 +309,25 @@ export function Ncrs() {
     }
 
     try {
-      setSavingReviewId(id);
-      const updated = await updateNcr(id, {
-        title: draft.title.trim(),
-        discipline: draft.discipline.trim(),
-        content: draft.content.trim(),
-        rectifyRequest: draft.rectifyRequest.trim() || null,
-        remark: draft.remark.trim() || null
+      const updated = await ncrSave.run(`review:${id}`, async () => {
+        setSavingReviewId(id);
+        try {
+          const saved = await updateNcr(id, {
+            title: draft.title.trim(),
+            discipline: draft.discipline.trim(),
+            content: draft.content.trim(),
+            rectifyRequest: draft.rectifyRequest.trim() || null,
+            remark: draft.remark.trim() || null
+          });
+          updateLocalItem(saved);
+          return saved;
+        } finally {
+          setSavingReviewId(null);
+        }
       });
-      updateLocalItem(updated);
-    } catch (reviewError: any) {
-      toast.error(`Failed to save review changes: ${reviewError?.message || "Unknown error"}`);
-    } finally {
-      setSavingReviewId(null);
+      if (updated) toast.success(`Saved · ${updated.formattedSerial || `#${updated.serialNo}`}`);
+    } catch (reviewError: unknown) {
+      toast.error(saveErrorMessage("Save review changes", reviewError));
     }
   }
 
@@ -322,6 +339,7 @@ export function Ncrs() {
       setSavingImagesId(item.id);
       const updated = await updateNcr(item.id, { imageAttachments: images });
       updateLocalItem(updated);
+      toast.success("Images saved.");
     } catch (imageError: any) {
       updateLocalItem({ ...item, imageAttachments: previousImages, attachments: previousImages });
       toast.error(`Failed to save images: ${imageError?.message || "Unknown error"}`);
@@ -586,8 +604,8 @@ export function Ncrs() {
                     ) : null}
 
                     {canApprove && item.status === "pending_approval" ? (
-                      <button type="button" style={btnStyle("primary")} onClick={() => void handlePublish(item.id)}>
-                        Publish
+                      <button type="button" style={btnStyle("primary")} onClick={() => void handlePublish(item.id)} disabled={ncrSave.isSaving(`publish:${item.id}`)} aria-busy={ncrSave.isSaving(`publish:${item.id}`)}>
+                        {saveButtonLabel(ncrSave.stateOf(`publish:${item.id}`), "Publish", { saving: "Publishing…", saved: "Published ✓" })}
                       </button>
                     ) : null}
 
@@ -596,8 +614,10 @@ export function Ncrs() {
                         type="button"
                         style={item.closedAt ? btnStyle("secondary") : dangerStyle}
                         onClick={() => void handleCloseNcr(item.id, !item.closedAt)}
+                        disabled={ncrSave.isSaving(`close:${item.id}`)}
+                        aria-busy={ncrSave.isSaving(`close:${item.id}`)}
                       >
-                        {item.closedAt ? "Re-open NCR" : "Close NCR"}
+                        {saveButtonLabel(ncrSave.stateOf(`close:${item.id}`), item.closedAt ? "Re-open NCR" : "Close NCR")}
                       </button>
                     )}
 
@@ -703,8 +723,8 @@ export function Ncrs() {
                           </label>
                           {canReviewEdit ? (
                             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                              <button type="button" style={btnStyle("primary")} onClick={() => void handleSaveReview(item.id)} disabled={savingReviewId === item.id}>
-                                {savingReviewId === item.id ? "Saving..." : "Save Review Changes"}
+                              <button type="button" style={btnStyle("primary")} onClick={() => void handleSaveReview(item.id)} disabled={savingReviewId === item.id || ncrSave.isSaving(`review:${item.id}`)} aria-busy={ncrSave.isSaving(`review:${item.id}`)}>
+                                {saveButtonLabel(ncrSave.stateOf(`review:${item.id}`), "Save Review Changes")}
                               </button>
                               <button type="button" style={btnStyle("secondary")} onClick={() => setReviewDrafts((current) => ({ ...current, [item.id]: createReviewDraft(item) }))}>
                                 Reset Draft

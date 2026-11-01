@@ -54,3 +54,8 @@ export function createRequestCache(options: { ttlMs: number; now?: () => number 
     }
   };
 }
+
+/** Cache key for the project list: one entry per signed-in token and status filter. */
+export function projectsCacheKey(token: string | null | undefined, status?: string | null): string {
+  return `projects:${token ?? ""}:${status ?? ""}`;
+}

@@ -1,7 +1,10 @@
 import React, { useEffect, useMemo, useState } from "react";
-import type { InspectionItemDetailResponse, InspectionResult } from "@nbins/shared";
+import { INSPECTION_RESULT_LABELS, type InspectionItemDetailResponse, type InspectionResult } from "@nbins/shared";
 import { ApiError } from "../../api";
 import { useAuth } from "../../auth-context";
+import { useToast } from "../../components/Toast";
+import { useSaveState } from "../../hooks/use-save-state";
+import { inspectionSavedMessage, saveErrorMessage } from "../../save-state";
 import { getInspectionWriteBlockReason } from "../../inspection-permissions";
 import { type DetailTransportMode, useInspectionDetail } from "../../useInspectionDetail";
 import {
@@ -51,7 +54,9 @@ export function InspectionWorkspace({
 
   const [selectedResult, setSelectedResult] = useState<InspectionResult>("QCC");
   const [commentText, setCommentText] = useState("");
-  const [clientNotice, setClientNotice] = useState<string | null>(null);
+  const toast = useToast();
+  // Submit button: "Saving…" while the request runs, then "Saved ✓" briefly.
+  const submitSave = useSaveState();
   const [resolvingCommentId, setResolvingCommentId] = useState<string | null>(null);
   const [remarkModalCommentId, setRemarkModalCommentId] = useState<string | null>(null);
   const [remarkText, setRemarkText] = useState("");
@@ -62,7 +67,6 @@ export function InspectionWorkspace({
     mode,
     loading,
     error,
-    submitError,
     submitting,
     refresh,
     applyLocalDetail,
@@ -78,7 +82,6 @@ export function InspectionWorkspace({
   // Reset transient input when switching to another item.
   useEffect(() => {
     setCommentText("");
-    setClientNotice(null);
     setRemarkModalCommentId(null);
   }, [inspectionItemId]);
 
@@ -135,12 +138,14 @@ export function InspectionWorkspace({
     onDetailChange?.(nextDetail);
   }
 
+  const resultLabel = (result: InspectionResult | null | undefined) =>
+    result ? INSPECTION_RESULT_LABELS[result] ?? result : null;
+
   async function handleResolveComment(commentId: string): Promise<void> {
     if (!selectedDetail || resolvingCommentId || submitting || writeBlockedReason) {
       return;
     }
 
-    setClientNotice(null);
     setResolvingCommentId(commentId);
 
     try {
@@ -154,7 +159,7 @@ export function InspectionWorkspace({
           { mode }
         );
         persistResolvedDetail(nextDetail);
-        setClientNotice("Comment resolved.");
+        toast.success("Comment closed.");
       } else {
         const nextDetail = createLocalResolvedDetail(
           selectedDetail,
@@ -162,21 +167,21 @@ export function InspectionWorkspace({
           currentUserDisplayName
         );
         persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Comment resolved in demo mode.");
+        toast.info("Comment closed in demo mode (not sent to the server).");
       }
     } catch (resolveRequestError) {
       if (mode === "api" && resolveRequestError instanceof ApiError) {
         if (resolveRequestError.status === 409) {
-          setClientNotice("Version conflict. Please try again.");
+          toast.error("Someone else changed this item. The latest version is loaded; please try again.");
           await refresh();
           return;
         }
         if (resolveRequestError.status === 404) {
-          setClientNotice("Comment not found. It may have been deleted.");
+          toast.error("Comment not found. It may have been deleted.");
           return;
         }
         if (resolveRequestError.message.toLowerCase().includes("already closed")) {
-          setClientNotice("Comment is already closed.");
+          toast.info("Comment is already closed.");
           return;
         }
       }
@@ -188,9 +193,9 @@ export function InspectionWorkspace({
           currentUserDisplayName
         );
         persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Comment resolved in demo mode.");
+        toast.info("Comment closed in demo mode (not sent to the server).");
       } else {
-        setClientNotice("Failed to resolve comment. Please try again.");
+        toast.error(saveErrorMessage("Close comment", resolveRequestError));
       }
     } finally {
       setResolvingCommentId(null);
@@ -199,7 +204,6 @@ export function InspectionWorkspace({
 
   async function handleAddRemark(commentId: string, remark: string): Promise<void> {
     if (!selectedDetail || submitting || writeBlockedReason) return;
-    setClientNotice(null);
 
     try {
       if (mode === "api") {
@@ -209,23 +213,24 @@ export function InspectionWorkspace({
           { mode }
         );
         persistResolvedDetail(nextDetail);
-        setClientNotice("Remark added.");
+        toast.success("Remark saved.");
       } else {
         const nextDetail = createLocalRemarkDetail(selectedDetail, commentId, remark);
         persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Remark added in demo mode.");
+        toast.info("Remark saved in demo mode (not sent to the server).");
       }
     } catch (err) {
       if (mode === "api" && err instanceof ApiError && err.status === 409) {
+        toast.error("Someone else changed this item. The latest version is loaded; please add the remark again.");
         await refresh();
+        return;
       }
-      setClientNotice("Failed to add remark.");
+      toast.error(saveErrorMessage("Save remark", err));
     }
   }
 
   async function handleReopenComment(commentId: string): Promise<void> {
     if (!selectedDetail || submitting || writeBlockedReason) return;
-    setClientNotice(null);
 
     try {
       if (mode === "api") {
@@ -235,24 +240,26 @@ export function InspectionWorkspace({
           { mode }
         );
         persistResolvedDetail(nextDetail);
-        setClientNotice("Comment reopened.");
+        toast.success("Comment reopened.");
       } else {
         const nextDetail = createLocalReopenedDetail(selectedDetail, commentId);
         persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Comment reopened in demo mode.");
+        toast.info("Comment reopened in demo mode (not sent to the server).");
       }
     } catch (err) {
       if (mode === "api" && err instanceof ApiError && err.status === 409) {
+        toast.error("Someone else changed this item. The latest version is loaded; please try again.");
         await refresh();
+        return;
       }
-      setClientNotice("Failed to reopen comment.");
+      toast.error(saveErrorMessage("Reopen comment", err));
     }
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>): Promise<void> {
     event.preventDefault();
 
-    if (!selectedDetail || !preview || writeBlockedReason) {
+    if (!selectedDetail || !preview || writeBlockedReason || submitSave.saving) {
       return;
     }
 
@@ -266,39 +273,7 @@ export function InspectionWorkspace({
       comments: canAddComments ? draftComments.map((comment) => ({ message: comment.message })) : []
     };
 
-    setClientNotice(null);
-
-    try {
-      const nextMode: DetailTransportMode = mode;
-
-      if (nextMode === "api") {
-        const nextDetail = await submit(request, { mode: nextMode });
-        persistResolvedDetail(nextDetail);
-        setClientNotice("Submitted to API successfully.");
-      } else {
-        const nextDetail = createLocalSubmissionDetail({
-          detail: selectedDetail,
-          selectedResult,
-          preview,
-          canAddComments,
-          draftComments,
-          submittedBy: currentUserDisplayName
-        });
-        persistLocalDetail(nextDetail);
-        setClientNotice("API unavailable. Submission applied in demo mode.");
-      }
-
-      setCommentText("");
-    } catch (submitRequestError) {
-      if (mode === "api" && submitRequestError instanceof ApiError && submitRequestError.status === 409) {
-        await refresh();
-      }
-
-      if (mode === "api") {
-        setClientNotice(null);
-        return;
-      }
-
+    const applyDemoSubmission = () => {
       const nextDetail = createLocalSubmissionDetail({
         detail: selectedDetail,
         selectedResult,
@@ -309,7 +284,34 @@ export function InspectionWorkspace({
       });
       persistLocalDetail(nextDetail);
       setCommentText("");
-      setClientNotice("API unavailable. Submission applied in demo mode.");
+      toast.info(inspectionSavedMessage(resultLabel(nextDetail.lastRoundResult ?? selectedResult), { demo: true }));
+    };
+
+    const nextMode: DetailTransportMode = mode;
+
+    try {
+      await submitSave.run(async () => {
+        if (nextMode === "api") {
+          const nextDetail = await submit(request, { mode: nextMode });
+          persistResolvedDetail(nextDetail);
+          setCommentText("");
+          toast.success(inspectionSavedMessage(resultLabel(nextDetail.lastRoundResult ?? selectedResult)));
+        } else {
+          applyDemoSubmission();
+        }
+      });
+    } catch (submitRequestError) {
+      if (nextMode === "api") {
+        if (submitRequestError instanceof ApiError && submitRequestError.status === 409) {
+          toast.error("Someone else saved this item first. The latest version is loaded; check it and submit again.");
+          await refresh();
+          return;
+        }
+        toast.error(saveErrorMessage("Submit", submitRequestError));
+        return;
+      }
+
+      applyDemoSubmission();
     }
   }
 
@@ -346,8 +348,7 @@ export function InspectionWorkspace({
             setCommentText={setCommentText}
             canAddComments={canAddComments}
             hasExistingOpenComments={hasExistingOpenComments}
-            submitError={submitError}
-            clientNotice={clientNotice}
+            submitState={submitSave.state}
             preview={preview}
             writeBlockedReason={writeBlockedReason}
           />

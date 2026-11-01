@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "../auth-context";
+import { useToast } from "../components/Toast";
 import {
 
   batchImportInspections,
@@ -136,12 +137,14 @@ export function Admin() {
   const [newCommentDraft, setNewCommentDraft] = useState("");
   const [passwordDraft, setPasswordDraft] = useState("");
 
-  /* ── auto-clear toast ── */
+  /* ── forward admin messages to the app-wide toasts (same look as every other page) ── */
+  const appToast = useToast();
   useEffect(() => {
     if (!toast) return;
-    const t = setTimeout(() => setToast(null), 3000);
-    return () => clearTimeout(t);
-  }, [toast]);
+    if (toast.type === "ok") appToast.success(toast.text);
+    else appToast.error(toast.text);
+    setToast(null);
+  }, [toast, appToast]);
 
   /* ── initial load ── */
   useEffect(() => { void loadBase(); }, []);
@@ -757,8 +760,6 @@ export function Admin() {
 
       {/* ── Content ── */}
       <div className="admin-content">
-        {/* Toast */}
-        {toast && <div className={`alert ${toast.type === "ok" ? "success" : "error"}`} style={{ marginBottom: 10 }}>{toast.text}</div>}
 
         {/* Header */}
         <div className="admin-content-header">

@@ -1,7 +1,7 @@
 import { requestJson, withQuery } from "./client";
 import type { ProjectRecord } from "./types";
 import { getAuthToken } from "../auth";
-import { createRequestCache } from "../request-cache";
+import { createRequestCache, projectsCacheKey } from "../request-cache";
 
 // The project list is read by several components on every page load (project
 // context, top bar, pages). Share one request per user and status; refresh
@@ -13,7 +13,7 @@ export function invalidateProjectsCache(): void {
 }
 
 export async function fetchProjects(status?: ProjectRecord["status"]): Promise<ProjectRecord[]> {
-  const key = `projects:${getAuthToken() ?? ""}:${status ?? ""}`;
+  const key = projectsCacheKey(getAuthToken(), status);
   return projectsCache.get(key, () => requestJson<ProjectRecord[]>(withQuery("/projects", { status })));
 }
 

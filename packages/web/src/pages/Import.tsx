@@ -34,7 +34,6 @@ export function Import() {
 
   const [pastedData, setPastedData] = useState('');
   const [isImporting, setIsImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ success: number } | null>(null);
 
   // ── 暂存清单（购物车） ──
   const [staging, setStaging] = useState<StagingRow[]>([]);
@@ -280,7 +279,7 @@ export function Import() {
 
   // ── 最终提交入库 ──
   const handleImport = async () => {
-    if (staging.length === 0 || !selectedProjectId) return;
+    if (staging.length === 0 || !selectedProjectId || isImporting) return;
     if (!confirm(`Submit ${staging.length} inspection records to the database?`)) return;
 
     setIsImporting(true);
@@ -308,12 +307,16 @@ export function Import() {
         });
         successCount += resp.imported;
       }
-      setImportResult({ success: successCount });
       setStaging([]);
       setEditingUid(null);
-      setTimeout(() => setImportResult(null), 3000);
+      toast.success(`Imported ${successCount} inspection ${successCount === 1 ? "record" : "records"}.`);
     } catch (e: any) {
-      toast.error("Import Failed: " + String(e));
+      const reason = e instanceof Error ? e.message : String(e);
+      toast.error(
+        successCount > 0
+          ? `Import failed after ${successCount} records were saved: ${reason}`
+          : `Import failed: ${reason}`
+      );
     } finally {
       setIsImporting(false);
     }
@@ -351,12 +354,6 @@ export function Import() {
         </div>
       </section>
 
-      {/* ── 成功提示 ── */}
-      {importResult && (
-        <div className="alert success" style={{ marginTop: 16 }}>
-          ✅ Imported {importResult.success} inspection records.
-        </div>
-      )}
 
       <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
 
@@ -584,7 +581,7 @@ export function Import() {
                   </div>
                 </div>
                 <button className="submitButton" onClick={handleImport} disabled={isImporting || staging.length === 0 || !selectedShip}>
-                  {isImporting ? 'Importing...' : `Confirm Import (${staging.length})`}
+                  {isImporting ? 'Importing…' : `Confirm Import (${staging.length})`}
                 </button>
               </div>
             </>

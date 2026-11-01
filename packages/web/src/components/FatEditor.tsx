@@ -59,6 +59,7 @@ export function FatEditor({
   const [commentsText, setCommentsText] = useState("");
   const [discipline, setDiscipline] = useState(userDisciplines[0] || "HULL");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const submitLockRef = useRef(false);
   const [attachments, setAttachments] = useState<AttachmentPhoto[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -77,6 +78,8 @@ export function FatEditor({
     if (!e.target.files) return;
     const files = Array.from(e.target.files).filter((f) => f.type.startsWith("image/"));
 
+    if (submitLockRef.current) return; // a double click submits once
+    submitLockRef.current = true;
     setIsSubmitting(true);
     try {
       const newAttachments = await Promise.all(
@@ -94,6 +97,7 @@ export function FatEditor({
     } catch {
       toast.error("Failed to compress image");
     } finally {
+      submitLockRef.current = false;
       setIsSubmitting(false);
     }
   };
@@ -165,7 +169,7 @@ export function FatEditor({
         <div style={{ display: "flex", gap: 12 }}>
           <button style={btnCancelStyle} onClick={onClose} disabled={isSubmitting}>Cancel</button>
           <button style={btnSubmitStyle} onClick={() => void handleSubmit()} disabled={isSubmitting}>
-            {isSubmitting ? <Loader2 size={16} className="animate-spin" /> : "Submit FAT"}
+            {isSubmitting ? "Saving…" : "Submit FAT"}
           </button>
         </div>
       </div>
