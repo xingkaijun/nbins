@@ -316,9 +316,15 @@ export function CommentDetailModal({ comment, user, onClose, onChange }: Comment
             <section className="commentModalSection" aria-label="Comment">
               <p className="commentModalText">{comment.content}</p>
               {actions.canEditContent ? (
-                <button type="button" className="nbLinkButton" onClick={() => setEditingContent(true)} disabled={disabled}>
-                  Edit text
-                </button>
+                <div className="commentModalInlineActions commentModalInlineActions--start">
+                  <button type="button" className="nbLinkButton" onClick={() => setEditingContent(true)} disabled={disabled}>
+                    Edit text
+                  </button>
+                  {/* The edit form closes on success, so its "Saved ✓" is shown here. */}
+                  {justSaved === "Save comment" ? (
+                    <span className="commentModalSavedNote" role="status">Saved ✓</span>
+                  ) : null}
+                </div>
               ) : null}
             </section>
           )}

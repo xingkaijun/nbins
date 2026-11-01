@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { createDebouncer } from "../debounce";
+import { createDebouncer, resolveDebouncedValue } from "../debounce";
 
 /**
  * Returns `value` after it has stopped changing for `delayMs`.
  * When `immediate(value)` is true the new value is taken at once
- * (e.g. clearing the search box should not wait).
+ * (e.g. clearing the search box should not wait), in the same render.
  */
 export function useDebouncedValue<T>(value: T, delayMs: number, immediate?: (value: T) => boolean): T {
   const [debounced, setDebounced] = useState(value);
@@ -22,5 +22,5 @@ export function useDebouncedValue<T>(value: T, delayMs: number, immediate?: (val
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [value, delayMs]);
 
-  return debounced;
+  return resolveDebouncedValue(value, debounced, immediate);
 }

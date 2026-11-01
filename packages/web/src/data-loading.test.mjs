@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 
 import { createRequestCache, projectsCacheKey } from "./request-cache.ts";
-import { KEYWORD_DEBOUNCE_MS, createDebouncer } from "./debounce.ts";
+import { KEYWORD_DEBOUNCE_MS, createDebouncer, resolveDebouncedValue } from "./debounce.ts";
 import { createLatestRequestGate } from "./latest-request.ts";
 import { buildInspectionListParams, inspectionListFilterKey, isAbortError } from "./inspection-list-query.ts";
 import { createFakeTimers, deferred } from "./test-helpers/fake-timers.mjs";
@@ -229,4 +229,16 @@ test("unpaged params (export) and the filter key carry no page info", () => {
   assert.equal(unpaged.has("facets"), false);
   assert.equal(inspectionListFilterKey({ ...BASE, page: 1 }), inspectionListFilterKey({ ...BASE, page: 9, pageSize: 100 }));
   assert.notEqual(inspectionListFilterKey(BASE), inspectionListFilterKey({ ...BASE, hull: "H1" }));
+});
+
+test("resolveDebouncedValue: a cleared keyword applies in the same render, typing still waits", () => {
+  const isEmpty = (value) => value.trim() === "";
+  // Clear filters: keyword "" must not pair with the stale debounced keyword
+  assert.equal(resolveDebouncedValue("", "zzzz-no-match", isEmpty), "");
+  assert.equal(resolveDebouncedValue("   ", "abc", isEmpty), "   ");
+  // typing: the debounced (older) value is exposed until the timer fires
+  assert.equal(resolveDebouncedValue("weld", "wel", isEmpty), "wel");
+  assert.equal(resolveDebouncedValue("weld", "weld", isEmpty), "weld");
+  // without an immediate predicate the debounced value is always used
+  assert.equal(resolveDebouncedValue("", "abc"), "abc");
 });

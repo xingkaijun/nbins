@@ -47,3 +47,13 @@ export function createDebouncer(delayMs: number, timers: TimerApi = defaultTimer
     }
   };
 }
+
+/**
+ * The value a debounced hook should expose for this render. A value that applies at once
+ * (e.g. a cleared keyword) is returned in the same render as the change, so other filter
+ * changes made together with it (Clear filters) never pair with the stale debounced value
+ * and send a wasted request.
+ */
+export function resolveDebouncedValue<T>(value: T, debounced: T, immediate?: (value: T) => boolean): T {
+  return immediate?.(value) ? value : debounced;
+}

@@ -2598,6 +2598,12 @@ tbody tr.record-row.isFlashing {
   margin: 0 0 14px;
 }
 
+.commentModalSavedNote {
+  color: var(--nb-success-text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .commentModalText {
   margin: 0;
   padding: 10px 12px;
@@ -2617,6 +2623,11 @@ tbody tr.record-row.isFlashing {
   justify-content: flex-end;
   gap: 8px;
   margin-top: 8px;
+}
+
+.commentModalInlineActions--start {
+  justify-content: flex-start;
+  align-items: center;
 }
 
 .commentModalMeta {
