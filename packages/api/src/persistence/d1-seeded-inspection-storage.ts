@@ -98,6 +98,15 @@ export class D1SeededInspectionStorage implements InspectionStorage {
     );
   }
 
+  async readProjectIds(): Promise<string[]> {
+    await this.ensureSeeded();
+    if (this.inner.readProjectIds) {
+      return this.inner.readProjectIds();
+    }
+    const snapshot = await this.inner.read();
+    return snapshot.projects.map((project) => project.id);
+  }
+
   async readProjectMembersByUserId(userId: string) {
     await this.ensureSeeded();
     if (this.inner.readProjectMembersByUserId) {

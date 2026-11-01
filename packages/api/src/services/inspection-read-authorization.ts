@@ -9,6 +9,9 @@ export async function resolveAllowedProjectIdsForAuthUser(
 ): Promise<string[]> {
   // P1: admin 角色可见所有项目，跳过成员关系过滤
   if (authUser.role === "admin") {
+    if (storage.readProjectIds) {
+      return storage.readProjectIds();
+    }
     const snapshot = await storage.read();
     return snapshot.projects.map((project) => project.id);
   }

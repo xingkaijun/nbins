@@ -1,5 +1,7 @@
 import type {
   DashboardSnapshot,
+  InspectionListItem,
+  InspectionListPageResponse,
   Discipline,
   InspectionItemDetailResponse,
   InspectionCommentView,
@@ -9,6 +11,7 @@ import type {
   SubmitInspectionResultResponse,
 } from "@nbins/shared";
 import { requestJson, withQuery } from "./client";
+import { buildInspectionListParams, type InspectionListQueryInput } from "../inspection-list-query";
 
 export async function fetchInspectionDetail(
   inspectionItemId: string
@@ -18,6 +21,23 @@ export async function fetchInspectionDetail(
 
 export async function fetchInspectionList(projectId?: string): Promise<DashboardSnapshot> {
   return requestJson<DashboardSnapshot>(withQuery("/inspections", { projectId }));
+}
+
+/** One server-filtered page of the inspection list plus stats over all matches. */
+export async function fetchInspectionListPage(
+  input: InspectionListQueryInput,
+  init?: { signal?: AbortSignal }
+): Promise<InspectionListPageResponse> {
+  return requestJson<InspectionListPageResponse>(`/inspections?${buildInspectionListParams(input)}`, {
+    signal: init?.signal
+  });
+}
+
+/** Every item matching the filters (no paging), streamed by the server in batches. */
+export async function fetchInspectionListExport(
+  input: InspectionListQueryInput
+): Promise<{ generatedAt: string; items: InspectionListItem[]; total: number }> {
+  return requestJson(`/inspections/export?${buildInspectionListParams(input, { paged: false })}`);
 }
 
 export async function submitInspectionResult(

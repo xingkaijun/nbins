@@ -7,6 +7,14 @@ import { createInspectionStorageResolver } from "../persistence/storage-factory.
 import { InspectionRepository } from "../repositories/inspection-repository.ts";
 import { InspectionService } from "../services/inspection-service.ts";
 import { resolveAllowedProjectIdsForAuthUser } from "../services/inspection-read-authorization.ts";
+import type { DashboardSummary, InspectionListItem, InspectionListPageResponse } from "@nbins/shared";
+import {
+  iterateInspectionList,
+  normalizePaging,
+  queryInspectionListPage,
+  queryInspectionListStats
+} from "../persistence/inspection-list-query.ts";
+import type { InspectionListFilter, InspectionListMode, InspectionListStats } from "../persistence/inspection-list-query.ts";
 
 function normalizeItemName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -35,7 +43,6 @@ function createInspectionRoutes(
   inspectionRoutes.get("/", async (c) => {
     try {
       const storage = resolveStorage(c.env);
-      const inspectionService = new InspectionService(new InspectionRepository(storage));
       const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(
         storage,
         c.get("authUser")
@@ -46,15 +53,94 @@ function createInspectionRoutes(
         return c.json({ ok: false, error: "forbidden" }, 403);
       }
 
-      const snapshot = await inspectionService.listInspections(allowedProjectIds, projectId);
+      const db = c.env.DB;
+      if (!db) {
+        // Not reachable with the local server (DB is always bound); kept for safety.
+        const inspectionService = new InspectionService(new InspectionRepository(storage));
+        return c.json({ ok: true, data: await inspectionService.listInspections(allowedProjectIds, projectId) });
+      }
 
-      return c.json({
-        ok: true,
-        data: snapshot
-      });
+      const filter = readListFilter(c, allowedProjectIds, projectId);
+      const wantsPage = c.req.query("page") !== undefined || c.req.query("pageSize") !== undefined;
+
+      if (wantsPage) {
+        // Server-side filtering + paging: only the requested page is read.
+        const paging = normalizePaging(c.req.query("page"), c.req.query("pageSize"));
+        const result = await queryInspectionListPage(db, filter, paging, { facets: c.req.query("facets") === "1" });
+        const data: InspectionListPageResponse = {
+          generatedAt: new Date().toISOString(),
+          summary: summaryFromStats(result.stats),
+          ...result
+        };
+        return c.json({ ok: true, data });
+      }
+
+      // Legacy full list (no page/pageSize): unchanged behaviour and shape for
+      // older clients. The web app always asks for a page.
+      const inspectionService = new InspectionService(new InspectionRepository(storage));
+      return c.json({ ok: true, data: await inspectionService.listInspections(allowedProjectIds, projectId) });
     } catch (e: any) {
       console.error("GET / error:", e);
       return c.json({ ok: false, error: String(e), stack: e?.stack }, 500);
+    }
+  });
+
+  /**
+   * Full export of the filtered list (same filters as GET /), streamed as JSON
+   * and read from the database in batches; used by the checklist PDF export.
+   */
+  inspectionRoutes.get("/export", async (c) => {
+    try {
+      const storage = resolveStorage(c.env);
+      const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(storage, c.get("authUser"));
+      const projectId = c.req.query("projectId")?.trim() || undefined;
+      if (projectId && !allowedProjectIds.includes(projectId)) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
+      const db = c.env.DB;
+      if (!db) {
+        return c.json({ ok: false, error: "DATABASE_NOT_CONFIGURED" }, 500);
+      }
+      const filter = readListFilter(c, allowedProjectIds, projectId);
+      const encoder = new TextEncoder();
+      const batches = iterateInspectionList(db, filter);
+      let first = true;
+      let started = false;
+      let count = 0;
+      const stream = new ReadableStream<Uint8Array>({
+        async pull(controller) {
+          try {
+            if (!started) {
+              started = true;
+              controller.enqueue(encoder.encode(`{"ok":true,"data":{"generatedAt":${JSON.stringify(new Date().toISOString())},"items":[`));
+            }
+            const next = await batches.next();
+            if (next.done) {
+              controller.enqueue(encoder.encode(`],"total":${count}}}`));
+              controller.close();
+              return;
+            }
+            const chunk = next.value.map((item) => JSON.stringify(item)).join(",");
+            count += next.value.length;
+            if (chunk) {
+              controller.enqueue(encoder.encode((first ? "" : ",") + chunk));
+              first = false;
+            }
+          } catch (error) {
+            controller.error(error);
+          }
+        },
+        async cancel() {
+          await batches.return(undefined);
+        }
+      });
+      return new Response(stream, {
+        status: 200,
+        headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" }
+      });
+    } catch (e: any) {
+      console.error("GET /export error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
     }
   });
 
@@ -749,3 +835,34 @@ function createInspectionRoutes(
 const inspectionRoutes = createInspectionRoutes();
 
 export { createInspectionRoutes, inspectionRoutes };
+
+function readListFilter(
+  c: { req: { query(name: string): string | undefined } },
+  allowedProjectIds: string[],
+  projectId: string | undefined
+): InspectionListFilter {
+  const rawMode = c.req.query("mode")?.trim();
+  const mode: InspectionListMode = rawMode === "pending" || rawMode === "open-comments" ? rawMode : "date";
+  const rawDate = c.req.query("date")?.trim() ?? "";
+  const hull = c.req.query("hull")?.trim();
+  const discipline = c.req.query("discipline")?.trim();
+  return {
+    allowedProjectIds,
+    projectId,
+    mode,
+    date: /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : "",
+    hull: hull && hull !== "ALL" ? hull : null,
+    discipline: discipline && discipline !== "ALL" ? discipline : null,
+    keyword: c.req.query("keyword") ?? c.req.query("q") ?? null
+  };
+}
+
+function summaryFromStats(stats: InspectionListStats): DashboardSummary {
+  return {
+    pendingToday: stats.pending,
+    completedToday: stats.accepted,
+    openComments: stats.openComments,
+    reinspectionQueue: stats.reinspection,
+    projectProgress: 0
+  };
+}

@@ -24,6 +24,9 @@ import {
 
 type JsonRow = Record<string, unknown>;
 
+/** Thrown (and mapped to HTTP 409) when a guarded item update matches no row. */
+const VERSION_CONFLICT_ERROR = "INSPECTION_ITEM_VERSION_CONFLICT";
+
 export class D1InspectionStorage implements InspectionStorage {
   private readonly db: SqlDatabase;
 
@@ -97,6 +100,11 @@ export class D1InspectionStorage implements InspectionStorage {
   async readUserByUsername(username: string): Promise<UserRecord | null> {
     const row = await this.selectFirst(`SELECT * FROM "users" WHERE "username" = ?`, username);
     return row ? mapUserRecord(row) : null;
+  }
+
+  async readProjectIds(): Promise<string[]> {
+    const rows = await this.selectMany(`SELECT "id" FROM "projects" ORDER BY "id"`);
+    return rows.map((row) => String(row.id));
   }
 
   async readProjectMembersByUserId(userId: string): Promise<ProjectMemberRecord[]> {
@@ -411,7 +419,7 @@ export class D1InspectionStorage implements InspectionStorage {
         .prepare(
           `UPDATE "inspection_items"
            SET "workflowStatus" = ?, "lastRoundResult" = ?, "resolvedResult" = ?, "openCommentsCount" = ?, "version" = ?, "updatedAt" = ?
-           WHERE "id" = ?`
+           WHERE "id" = ? AND "version" = ?`
         )
         .bind(
           mutation.inspectionItem.workflowStatus,
@@ -420,8 +428,12 @@ export class D1InspectionStorage implements InspectionStorage {
           mutation.inspectionItem.openCommentsCount,
           mutation.inspectionItem.version,
           mutation.inspectionItem.updatedAt,
-          mutation.inspectionItem.id
+          mutation.inspectionItem.id,
+          mutation.inspectionItem.version - 1
         )
+        // Optimistic lock in the same transaction: if another save bumped the
+        // version since we read it, nothing matches and the whole batch rolls back.
+        .expectChanges(1, VERSION_CONFLICT_ERROR)
     ];
 
     for (const record of mutation.createdComments) {
@@ -486,7 +498,7 @@ export class D1InspectionStorage implements InspectionStorage {
         .prepare(
           `UPDATE "inspection_items"
            SET "workflowStatus" = ?, "resolvedResult" = ?, "openCommentsCount" = ?, "version" = ?, "updatedAt" = ?
-           WHERE "id" = ?`
+           WHERE "id" = ? AND "version" = ?`
         )
         .bind(
           mutation.inspectionItem.workflowStatus,
@@ -494,8 +506,10 @@ export class D1InspectionStorage implements InspectionStorage {
           mutation.inspectionItem.openCommentsCount,
           mutation.inspectionItem.version,
           mutation.inspectionItem.updatedAt,
-          mutation.inspectionItem.id
+          mutation.inspectionItem.id,
+          mutation.inspectionItem.version - 1
         )
+        .expectChanges(1, VERSION_CONFLICT_ERROR)
     ];
 
     await this.db.batch(statements);

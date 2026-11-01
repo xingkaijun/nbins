@@ -92,6 +92,31 @@ export interface DashboardSnapshot {
   items: InspectionListItem[];
 }
 
+/** Aggregates over the whole filtered inspection list (not just one page). */
+export interface InspectionListStats {
+  total: number;
+  pending: number;
+  accepted: number;
+  qcRecheck: number;
+  reinspection: number;
+  rejected: number;
+  openComments: number;
+  byDiscipline: Record<string, number>;
+}
+
+/** GET /api/inspections?page=&pageSize=&mode=&date=&hull=&discipline=&keyword= */
+export interface InspectionListPageResponse extends DashboardSnapshot {
+  total: number;
+  page: number;
+  pageSize: number;
+  pageCount: number;
+  stats: InspectionListStats;
+  /** Hull numbers in the scoped project(s), for the filter dropdown (only with facets=1). */
+  hulls?: string[];
+  /** Disciplines used by items in the scoped project(s) (only with facets=1). */
+  disciplines?: string[];
+}
+
 // ---- 巡检/试航意见模块 DTO ----
 
 /** 意见类型字典（用户可自定义扩展） */

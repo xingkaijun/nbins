@@ -91,6 +91,21 @@ export const createTableStatements = createCreateTableStatements();
  * file, so regenerating that file from schema.ts silently dropped them; keeping
  * them here makes `pnpm db:gen` reproduce src/db/bootstrap.sql exactly.
  */
+/**
+ * Indexes for the server-side inspection list (inspection-list-query.ts):
+ * filter by discipline per ship, the open-comments queue, the planned-date
+ * filter, and a covering index for the item -> current round lookup.
+ * Databases created before them get them from migrate() (ensureIndexes).
+ */
+export const LIST_QUERY_ITEM_INDEXES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_inspection_items_ship_discipline ON "inspection_items"("shipId", "discipline");',
+  'CREATE INDEX IF NOT EXISTS idx_inspection_items_open_comments ON "inspection_items"("shipId") WHERE "openCommentsCount" > 0;'
+];
+export const LIST_QUERY_ROUND_INDEXES: string[] = [
+  'CREATE INDEX IF NOT EXISTS idx_inspection_rounds_plannedDate ON "inspection_rounds"("plannedDate");',
+  'CREATE INDEX IF NOT EXISTS idx_inspection_rounds_item_round_cover ON "inspection_rounds"("inspectionItemId", "roundNumber", "plannedDate", "yardQc");'
+];
+
 const INDEX_GROUPS: ReadonlyArray<{ comment: string; statements: string[] }> = [
   {
     comment: "ships: 按项目查询船舶",
@@ -101,14 +116,16 @@ const INDEX_GROUPS: ReadonlyArray<{ comment: string; statements: string[] }> = [
     statements: [
       'CREATE INDEX IF NOT EXISTS idx_inspection_items_shipId ON "inspection_items"("shipId");',
       'CREATE INDEX IF NOT EXISTS idx_inspection_items_discipline ON "inspection_items"("discipline");',
-      'CREATE INDEX IF NOT EXISTS idx_inspection_items_workflowStatus ON "inspection_items"("workflowStatus");'
+      'CREATE INDEX IF NOT EXISTS idx_inspection_items_workflowStatus ON "inspection_items"("workflowStatus");',
+      ...LIST_QUERY_ITEM_INDEXES
     ]
   },
   {
     comment: "inspection_rounds: 按检验项加载轮次",
     statements: [
       'CREATE INDEX IF NOT EXISTS idx_inspection_rounds_inspectionItemId ON "inspection_rounds"("inspectionItemId");',
-      'CREATE INDEX IF NOT EXISTS idx_inspection_rounds_item_round ON "inspection_rounds"("inspectionItemId", "roundNumber");'
+      'CREATE INDEX IF NOT EXISTS idx_inspection_rounds_item_round ON "inspection_rounds"("inspectionItemId", "roundNumber");',
+      ...LIST_QUERY_ROUND_INDEXES
     ]
   },
   {

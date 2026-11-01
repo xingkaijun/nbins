@@ -198,10 +198,14 @@ CREATE INDEX IF NOT EXISTS idx_ships_projectId ON "ships"("projectId");
 CREATE INDEX IF NOT EXISTS idx_inspection_items_shipId ON "inspection_items"("shipId");
 CREATE INDEX IF NOT EXISTS idx_inspection_items_discipline ON "inspection_items"("discipline");
 CREATE INDEX IF NOT EXISTS idx_inspection_items_workflowStatus ON "inspection_items"("workflowStatus");
+CREATE INDEX IF NOT EXISTS idx_inspection_items_ship_discipline ON "inspection_items"("shipId", "discipline");
+CREATE INDEX IF NOT EXISTS idx_inspection_items_open_comments ON "inspection_items"("shipId") WHERE "openCommentsCount" > 0;
 
 -- inspection_rounds: 按检验项加载轮次
 CREATE INDEX IF NOT EXISTS idx_inspection_rounds_inspectionItemId ON "inspection_rounds"("inspectionItemId");
 CREATE INDEX IF NOT EXISTS idx_inspection_rounds_item_round ON "inspection_rounds"("inspectionItemId", "roundNumber");
+CREATE INDEX IF NOT EXISTS idx_inspection_rounds_plannedDate ON "inspection_rounds"("plannedDate");
+CREATE INDEX IF NOT EXISTS idx_inspection_rounds_item_round_cover ON "inspection_rounds"("inspectionItemId", "roundNumber", "plannedDate", "yardQc");
 
 -- comments: 按检验项加载意见 + 按状态统计
 CREATE INDEX IF NOT EXISTS idx_comments_inspectionItemId ON "comments"("inspectionItemId");

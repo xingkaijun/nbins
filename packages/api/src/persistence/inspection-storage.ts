@@ -51,6 +51,8 @@ export interface InspectionStorage {
   readUserById?(id: string): Promise<UserRecord | null>;
   readUserByUsername?(username: string): Promise<UserRecord | null>;
   readProjectMembersByUserId?(userId: string): Promise<ProjectMemberRecord[]>;
+  /** Ids of every project (admin visibility) without reading the whole database. */
+  readProjectIds?(): Promise<string[]>;
   readInspectionList?(): Promise<InspectionListStorageRecord>;
   readInspectionDetail?(
     inspectionItemId: string

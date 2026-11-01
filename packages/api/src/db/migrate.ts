@@ -15,7 +15,7 @@
  */
 import type { LocalSqliteDatabase } from "../platform/sqlite-database.ts";
 import { schema } from "./schema.ts";
-import { columnDefinitionSql, quoteIdentifier, schemaStatements } from "./sql.ts";
+import { columnDefinitionSql, createIndexStatements, quoteIdentifier, schemaStatements } from "./sql.ts";
 
 export interface Migration {
   id: string;
@@ -47,6 +47,35 @@ export interface MigrationReport {
   addedColumns: ColumnFix[];
   /** Columns that could not be added automatically (NOT NULL without DEFAULT). */
   manualColumns: ColumnFix[];
+  /** Indexes from src/db/sql.ts the database lacked (e.g. added after it was created). */
+  addedIndexes: string[];
+}
+
+function indexNames(db: LocalSqliteDatabase): Set<string> {
+  return new Set(
+    (db.sqlite.prepare("SELECT name FROM sqlite_master WHERE type = 'index'").all() as Array<{ name: string }>).map(
+      (row) => row.name
+    )
+  );
+}
+
+/**
+ * Creates any index from src/db/sql.ts that is missing (all statements are
+ * IF NOT EXISTS), so databases created before an index was added get it on
+ * the next start. Refreshes planner statistics when something was added.
+ */
+function ensureIndexes(db: LocalSqliteDatabase): string[] {
+  const before = indexNames(db);
+  db.transaction(() => {
+    for (const statement of createIndexStatements) {
+      db.sqlite.exec(statement);
+    }
+  });
+  const added = [...indexNames(db)].filter((name) => !before.has(name)).sort();
+  if (added.length > 0) {
+    db.sqlite.exec("ANALYZE;");
+  }
+  return added;
 }
 
 function ensureMigrationsTable(db: LocalSqliteDatabase): void {
@@ -102,7 +131,7 @@ export function findMissingColumns(db: LocalSqliteDatabase): { addable: ColumnFi
 export function migrate(db: LocalSqliteDatabase, now: () => string = () => new Date().toISOString()): MigrationReport {
   ensureMigrationsTable(db);
   const done = new Set(listAppliedMigrations(db));
-  const report: MigrationReport = { applied: [], alreadyApplied: [], addedColumns: [], manualColumns: [] };
+  const report: MigrationReport = { applied: [], alreadyApplied: [], addedColumns: [], manualColumns: [], addedIndexes: [] };
 
   for (const migration of MIGRATIONS) {
     if (done.has(migration.id)) {
@@ -129,6 +158,7 @@ export function migrate(db: LocalSqliteDatabase, now: () => string = () => new D
   }
   report.addedColumns = addable;
   report.manualColumns = manual;
+  report.addedIndexes = ensureIndexes(db);
 
   return report;
 }

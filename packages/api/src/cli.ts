@@ -87,6 +87,9 @@ function printReport(report: MigrationReport): void {
   for (const fix of report.addedColumns) {
     console.log(`added missing column: ${fix.table}.${fix.column}`);
   }
+  for (const name of report.addedIndexes) {
+    console.log(`added missing index: ${name}`);
+  }
   for (const fix of report.manualColumns) {
     console.log(`WARNING missing column needs a manual fix: ${fix.table}.${fix.column}  (${fix.sql})`);
   }

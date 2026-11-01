@@ -39,6 +39,9 @@ function main(): void {
     for (const fix of report.addedColumns) {
       log(`schema: added missing column ${fix.table}.${fix.column}`);
     }
+    for (const name of report.addedIndexes) {
+      log(`schema: added missing index ${name}`);
+    }
     for (const fix of report.manualColumns) {
       log(`schema WARNING: column ${fix.table}.${fix.column} is missing and needs a manual fix: ${fix.sql}`);
     }

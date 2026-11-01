@@ -33,6 +33,13 @@ export interface SqlStatement {
   first<T = Record<string, unknown>>(columnName?: string): Promise<T | null>;
   run<T = Record<string, unknown>>(): Promise<SqlResult<T>>;
   raw<T = unknown[]>(): Promise<T[]>;
+  /**
+   * Returns a statement that fails with `new Error(message)` when it changes
+   * fewer than `min` rows. Inside batch() the failure rolls the whole batch
+   * back, which gives an atomic optimistic-lock check
+   * (`UPDATE ... WHERE id = ? AND version = ?`).
+   */
+  expectChanges(min: number, message: string): SqlStatement;
 }
 
 export interface SqlExecResult {
