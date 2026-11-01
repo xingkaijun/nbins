@@ -117,6 +117,29 @@ export interface InspectionListPageResponse extends DashboardSnapshot {
   disciplines?: string[];
 }
 
+/** One discipline row of GET /api/inspections/report-summary. */
+export interface ReportDisciplineRow {
+  discipline: string;
+  /** Inspection items whose current round is planned inside the period. */
+  total: number;
+  acceptedAA: number;
+  qualifiedQCC: number;
+  rejectedRJ: number;
+  owc: number;
+  pending: number;
+  /** AA or QCC on round 1. */
+  passedFirstRound: number;
+  /** Inspection comments created inside the period. */
+  comments: number;
+}
+
+/** GET /api/inspections/report-summary: Reports page aggregates computed in SQL. */
+export interface ReportSummaryResponse {
+  hulls: string[];
+  disciplines: string[];
+  rows: ReportDisciplineRow[];
+}
+
 // ---- 巡检/试航意见模块 DTO ----
 
 /** 意见类型字典（用户可自定义扩展） */

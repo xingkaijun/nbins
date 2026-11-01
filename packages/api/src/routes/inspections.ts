@@ -15,6 +15,7 @@ import {
   queryInspectionListStats
 } from "../persistence/inspection-list-query.ts";
 import type { InspectionListFilter, InspectionListMode, InspectionListStats } from "../persistence/inspection-list-query.ts";
+import { queryReportSummary } from "../persistence/report-summary-query.ts";
 
 function normalizeItemName(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9]/g, "");
@@ -140,6 +141,53 @@ function createInspectionRoutes(
       });
     } catch (e: any) {
       console.error("GET /export error:", e);
+      return c.json({ ok: false, error: String(e) }, 500);
+    }
+  });
+
+  /**
+   * Reports page aggregates (per discipline counts of results and comments)
+   * computed in SQL. Query: projectId, startDate, endDate (YYYY-MM-DD, inclusive),
+   * startAt, endAt (ISO instants for comment createdAt), tzOffset (minutes,
+   * Date#getTimezoneOffset of the browser), hull, discipline.
+   */
+  inspectionRoutes.get("/report-summary", async (c) => {
+    try {
+      const storage = resolveStorage(c.env);
+      const allowedProjectIds = await resolveAllowedProjectIdsForAuthUser(storage, c.get("authUser"));
+      const projectId = c.req.query("projectId")?.trim() || undefined;
+      if (projectId && !allowedProjectIds.includes(projectId)) {
+        return c.json({ ok: false, error: "forbidden" }, 403);
+      }
+      const db = c.env.DB;
+      if (!db) {
+        return c.json({ ok: false, error: "DATABASE_NOT_CONFIGURED" }, 500);
+      }
+      const startDate = c.req.query("startDate")?.trim() ?? "";
+      const endDate = c.req.query("endDate")?.trim() ?? "";
+      const startAt = c.req.query("startAt")?.trim() ?? "";
+      const endAt = c.req.query("endAt")?.trim() ?? "";
+      const isDate = (value: string) => /^\d{4}-\d{2}-\d{2}$/.test(value);
+      const isInstant = (value: string) => !Number.isNaN(Date.parse(value));
+      if (!isDate(startDate) || !isDate(endDate) || !isInstant(startAt) || !isInstant(endAt)) {
+        return c.json({ ok: false, error: "startDate, endDate (YYYY-MM-DD), startAt and endAt (ISO) are required" }, 400);
+      }
+      const hull = c.req.query("hull")?.trim();
+      const discipline = c.req.query("discipline")?.trim();
+      const data = await queryReportSummary(db, {
+        allowedProjectIds,
+        projectId,
+        startDate,
+        endDate,
+        startAt: new Date(startAt).toISOString(),
+        endAt: new Date(endAt).toISOString(),
+        tzOffsetMinutes: Number(c.req.query("tzOffset") ?? 0) || 0,
+        hull: hull && hull !== "ALL" ? hull : null,
+        discipline: discipline && discipline !== "ALL" ? discipline : null
+      });
+      return c.json({ ok: true, data });
+    } catch (e: any) {
+      console.error("GET /report-summary error:", e);
       return c.json({ ok: false, error: String(e) }, 500);
     }
   });
