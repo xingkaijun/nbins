@@ -1,11 +1,17 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { Download, ExternalLink, Search, X } from "lucide-react";
 import {
   INSPECTION_RESULT_LABELS,
-  type InspectionListItem
+  type InspectionListItem,
+  type InspectionListPageResponse
 } from "@nbins/shared";
-import { fetchInspectionList, fetchInspectionDetail, fetchProjects, type ProjectRecord } from "../api";
+import { fetchInspectionDetail, fetchInspectionListExport, fetchInspectionListPage, fetchProjects, type ProjectRecord } from "../api";
+import { buildInspectionListParams, isAbortError, type InspectionListQueryInput } from "../inspection-list-query";
+import { useDebouncedValue } from "../hooks/use-debounced-value";
+import { useRowFlash } from "../hooks/use-row-flash";
+import { rowsToFlash } from "../row-flash";
+import { KEYWORD_DEBOUNCE_MS } from "../debounce";
 import { resolveAvailableProjectId, useProjectContext } from "../project-context";
 import type { DetailTransportMode } from "../useInspectionDetail";
 import { generateInspectionChecklistPdf, generateInspectionReport, generateInspectionChecklistAsciiPdf } from "../utils/pdf-generator";
@@ -23,9 +29,7 @@ import {
   ALL,
   PAGE_SIZE_OPTIONS,
   clearDashboardFilters,
-  filterDashboardItems,
   hasActiveFilters,
-  paginate,
   parseDashboardFilters,
   serializeDashboardFilters,
   updateDashboardFilters,
@@ -47,22 +51,32 @@ function pad2(value: number): string {
 export function Dashboard() {
   const toast = useToast();
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
-  const [listItems, setListItems] = useState<InspectionListItem[]>([]);
+  // One page of the server-paged list plus the stats of every filtered item.
+  const [pageData, setPageData] = useState<InspectionListPageResponse | null>(null);
+  const listItems: InspectionListItem[] = pageData?.items ?? [];
   const [listLoading, setListLoading] = useState(true);
   const [listError, setListError] = useState<string | null>(null);
   const [listMode, setListMode] = useState<DetailTransportMode>("api");
   const [dataGeneratedAt, setDataGeneratedAt] = useState<string>(new Date().toISOString());
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
-  
+  // Hull / discipline dropdown options, requested once per project (facets=1).
+  const [facets, setFacets] = useState<{ projectId: string; hulls: string[]; disciplines: string[] } | null>(null);
+  const facetsProjectRef = useRef<string | null>(null);
+  // A refetch that keeps the rows on screen (cross-tab sync) instead of skeletons.
+  const silentReloadRef = useRef(false);
+
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isExporting, setIsExporting] = useState(false);
+  const [checklistLoading, setChecklistLoading] = useState(false);
   const [exportProgress, setExportProgress] = useState({ current: 0, total: 0 });
-  // Bumped to force a list refetch (fallback sync when BroadcastChannel is unavailable).
+  // Bumped to refetch the current page (cross-tab saves, Retry, visibility fallback).
   const [listReloadToken, setListReloadToken] = useState(0);
   // Last row opened in a new tab, highlighted so the user keeps their place in the list.
   const [lastOpenedId, setLastOpenedId] = useState<string | null>(null);
+  // Rows another tab just saved flash briefly.
+  const { flashing, flash } = useRowFlash();
 
-  // Load projects
+  // Load projects (deduplicated: one /api/projects request per user per 30 s).
   useEffect(() => {
     let active = true;
 
@@ -85,71 +99,107 @@ export function Dashboard() {
     };
   }, [selectedProjectId, setSelectedProjectId]);
 
-  useEffect(() => {
-    let active = true;
-    async function loadList() {
-      if (!selectedProjectId) {
-        setListItems([]);
-        setSelectedIds(new Set());
-        setDataGeneratedAt(new Date().toISOString());
-        setListLoading(false);
-        return;
-      }
-
-      setListLoading(true);
-      setListError(null);
-      try {
-        const response = await fetchInspectionList(selectedProjectId);
-        if (!active) return;
-        setListItems(response.items);
-        setDataGeneratedAt(response.generatedAt);
-        setListMode("api");
-      } catch (err) {
-        if (!active) return;
-        setListError(err instanceof Error && err.message ? err.message : "Failed to load inspections.");
-        setListMode("api");
-        setListItems([]);
-        setSelectedIds(new Set());
-        setDataGeneratedAt(new Date().toISOString());
-      } finally {
-        if (active) setListLoading(false);
-      }
-    }
-    void loadList();
-    return () => { active = false; };
-  }, [selectedProjectId, listReloadToken]);
-
-  // Keep the list in sync with saves made on /inspections/:itemId in other tabs.
-  // Primary: BroadcastChannel (see inspection-sync.ts for why). Fallback for
-  // browsers without BroadcastChannel: refetch the list when this tab becomes
-  // visible again.
-  useEffect(() => {
-    const unsubscribe = subscribeInspectionUpdates(({ detail }) => {
-      setListItems((current) => syncDashboardItem(current, detail));
-    });
-
-    if (isBroadcastChannelSupported()) {
-      return unsubscribe;
-    }
-
-    function handleVisibilityChange() {
-      if (document.visibilityState === "visible") {
-        setListReloadToken((token) => token + 1);
-      }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => {
-      unsubscribe();
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-    };
-  }, []);
   const localToday = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
   // Filters live in the URL (?mode=&date=&hull=&disc=&q=&page=&size=) so a
   // refresh, a shared link or Back restores the same view.
   const [searchParams, setSearchParams] = useSearchParams();
   const filters = useMemo(() => parseDashboardFilters(searchParams, localToday), [searchParams, localToday]);
   const { mode: filterMode, date: filterDate, hull: filterHull, discipline: filterDiscipline, keyword: searchKeyword } = filters;
+  // The URL follows every keystroke; the request waits until typing pauses
+  // (clearing the box applies at once).
+  const debouncedKeyword = useDebouncedValue(searchKeyword, KEYWORD_DEBOUNCE_MS, (value) => value.trim() === "");
+
+  const listQuery = useMemo<InspectionListQueryInput>(() => ({
+    projectId: selectedProjectId,
+    mode: filterMode,
+    date: filterDate,
+    hull: filterHull,
+    discipline: filterDiscipline,
+    keyword: debouncedKeyword,
+    page: filters.page,
+    pageSize: filters.pageSize
+  }), [selectedProjectId, filterMode, filterDate, filterHull, filterDiscipline, debouncedKeyword, filters.page, filters.pageSize]);
+  const listQueryKey = buildInspectionListParams(listQuery);
+
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setPageData(null);
+      setSelectedIds(new Set());
+      setDataGeneratedAt(new Date().toISOString());
+      setListLoading(false);
+      return;
+    }
+
+    // A newer query (filter, page, project) aborts the request still in flight.
+    const controller = new AbortController();
+    const silent = silentReloadRef.current;
+    silentReloadRef.current = false;
+    if (!silent) setListLoading(true);
+    setListError(null);
+    const wantFacets = facetsProjectRef.current !== selectedProjectId;
+
+    fetchInspectionListPage({ ...listQuery, facets: wantFacets }, { signal: controller.signal })
+      .then((response) => {
+        if (controller.signal.aborted) return;
+        setPageData(response);
+        setDataGeneratedAt(response.generatedAt);
+        setListMode("api");
+        if (response.hulls) {
+          facetsProjectRef.current = selectedProjectId;
+          setFacets({ projectId: selectedProjectId, hulls: response.hulls, disciplines: response.disciplines ?? [] });
+        }
+      })
+      .catch((err) => {
+        if (controller.signal.aborted || isAbortError(err)) return;
+        setListError(err instanceof Error && err.message ? err.message : "Failed to load inspections.");
+        setListMode("api");
+        setPageData(null);
+        setDataGeneratedAt(new Date().toISOString());
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setListLoading(false);
+      });
+
+    return () => controller.abort();
+    // listQueryKey covers every field of listQuery.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listQueryKey, listReloadToken]);
+
+  // Keep the list in sync with saves made on /inspections/:itemId in other tabs.
+  // Primary: BroadcastChannel (see inspection-sync.ts for why). The saved row
+  // is patched in place and flashes, then only the current page is refetched
+  // in the background so stats and filter membership stay right. Fallback for
+  // browsers without BroadcastChannel: refetch the page when this tab becomes
+  // visible again.
+  const pageIdsRef = useRef<string[]>([]);
+  pageIdsRef.current = listItems.map((item) => item.id);
+  useEffect(() => {
+    let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+    const unsubscribe = subscribeInspectionUpdates(({ detail }) => {
+      setPageData((current) => current ? { ...current, items: syncDashboardItem(current.items, detail) } : current);
+      for (const id of rowsToFlash(pageIdsRef.current, [detail.id])) flash(id);
+      if (refetchTimer) clearTimeout(refetchTimer);
+      refetchTimer = setTimeout(() => {
+        silentReloadRef.current = true;
+        setListReloadToken((token) => token + 1);
+      }, 250);
+    });
+
+    function handleVisibilityChange() {
+      if (document.visibilityState === "visible") {
+        silentReloadRef.current = true;
+        setListReloadToken((token) => token + 1);
+      }
+    }
+    const useVisibilityFallback = !isBroadcastChannelSupported();
+    if (useVisibilityFallback) document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      unsubscribe();
+      if (refetchTimer) clearTimeout(refetchTimer);
+      if (useVisibilityFallback) document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [flash]);
 
   const applyFilters = useCallback((next: DashboardFilters) => {
     setSearchParams((current) => serializeDashboardFilters(next, localToday, current), { replace: true });
@@ -168,35 +218,39 @@ export function Dashboard() {
     [projects, selectedProjectId]
   );
 
-  // Derived filter options
-  const hullOptions = useMemo(() => Array.from(new Set(listItems.map(i => i.hullNumber))).sort(), [listItems]);
-  
+  // Derived filter options (from the server, once per project)
+  const projectFacets = facets && facets.projectId === selectedProjectId ? facets : null;
+  const hullOptions = useMemo(() => projectFacets?.hulls ?? [], [projectFacets]);
+
   // Get effective disciplines from the current project configuration first
   const disciplineOptions = useMemo(() => {
     if (currentProject?.disciplines && currentProject.disciplines.length > 0) {
       return [...currentProject.disciplines].sort();
     }
 
-    return Array.from(new Set(listItems.map(i => i.discipline))).sort();
-  }, [currentProject, listItems]);
+    return projectFacets?.disciplines ?? [];
+  }, [currentProject, projectFacets]);
 
-  const displayedItems = useMemo(() => filterDashboardItems(listItems, filters), [listItems, filters]);
-  const pageSlice = useMemo(
-    () => paginate(displayedItems, filters.page, filters.pageSize),
-    [displayedItems, filters.page, filters.pageSize]
-  );
+  const total = pageData?.total ?? 0;
+  const pageSlice = {
+    items: listItems,
+    page: pageData?.page ?? filters.page,
+    pageCount: pageData?.pageCount ?? 1,
+    total,
+    from: total === 0 ? 0 : ((pageData?.page ?? 1) - 1) * (pageData?.pageSize ?? filters.pageSize) + 1,
+    to: total === 0 ? 0 : ((pageData?.page ?? 1) - 1) * (pageData?.pageSize ?? filters.pageSize) + listItems.length
+  };
   const filtersActive = hasActiveFilters(filters, localToday);
 
-  const acceptedCount = displayedItems.filter(item => item.currentResult === "AA").length;
-  const qcRecheckCount = displayedItems.filter(item => item.currentResult === "QCC").length;
-  const reinspectionCount = displayedItems.filter(item => item.currentResult === "OWC").length;
-  const rejectedCount = displayedItems.filter(item => item.currentResult === "RJ").length;
-  const todayQueueCount = displayedItems.filter(item => item.workflowStatus === "pending").length;
+  // Stats cover every item matching the filters, counted by the server.
+  const stats = pageData?.stats;
+  const acceptedCount = stats?.accepted ?? 0;
+  const qcRecheckCount = stats?.qcRecheck ?? 0;
+  const reinspectionCount = stats?.reinspection ?? 0;
+  const rejectedCount = stats?.rejected ?? 0;
+  const todayQueueCount = stats?.pending ?? 0;
 
-  const disciplineCounts = displayedItems.reduce((acc, item) => {
-    acc[item.discipline] = (acc[item.discipline] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
+  const disciplineCounts: Record<string, number> = stats?.byDiscipline ?? {};
 
   /**
    * Row click opens the item in a new tab (window.open). Clicks on the checkbox,
@@ -240,9 +294,14 @@ export function Dashboard() {
 
   function handleSelectAll(e: React.ChangeEvent<HTMLInputElement>) {
     if (e.target.checked) {
-      setSelectedIds(new Set(displayedItems.map(i => i.id)));
+      // Selects the rows on this page (selections on other pages are kept).
+      setSelectedIds((current) => new Set([...current, ...listItems.map((item) => item.id)]));
     } else {
-      setSelectedIds(new Set());
+      setSelectedIds((current) => {
+        const next = new Set(current);
+        for (const item of listItems) next.delete(item.id);
+        return next;
+      });
     }
   }
 
@@ -281,16 +340,34 @@ export function Dashboard() {
     }
   }
 
-  function handleExportChecklist() {
-    generateInspectionChecklistPdf(displayedItems, {
+  /** Every item matching the filters (all pages), from the backend export endpoint. */
+  async function loadAllFilteredItems(): Promise<InspectionListItem[] | null> {
+    setChecklistLoading(true);
+    try {
+      const response = await fetchInspectionListExport({ ...listQuery, keyword: searchKeyword });
+      return response.items;
+    } catch (err) {
+      toast.error(err, "Could not load the inspections to export.");
+      return null;
+    } finally {
+      setChecklistLoading(false);
+    }
+  }
+
+  async function handleExportChecklist() {
+    const items = await loadAllFilteredItems();
+    if (!items) return;
+    generateInspectionChecklistPdf(items, {
       date: filterDate || 'ALL',
       hull: filterHull === 'ALL' ? 'ALL' : filterHull,
       discipline: filterDiscipline === 'ALL' ? 'ALL' : filterDiscipline
     });
   }
 
-  function handleExportAsciiChecklist() {
-    generateInspectionChecklistAsciiPdf(displayedItems, {
+  async function handleExportAsciiChecklist() {
+    const items = await loadAllFilteredItems();
+    if (!items) return;
+    generateInspectionChecklistAsciiPdf(items, {
       date: filterDate || 'ALL',
       hull: filterHull === 'ALL' ? 'ALL' : filterHull,
       discipline: filterDiscipline === 'ALL' ? 'ALL' : filterDiscipline
@@ -318,7 +395,7 @@ export function Dashboard() {
     : filterDate === localToday ? "TODAY QUEUE"
     : filterDate ? `HISTORY: ${filterDate}`
     : "ALL DATES";
-  const allDisplayedSelected = selectedIds.size > 0 && displayedItems.every((item) => selectedIds.has(item.id));
+  const allDisplayedSelected = listItems.length > 0 && listItems.every((item) => selectedIds.has(item.id));
 
   return (
     <>
@@ -416,7 +493,7 @@ export function Dashboard() {
           <div className="tableTools dashboardTools">
              <div className="dashboardToolsFilters">
                 <p className="eyebrow dashboardCount">
-                  ACTIVE INSPECTIONS ({displayedItems.length})
+                  ACTIVE INSPECTIONS ({total})
                   {searchKeyword && <span className="dashboardSearchHint"> — search across all dates</span>}
                 </p>
                 <select 
@@ -477,17 +554,18 @@ export function Dashboard() {
                 </button>
                 <button
                   type="button"
-                  className={`exportButton exportButton--ink${displayedItems.length > 0 ? " isReady" : ""}`}
-                  onClick={handleExportChecklist}
-                  disabled={displayedItems.length === 0}
+                  className={`exportButton exportButton--ink${total > 0 ? " isReady" : ""}`}
+                  onClick={() => void handleExportChecklist()}
+                  disabled={total === 0 || checklistLoading}
+                  aria-busy={checklistLoading}
                 >
-                  EXPORT CHECKLIST ({displayedItems.length})
+                  {checklistLoading ? "PREPARING…" : `EXPORT CHECKLIST (${total})`}
                 </button>
                 <button
                   type="button"
-                  className={`exportButton exportButton--slate${displayedItems.length > 0 ? " isReady" : ""}`}
-                  onClick={handleExportAsciiChecklist}
-                  disabled={displayedItems.length === 0}
+                  className={`exportButton exportButton--slate${total > 0 ? " isReady" : ""}`}
+                  onClick={() => void handleExportAsciiChecklist()}
+                  disabled={total === 0 || checklistLoading}
                 >
                   ASCII CHECKLIST
                 </button>
@@ -503,7 +581,7 @@ export function Dashboard() {
             </div>
           ) : null}
           <div className="tableWrap">
-            <table className="dashboardTable responsiveTable" aria-busy={listLoading}>
+            <table className={`dashboardTable responsiveTable${listLoading && listItems.length > 0 ? " isRefreshing" : ""}`} aria-busy={listLoading}>
               <colgroup>
                 <col className="colCheckbox" />
                 <col className="colHull" />
@@ -521,7 +599,7 @@ export function Dashboard() {
                     <input 
                       type="checkbox" 
                       className="nbCheckbox"
-                      aria-label={`Select all ${displayedItems.length} filtered inspections`}
+                      aria-label={`Select all ${listItems.length} inspections on this page`}
                       checked={allDisplayedSelected} 
                       onChange={handleSelectAll} 
                     />
@@ -543,7 +621,8 @@ export function Dashboard() {
                 ) : pageSlice.items.length > 0 ? pageSlice.items.map((item) => (
                     <tr
                       key={item.id}
-                      className={`record-row ${item.id === lastOpenedId ? "isSelected" : ""}`}
+                      className={`record-row${item.id === lastOpenedId ? " isSelected" : ""}${flashing.has(item.id) ? " isFlashing" : ""}`}
+                      data-flashing={flashing.has(item.id) ? "true" : undefined}
                       title="Click to open details in a new tab"
                       onClick={(e) => handleRowClick(e, item.id)}
                       onAuxClick={(e) => handleRowAuxClick(e, item.id)}
@@ -603,14 +682,14 @@ export function Dashboard() {
                       ) : filtersActive ? (
                         <EmptyState
                           title="No inspections match current filters."
-                          description={listItems.length > 0 ? `${listItems.length} inspections in this project are hidden by the filters.` : undefined}
+                          description="Clear the filters to see every inspection in this project."
                           actionLabel="Clear filters"
                           onAction={resetFilters}
                         />
                       ) : (
                         <EmptyState
                           title="Nothing planned for today."
-                          description={listItems.length > 0 ? "Pick another date, or switch to ALL PENDING." : "This project has no inspections yet."}
+                          description="Pick another date, or switch to ALL PENDING."
                         />
                       )}
                     </td>
@@ -619,7 +698,7 @@ export function Dashboard() {
               </tbody>
             </table>
           </div>
-          {displayedItems.length > PAGE_SIZE_OPTIONS[0] || pageSlice.pageCount > 1 ? (
+          {total > PAGE_SIZE_OPTIONS[0] || pageSlice.pageCount > 1 ? (
             <Pagination
               label="Inspection list pages"
               page={pageSlice.page}

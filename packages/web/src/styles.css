@@ -661,6 +661,23 @@ tbody tr.record-row.isSelected {
   border-left: 2px solid var(--nb-accent);
 }
 
+/* A row another tab just saved: a short highlight that fades out. */
+@keyframes nb-row-flash {
+  0% { background-color: rgba(250, 204, 21, 0.55); box-shadow: inset 3px 0 0 #ca8a04; }
+  60% { background-color: rgba(254, 240, 138, 0.45); box-shadow: inset 3px 0 0 #ca8a04; }
+  100% { background-color: transparent; box-shadow: inset 3px 0 0 transparent; }
+}
+
+tbody tr.record-row.isFlashing {
+  animation: nb-row-flash 1.6s ease-out;
+}
+
+/* Rows of the previous page stay readable but dimmed while the next one loads. */
+.dashboardTable.isRefreshing tbody {
+  opacity: 0.55;
+  transition: opacity 120ms ease;
+}
+
 /* Item link that opens the standalone detail page in a new tab */
 .rowOpenLink {
   display: inline-flex;
@@ -3046,5 +3063,14 @@ tbody tr.record-row.isSelected {
   .nbModal,
   .nbModalBackdrop {
     animation: none;
+  }
+}
+
+/* Reduced motion: the saved row is marked with a static outline instead of an animation. */
+@media (prefers-reduced-motion: reduce) {
+  tbody tr.record-row.isFlashing {
+    animation: none;
+    background-color: rgba(254, 240, 138, 0.45);
+    box-shadow: inset 3px 0 0 #ca8a04;
   }
 }

@@ -27,6 +27,8 @@ import { publishInspectionUpdate, subscribeInspectionUpdates } from "../inspecti
 import { mergeCommentFromDetail } from "../comment-permissions";
 import { useToast } from "../components/Toast";
 import { CommentDetailModal } from "../components/CommentDetailModal";
+import { Pagination } from "../components/Pagination";
+import { paginate, PAGE_SIZE_OPTIONS, type PageSlice } from "../dashboard-filters";
 
 type ActiveTab = "observations" | "inspection-comments" | "highlighted";
 
@@ -60,6 +62,31 @@ export function Observations() {
   const [filterDiscipline, setFilterDiscipline] = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [searchKeyword, setSearchKeyword] = useState("");
+  // The punch list and inspection comments render one page at a time; a ship
+  // can carry thousands of comments.
+  const [obsPage, setObsPage] = useState(1);
+  const [obsPageSize, setObsPageSize] = useState<number>(50);
+  useEffect(() => {
+    setObsPage(1);
+  }, [activeTab, searchKeyword, selectedShipId, filterType, filterDiscipline, filterStatus]);
+  const renderObsPagination = <T,>(slice: PageSlice<T>, label: string) =>
+    slice.total > PAGE_SIZE_OPTIONS[0] || slice.pageCount > 1 ? (
+      <Pagination
+        page={slice.page}
+        pageCount={slice.pageCount}
+        pageSize={obsPageSize}
+        total={slice.total}
+        from={slice.from}
+        to={slice.to}
+        pageSizeOptions={PAGE_SIZE_OPTIONS}
+        onPageChange={setObsPage}
+        onPageSizeChange={(size) => {
+          setObsPageSize(size);
+          setObsPage(1);
+        }}
+        label={label}
+      />
+    ) : null;
 
   // 手动加载控制
   const [hasStarted, setHasStarted] = useState(false);
@@ -740,12 +767,14 @@ export function Observations() {
                 || (item.authorName || "").toLowerCase().includes(kw)
               )
             : items;
+          const slice = paginate(filteredItems, obsPage, obsPageSize);
           return filteredItems.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
             <p style={{ fontSize: 14 }}>No punch list records found</p>
             <p style={{ fontSize: 12 }}>Click "+ New Punch Item" or "Paste Import" to start adding.</p>
           </div>
         ) : (
+          <>
           <div className="obsTableWrap">
             <table className="obsTable">
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
@@ -754,7 +783,7 @@ export function Observations() {
                 <th className="obsTh">Author</th><th className="obsTh">Status</th><th className="obsTh">Closed By</th><th className="obsTh">Action</th>
               </tr></thead>
               <tbody>
-                {filteredItems.map(item => {
+                {slice.items.map(item => {
                   const isHighlighted = item.isHighlighted === 1;
                   return (
                   <tr key={item.id} style={{ 
@@ -802,6 +831,8 @@ export function Observations() {
               </tbody>
             </table>
           </div>
+          {renderObsPagination(slice, "Punch list pages")}
+          </>
         );
         })()
       ) : activeTab === "inspection-comments" ? (
@@ -816,12 +847,14 @@ export function Observations() {
                 || cm.authorName.toLowerCase().includes(kw)
               )
             : comments;
+          const slice = paginate(filteredComments, obsPage, obsPageSize);
           return filteredComments.length === 0 ? (
           <div style={{ textAlign: "center", padding: "60px 24px", color: "var(--nb-text-muted)" }}>
             <p style={{ fontSize: 14 }}>No inspection comments found</p>
             <p style={{ fontSize: 12 }}>Inspection comments are generated from the inspection submission workflow.</p>
           </div>
         ) : (
+          <>
           <div className="obsTableWrap">
             <table className="obsTable">
               <thead><tr style={{ background: "var(--nb-surface)", borderBottom: "2px solid var(--nb-border)" }}>
@@ -830,9 +863,9 @@ export function Observations() {
                 <th className="obsTh">Author</th><th className="obsTh">Issued At</th><th className="obsTh">Status</th><th className="obsTh">Closed At</th><th className="obsTh">Action</th>
               </tr></thead>
               <tbody>
-                {filteredComments.map((cm, index) => {
+                {slice.items.map((cm, index) => {
                   // 检查是否是新的inspection item（与上一条不同）
-                  const isNewItem = index > 0 && filteredComments[index - 1].inspectionItemId !== cm.inspectionItemId;
+                  const isNewItem = index > 0 && slice.items[index - 1].inspectionItemId !== cm.inspectionItemId;
                   const isHighlighted = cm.isHighlighted === 1;
                   
                   return (
@@ -896,6 +929,8 @@ export function Observations() {
               </tbody>
             </table>
           </div>
+          {renderObsPagination(slice, "Inspection comment pages")}
+          </>
         );
         })()
       ) : activeTab === "highlighted" ? (

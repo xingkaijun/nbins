@@ -9,6 +9,7 @@ import type {
   ResolveCommentResponse,
   SubmitInspectionResultRequest,
   SubmitInspectionResultResponse,
+  ReportSummaryResponse,
 } from "@nbins/shared";
 import { requestJson, withQuery } from "./client";
 import { buildInspectionListParams, type InspectionListQueryInput } from "../inspection-list-query";
@@ -38,6 +39,36 @@ export async function fetchInspectionListExport(
   input: InspectionListQueryInput
 ): Promise<{ generatedAt: string; items: InspectionListItem[]; total: number }> {
   return requestJson(`/inspections/export?${buildInspectionListParams(input, { paged: false })}`);
+}
+
+export interface ReportSummaryQuery {
+  projectId: string;
+  /** Calendar dates (YYYY-MM-DD), inclusive, for the current round's planned date. */
+  startDate: string;
+  endDate: string;
+  /** Instants bounding comment createdAt (local start/end of day). */
+  startAt: string;
+  endAt: string;
+  hull: string;
+  discipline: string;
+}
+
+/** Reports page aggregates, computed by the server in SQL. */
+export async function fetchReportSummary(
+  query: ReportSummaryQuery,
+  init?: { signal?: AbortSignal }
+): Promise<ReportSummaryResponse> {
+  const params = new URLSearchParams({
+    startDate: query.startDate,
+    endDate: query.endDate,
+    startAt: query.startAt,
+    endAt: query.endAt,
+    tzOffset: String(new Date().getTimezoneOffset()),
+    hull: query.hull || "ALL",
+    discipline: query.discipline || "ALL"
+  });
+  if (query.projectId) params.set("projectId", query.projectId);
+  return requestJson<ReportSummaryResponse>(`/inspections/report-summary?${params}`, { signal: init?.signal });
 }
 
 export async function submitInspectionResult(

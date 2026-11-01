@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { fetchInspectionComments, fetchInspectionList, fetchProjects, type ProjectRecord } from '../api';
-import type { InspectionCommentView, InspectionListItem } from '@nbins/shared';
-import { format, subDays, startOfDay, endOfDay, isWithinInterval, parseISO, isValid } from 'date-fns';
+import { fetchProjects, fetchReportSummary, type ProjectRecord } from '../api';
+import type { ReportSummaryResponse } from '@nbins/shared';
+import { format, subDays, startOfDay, endOfDay, parseISO } from 'date-fns';
+import { isAbortError } from '../inspection-list-query';
+import { buildCommentStats, buildDisciplineCommentData, buildDisciplineQualityData, buildInspectionStats } from '../report-stats';
 import {
   BarChart,
   Bar,
@@ -249,14 +251,6 @@ const RESULT_SEGMENTS = [
   { key: 'owc', label: 'OWC', color: '#f59e0b' },
 ] as const;
 
-function isDateInRange(value: string | null | undefined, interval: { start: Date; end: Date }): boolean {
-  if (!value) {
-    return false;
-  }
-  const parsed = parseISO(value);
-  return isValid(parsed) && isWithinInterval(parsed, interval);
-}
-
 function formatPercent(value: number): string {
   return `${Math.round(value)}%`;
 }
@@ -264,9 +258,10 @@ function formatPercent(value: number): string {
 export function Reports() {
   const { selectedProjectId, setSelectedProjectId } = useProjectContext();
   const [projects, setProjects] = useState<ProjectRecord[]>([]);
-  const [items, setItems] = useState<InspectionListItem[]>([]);
-  const [comments, setComments] = useState<InspectionCommentView[]>([]);
+  const [summary, setSummary] = useState<ReportSummaryResponse | null>(null);
+  const [summaryProjectId, setSummaryProjectId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
 
   const [timeRange, setTimeRange] = useState<number>(1);
   const [customRange, setCustomRange] = useState<{ start: string; end: string } | null>(null);
@@ -299,124 +294,65 @@ export function Reports() {
     };
   }, [selectedProjectId, setSelectedProjectId]);
 
-  useEffect(() => {
-    let active = true;
-
-    async function load() {
-      if (!selectedProjectId) {
-        setItems([]);
-        setComments([]);
-        setLoading(false);
-        return;
-      }
-
-      try {
-        setLoading(true);
-        const [inspectionSnapshot, inspectionComments] = await Promise.all([
-          fetchInspectionList(selectedProjectId),
-          fetchInspectionComments({ projectId: selectedProjectId }),
-        ]);
-
-        if (!active) {
-          return;
-        }
-
-        setItems(inspectionSnapshot.items);
-        setComments(inspectionComments);
-      } catch (error) {
-        console.error(error);
-      } finally {
-        if (active) {
-          setLoading(false);
-        }
-      }
-    }
-
-    void load();
-
-    return () => {
-      active = false;
-    };
-  }, [selectedProjectId]);
-
   const currentProject = useMemo(
     () => projects.find((project) => project.id === selectedProjectId) ?? null,
     [projects, selectedProjectId]
   );
-  const currentProjectName = currentProject?.name ?? items[0]?.projectName ?? 'NBINS MASTER';
+  const currentProjectName = currentProject?.name ?? 'NBINS MASTER';
 
-  const hullOptions = useMemo(() => Array.from(new Set(items.map((item) => item.hullNumber))).sort(), [items]);
-  const disciplineOptions = useMemo(() => Array.from(new Set(items.map((item) => item.discipline))).sort(), [items]);
+  const hullOptions = useMemo(() => summary?.hulls ?? [], [summary]);
+  const disciplineOptions = useMemo(() => summary?.disciplines ?? [], [summary]);
 
   const now = new Date();
   const rangeEnd = customRange?.end ? endOfDay(parseISO(customRange.end)) : endOfDay(now);
   const rangeStart = customRange?.start ? startOfDay(parseISO(customRange.start)) : startOfDay(subDays(now, timeRange - 1));
-  const interval = { start: rangeStart, end: rangeEnd };
   const rangeLabel = `${format(rangeStart, 'yyyy/MM/dd')} – ${format(rangeEnd, 'yyyy/MM/dd')}`;
 
-  const filteredData = useMemo(() => {
-    return items.filter((item) => {
-      if (!isDateInRange(item.plannedDate, interval)) {
-        return false;
-      }
-      if (filterHull !== 'ALL' && item.hullNumber !== filterHull) {
-        return false;
-      }
-      if (filterDiscipline !== 'ALL' && item.discipline !== filterDiscipline) {
-        return false;
-      }
-      return true;
-    });
-  }, [items, interval, filterHull, filterDiscipline]);
+  // Aggregates come from the server (GET /api/inspections/report-summary):
+  // items by the current round's planned date, comments by createdAt, both
+  // inside the local [rangeStart, rangeEnd] period, then hull / discipline.
+  const startDate = format(rangeStart, 'yyyy-MM-dd');
+  const endDate = format(rangeEnd, 'yyyy-MM-dd');
+  const startAt = rangeStart.toISOString();
+  const endAt = rangeEnd.toISOString();
 
-  const filteredComments = useMemo(() => {
-    return comments.filter((comment) => {
-      if (!isDateInRange(comment.createdAt, interval)) {
-        return false;
-      }
-      if (filterHull !== 'ALL' && comment.hullNumber !== filterHull) {
-        return false;
-      }
-      if (filterDiscipline !== 'ALL' && comment.discipline !== filterDiscipline) {
-        return false;
-      }
-      return true;
-    });
-  }, [comments, interval, filterHull, filterDiscipline]);
+  useEffect(() => {
+    if (!selectedProjectId) {
+      setSummary(null);
+      setSummaryProjectId(null);
+      setLoading(false);
+      return;
+    }
+    const controller = new AbortController();
+    // The full-page loader only shows while a project loads for the first
+    // time; filter changes keep the current figures on screen.
+    if (summaryProjectId !== selectedProjectId) setLoading(true);
+    setLoadError(null);
+    fetchReportSummary(
+      { projectId: selectedProjectId, startDate, endDate, startAt, endAt, hull: filterHull, discipline: filterDiscipline },
+      { signal: controller.signal }
+    )
+      .then((data) => {
+        if (controller.signal.aborted) return;
+        setSummary(data);
+        setSummaryProjectId(selectedProjectId);
+      })
+      .catch((error) => {
+        if (controller.signal.aborted || isAbortError(error)) return;
+        console.error(error);
+        setLoadError(error instanceof Error && error.message ? error.message : 'Failed to load the report.');
+      })
+      .finally(() => {
+        if (!controller.signal.aborted) setLoading(false);
+      });
+    return () => controller.abort();
+    // summaryProjectId only decides whether to show the loader.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedProjectId, startDate, endDate, startAt, endAt, filterHull, filterDiscipline]);
 
-  const inspectionStats = useMemo(() => {
-    const total = filteredData.length;
-    const acceptedAA = filteredData.filter((item) => item.currentResult === 'AA').length;
-    const qualifiedQCC = filteredData.filter((item) => item.currentResult === 'QCC').length;
-    const rejectedRJ = filteredData.filter((item) => item.currentResult === 'RJ').length;
-    const owc = filteredData.filter((item) => item.currentResult === 'OWC').length;
-    const pending = total - acceptedAA - qualifiedQCC - rejectedRJ - owc;
-    const passed = acceptedAA + qualifiedQCC;
-    const passRate = total > 0 ? (passed / total) * 100 : 0;
-    const passed1stTurn = filteredData.filter(
-      (item) => (item.currentResult === 'AA' || item.currentResult === 'QCC') && item.currentRound === 1
-    ).length;
-    const yield1stTime = total > 0 ? (passed1stTurn / total) * 100 : 0;
-
-    return {
-      total,
-      acceptedAA,
-      qualifiedQCC,
-      rejectedRJ,
-      owc,
-      pending,
-      passed,
-      passRate,
-      yield1stTime,
-    };
-  }, [filteredData]);
-
-  const commentStats = useMemo(() => {
-    const total = filteredComments.length;
-    const disciplinesWithComments = new Set(filteredComments.map((comment) => comment.discipline || 'UNKNOWN')).size;
-
-    return { total, disciplinesWithComments };
-  }, [filteredComments]);
+  const summaryRows = useMemo(() => summary?.rows ?? [], [summary]);
+  const inspectionStats = useMemo(() => buildInspectionStats(summaryRows), [summaryRows]);
+  const commentStats = useMemo(() => buildCommentStats(summaryRows), [summaryRows]);
 
   const overallResultBreakdown = useMemo(
     () => [
@@ -434,94 +370,9 @@ export function Reports() {
     [overallResultBreakdown]
   );
 
-  const disciplineCommentData = useMemo(() => {
-    const map = new Map<string, { discipline: string; TotalComments: number }>();
+  const disciplineCommentData = useMemo(() => buildDisciplineCommentData(summaryRows), [summaryRows]);
 
-    filteredComments.forEach((comment) => {
-      const key = comment.discipline || 'UNKNOWN';
-      if (!map.has(key)) {
-        map.set(key, {
-          discipline: key,
-          TotalComments: 0,
-        });
-      }
-      map.get(key)!.TotalComments += 1;
-    });
-
-    return Array.from(map.values()).sort((a, b) => b.TotalComments - a.TotalComments || a.discipline.localeCompare(b.discipline));
-  }, [filteredComments]);
-
-  const disciplineQualityData = useMemo(() => {
-    const map = new Map<
-      string,
-      {
-        discipline: string;
-        total: number;
-        acceptedAA: number;
-        qualifiedQCC: number;
-        pending: number;
-        rejectedRJ: number;
-        owc: number;
-        TotalComments: number;
-        passRate: number;
-      }
-    >();
-
-    filteredData.forEach((item) => {
-      const key = item.discipline || 'UNKNOWN';
-      if (!map.has(key)) {
-        map.set(key, {
-          discipline: key,
-          total: 0,
-          acceptedAA: 0,
-          qualifiedQCC: 0,
-          pending: 0,
-          rejectedRJ: 0,
-          owc: 0,
-          TotalComments: 0,
-          passRate: 0,
-        });
-      }
-      const current = map.get(key)!;
-      current.total += 1;
-      if (item.currentResult === 'AA') {
-        current.acceptedAA += 1;
-      } else if (item.currentResult === 'QCC') {
-        current.qualifiedQCC += 1;
-      } else if (item.currentResult === 'RJ') {
-        current.rejectedRJ += 1;
-      } else if (item.currentResult === 'OWC') {
-        current.owc += 1;
-      } else {
-        current.pending += 1;
-      }
-    });
-
-    filteredComments.forEach((comment) => {
-      const key = comment.discipline || 'UNKNOWN';
-      if (!map.has(key)) {
-        map.set(key, {
-          discipline: key,
-          total: 0,
-          acceptedAA: 0,
-          qualifiedQCC: 0,
-          pending: 0,
-          rejectedRJ: 0,
-          owc: 0,
-          TotalComments: 0,
-          passRate: 0,
-        });
-      }
-      map.get(key)!.TotalComments += 1;
-    });
-
-    return Array.from(map.values())
-      .map((item) => ({
-        ...item,
-        passRate: item.total > 0 ? Math.round(((item.acceptedAA + item.qualifiedQCC) / item.total) * 100) : 0,
-      }))
-      .sort((a, b) => b.total - a.total || b.TotalComments - a.TotalComments || a.discipline.localeCompare(b.discipline));
-  }, [filteredData, filteredComments]);
+  const disciplineQualityData = useMemo(() => buildDisciplineQualityData(summaryRows), [summaryRows]);
 
   const clearPrintCleanupTimer = useCallback(() => {
     if (printCleanupTimerRef.current !== null) {
@@ -580,6 +431,14 @@ export function Reports() {
 
   if (loading) {
     return <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>Loading Data...</div>;
+  }
+
+  if (loadError && !summary) {
+    return (
+      <div role="alert" style={{ padding: '40px', textAlign: 'center', color: '#b91c1c' }}>
+        Could not load the report: {loadError}
+      </div>
+    );
   }
 
   return (
