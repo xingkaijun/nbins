@@ -34,6 +34,7 @@ import {
   type ShipRecord,
   type UserRecord,
 } from "../api";
+import { formatDisplayDate } from "../date-format";
 import {
   DISCIPLINES,
   INSPECTION_RESULTS,
@@ -976,7 +977,7 @@ export function Admin() {
       }
       case "observations": {
         const o = raw as ObservationItem;
-        return <><td>{o.type}</td><td>{o.discipline}</td><td>{o.date}</td><td>{o.authorName ?? o.authorId}</td><td><span className={`commentStatus ${o.status}`}>{o.status}</span></td><td>{o.content}</td>
+        return <><td>{o.type}</td><td>{o.discipline}</td><td>{formatDisplayDate(o.date)}</td><td>{o.authorName ?? o.authorId}</td><td><span className={`commentStatus ${o.status}`}>{o.status}</span></td><td>{o.content}</td>
           <td onClick={e => e.stopPropagation()}>
             <div className="actions-cell">
               <button onClick={() => openEdit(row)} title="Edit"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg></button>

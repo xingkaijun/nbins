@@ -132,7 +132,7 @@ export function TopBar() {
         </div>
         <div className="topbarBrandText">
           <h1 className="brand">
-            NEW BUILDING INSPECTION <span>SYSTEM</span>
+            NEWBUILDING<br /><span>INSPECTION</span>
           </h1>
           <p className="eyebrow topbarTagline">Technical Intelligence System</p>
         </div>

@@ -20,6 +20,7 @@ import { resolveAvailableProjectId, useProjectContext } from "../project-context
 import { useToast } from "../components/Toast";
 import { useKeyedSaveState } from "../hooks/use-save-state";
 import { saveButtonLabel, saveErrorMessage } from "../save-state";
+import { formatDisplayDate } from "../date-format";
 
 
 function resultColor(result: string | null): string {
@@ -555,7 +556,7 @@ export function Fats() {
                           )}
                           {item.inspectionDate && (
                             <span style={{ fontSize: 12, color: "var(--nb-text-muted)" }}>
-                              {item.inspectionDate}
+                              {formatDisplayDate(item.inspectionDate)}
                             </span>
                           )}
                           {isPending && (
@@ -812,11 +813,11 @@ export function Fats() {
                                 </div>
                                 <div className="summaryCard">
                                   <p>Created</p>
-                                  <strong style={{ fontSize: 13 }}>{new Date(item.createdAt).toLocaleDateString()}</strong>
+                                  <strong style={{ fontSize: 13 }}>{formatDisplayDate(item.createdAt)}</strong>
                                 </div>
                                 <div className="summaryCard">
                                   <p>Updated</p>
-                                  <strong style={{ fontSize: 13 }}>{new Date(item.updatedAt).toLocaleDateString()}</strong>
+                                  <strong style={{ fontSize: 13 }}>{formatDisplayDate(item.updatedAt)}</strong>
                                 </div>
                               </div>
                             </div>

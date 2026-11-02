@@ -26,6 +26,8 @@ import {
   resultTone,
   syncDashboardItem
 } from "./dashboard/dashboard-helpers";
+import { batchExportSkippedMessage, collectBatchExportItems, dropSelectedIds } from "./dashboard/batch-export";
+import { formatDisplayDate } from "../date-format";
 import {
   ALL,
   PAGE_SIZE_OPTIONS,
@@ -316,23 +318,37 @@ export function Dashboard() {
     setSelectedIds(next);
   }
 
+  /**
+   * Clears every selection, including ids picked on other pages — those rows
+   * are not on screen, so the header checkbox alone can never reach them.
+   */
+  function handleClearSelection() {
+    setSelectedIds((current) => (current.size === 0 ? current : new Set<string>()));
+  }
+
   async function handleBatchExport() {
     if (selectedIds.size === 0) return;
+    const ids = [...selectedIds];
     setIsExporting(true);
-    setExportProgress({ current: 0, total: selectedIds.size });
-    
+    setExportProgress({ current: 0, total: ids.length });
+    let progress = 0;
+
     try {
-      const itemsToExport = [];
-      let idx = 0;
-      for (const id of selectedIds) {
-        setExportProgress({ current: ++idx, total: selectedIds.size });
-        const detail = await fetchInspectionDetail(id);
-        if (detail) itemsToExport.push(detail);
+      const { items, missingIds } = await collectBatchExportItems(ids, async (id) => {
+        setExportProgress({ current: ++progress, total: ids.length });
+        return fetchInspectionDetail(id);
+      });
+
+      if (missingIds.length > 0) {
+        // Only 404s land here (see collectBatchExportItems); drop them so the
+        // counter and the next export don't keep chasing deleted items.
+        setSelectedIds((current) => dropSelectedIds(current, missingIds));
+        toast.info(batchExportSkippedMessage(missingIds.length));
       }
-      
-      if (itemsToExport.length > 0) {
+
+      if (items.length > 0) {
         const { generateBatchZip } = await import("../utils/pdf-generator");
-        await generateBatchZip(itemsToExport, `NbIns_Batch_Reports_${filterDate || 'All'}.zip`);
+        await generateBatchZip(items, `NbIns_Batch_Reports_${filterDate || 'All'}.zip`);
       }
     } catch (err) {
       toast.error(err, "Batch export failed.");
@@ -449,7 +465,7 @@ export function Dashboard() {
             </div>
           </div>
           <div className="heroMeta">
-            <span>UPDATED {new Date(dataGeneratedAt).toLocaleDateString("en-US")}</span>
+            <span>UPDATED {formatDisplayDate(dataGeneratedAt)}</span>
             <span className={`badge ${listMode === "api" ? "" : "muted"}`}>{listTransportLabel}</span>
           </div>
         </section>
@@ -547,14 +563,24 @@ export function Dashboard() {
                 ) : null}
              </div>
              <div className="dashboardToolsActions">
-                <button 
-                  type="button" 
+                <button
+                  type="button"
                   className={`exportButton exportButton--accent${selectedIds.size > 0 ? " isReady" : ""}`}
-                  onClick={() => void handleBatchExport()} 
+                  onClick={() => void handleBatchExport()}
                   disabled={isExporting || selectedIds.size === 0}
                 >
                   {isExporting ? `EXPORTING ${exportProgress.current}/${exportProgress.total}...` : `BATCH EXPORT (${selectedIds.size})`}
                 </button>
+                {selectedIds.size > 0 && (
+                  <button
+                    type="button"
+                    className="nbLinkButton"
+                    onClick={handleClearSelection}
+                    disabled={isExporting}
+                  >
+                    Clear selection ({selectedIds.size})
+                  </button>
+                )}
                 <button
                   type="button"
                   className={`exportButton exportButton--ink${total > 0 ? " isReady" : ""}`}
@@ -643,7 +669,7 @@ export function Dashboard() {
                         <strong>{item.hullNumber}</strong>
                       </td>
                       <td data-label="Discipline">{item.discipline}</td>
-                      <td data-label="Planned">{item.plannedDate}</td>
+                      <td data-label="Planned">{formatDisplayDate(item.plannedDate)}</td>
                       <td data-label="Round">R{item.currentRound}</td>
                       <td data-label="Item" className="cellPrimary">
                         <a

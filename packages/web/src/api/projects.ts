@@ -1,16 +1,14 @@
-import { requestJson, withQuery } from "./client";
-import type { ProjectRecord } from "./types";
-import { getAuthToken } from "../auth";
-import { createRequestCache, projectsCacheKey } from "../request-cache";
+import { requestJson, withQuery } from "./client.ts";
+import type { ProjectRecord } from "./types.ts";
+import { getAuthToken } from "../auth.ts";
+import { projectsCacheKey } from "../request-cache.ts";
+import { invalidateProjectsCache, projectsCache } from "./project-cache.ts";
 
 // The project list is read by several components on every page load (project
 // context, top bar, pages). Share one request per user and status; refresh
-// after 30 s or as soon as a project is created or changed.
-const projectsCache = createRequestCache({ ttlMs: 30_000 });
-
-export function invalidateProjectsCache(): void {
-  projectsCache.invalidate();
-}
+// after 30 s, or as soon as a project is created or changed. The cache lives in
+// ./project-cache so the SQL console can invalidate it without an import cycle.
+export { invalidateProjectsCache } from "./project-cache.ts";
 
 export async function fetchProjects(status?: ProjectRecord["status"]): Promise<ProjectRecord[]> {
   const key = projectsCacheKey(getAuthToken(), status);

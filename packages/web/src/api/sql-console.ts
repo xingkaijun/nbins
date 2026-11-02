@@ -1,5 +1,6 @@
-import { getAuthToken } from "../auth";
-import { getApiBaseUrl } from "./client";
+import { getAuthToken } from "../auth.ts";
+import { getApiBaseUrl } from "./client.ts";
+import { invalidateProjectsCacheAfter } from "./project-cache.ts";
 
 /** 
  * ----- SQL Console API -----
@@ -44,10 +45,11 @@ export async function exportDatabase(secret: string): Promise<any> {
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function importDatabase(data: object, secret: string): Promise<any> {
-  return sqlFetch("/sql/import-db", secret, {
+  // Replaces stored data wholesale, so the cached project list is stale after it.
+  return invalidateProjectsCacheAfter(() => sqlFetch("/sql/import-db", secret, {
     method: "POST",
     body: JSON.stringify({ data })
-  });
+  }));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -57,13 +59,13 @@ export async function exportProject(projectId: string, secret: string): Promise<
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function importProject(data: object, secret: string): Promise<any> {
-  return sqlFetch("/sql/import-project", secret, {
+  return invalidateProjectsCacheAfter(() => sqlFetch("/sql/import-project", secret, {
     method: "POST",
     body: JSON.stringify({ data })
-  });
+  }));
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function deleteProject(projectId: string, secret: string): Promise<any> {
-  return sqlFetch(`/sql/delete-project/${projectId}`, secret, { method: "DELETE" });
+  return invalidateProjectsCacheAfter(() => sqlFetch(`/sql/delete-project/${projectId}`, secret, { method: "DELETE" }));
 }

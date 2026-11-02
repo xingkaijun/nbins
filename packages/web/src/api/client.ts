@@ -2,7 +2,7 @@
  * Core HTTP client utilities for the NBINS frontend API layer.
  * All domain-specific API modules import from this file.
  */
-import { clearAuthSession, getAuthToken, notifySessionExpired } from "../auth";
+import { clearAuthSession, getAuthToken, notifySessionExpired } from "../auth.ts";
 
 interface ApiEnvelope<T> {
   ok: boolean;

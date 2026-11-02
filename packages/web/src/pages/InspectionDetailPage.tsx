@@ -1,39 +1,65 @@
-import React, { useCallback, useEffect } from "react";
-import { Link, useParams } from "react-router-dom";
+import React, { useCallback, useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
 import { INSPECTION_RESULT_LABELS, type InspectionItemDetailResponse } from "@nbins/shared";
-import { publishInspectionUpdate } from "../inspection-sync";
+import { publishInspectionUpdate, closeCurrentTab } from "../inspection-sync";
 import { InspectionWorkspace } from "./dashboard/InspectionWorkspace";
 import { resultTone } from "./dashboard/dashboard-helpers";
+import "./InspectionDetailPage.css";
 
 /**
  * Standalone inspection item page: /inspections/:itemId
  *
- * - Real route: works on direct load, refresh and when the link is shared.
- *   Everything is loaded from the API by the id in the URL, nothing is passed
- *   through memory from the Dashboard tab.
- * - Auth: the route sits under <ProtectedRoute>; the session is read from
- *   localStorage (`nbins.auth.token` / `nbins.auth.user`) on start-up, so a new
- *   tab of the same origin is authenticated. Without a session the user is sent
- *   to /login?redirect=/inspections/:itemId and comes back after signing in.
- * - Every change is broadcast to other tabs (see inspection-sync.ts) so the
- *   Dashboard list updates its row.
+ * This page is opened in a *new browser tab* from the Dashboard, so it is a
+ * lightweight shell for exactly one item — not a second copy of the workspace:
+ *
+ * - No <Layout>: App.tsx registers the route as a sibling of the "/" layout
+ *   route (still under <ProtectedRoute>), so this page renders its own compact
+ *   header and none of the TopBar, global menu, project picker, list pagination
+ *   or Hall/Admin/Import/Reports entry points. The Dashboard tab keeps its
+ *   filters and page number untouched because nothing navigates inside it.
+ * - Everything is loaded from the API by the id in the URL, so a direct load,
+ *   a refresh and a shared link all work. The route stays under
+ *   <ProtectedRoute>, so the auth guard is the same as every other page:
+ *   without a session the user goes to /login?redirect=/inspections/:itemId
+ *   and comes back after signing in.
+ * - Changes are broadcast to the Dashboard tab (see inspection-sync.ts), which
+ *   updates the matching row in place.
+ * - "Close tab" calls window.close(). Browsers only allow that for tabs opened
+ *   by script (the normal Dashboard flow); for a directly typed URL it is
+ *   silently ignored. That is why the hint below never promises a close.
  */
 export function InspectionDetailPage() {
   const { itemId = "" } = useParams<{ itemId: string }>();
+
+  const [title, setTitle] = useState("Inspection");
+  const [subtitle, setSubtitle] = useState("");
+  const [showCloseHint, setShowCloseHint] = useState(false);
 
   const handleDetailChange = useCallback((detail: InspectionItemDetailResponse) => {
     publishInspectionUpdate(detail);
   }, []);
 
+  const handleDetailLoaded = useCallback((detail: InspectionItemDetailResponse) => {
+    const heading = `${detail.hullNumber} · ${detail.itemName}`;
+    setTitle(heading);
+    setSubtitle(`${detail.projectCode} · ${detail.shipName} · ${detail.discipline}`);
+    document.title = `${heading} | NBINS`;
+  }, []);
+
+  // Restore the generic title when this page unmounts (back to / re-render).
   useEffect(() => {
-    const previousTitle = document.title;
     return () => {
-      document.title = previousTitle;
+      document.title = "NBINS";
     };
   }, []);
 
-  const handleDetailLoaded = useCallback((detail: InspectionItemDetailResponse) => {
-    document.title = `${detail.hullNumber} · ${detail.itemName} | NBINS`;
+  /**
+   * window.close() only works for script-opened tabs and gives no feedback, so
+   * try it once and always show the manual-close hint. Never claim success.
+   */
+  const handleCloseTab = useCallback(() => {
+    setShowCloseHint(true);
+    closeCurrentTab();
   }, []);
 
   const renderHeader = useCallback((detail: InspectionItemDetailResponse) => {
@@ -44,8 +70,8 @@ export function InspectionDetailPage() {
       { label: "Project", value: `${detail.projectName} (${detail.projectCode})` },
       { label: "Hull / Ship", value: `${detail.hullNumber} / ${detail.shipName}` },
       { label: "Discipline", value: detail.discipline },
-      { label: "Planned Date", value: detail.plannedDate ?? "—" },
-      { label: "Actual Date", value: detail.actualDate ?? "—" },
+      { label: "Planned", value: detail.plannedDate ?? "—" },
+      { label: "Actual", value: detail.actualDate ?? "—" },
       { label: "Workflow", value: detail.workflowStatus.toUpperCase() },
       {
         label: "Result",
@@ -59,12 +85,12 @@ export function InspectionDetailPage() {
     ];
 
     return (
-      <section className="inspectionPageContext" aria-label="Inspection context">
-        <dl className="inspectionPageContextGrid">
+      <section aria-label="Inspection context">
+        <dl className="inspectionTabContext">
           {contextFields.map((field) => (
-            <div key={field.label} className="infoCard inspectionPageContextItem">
+            <div key={field.label}>
               <dt>{field.label}</dt>
-              <dd>{field.value}</dd>
+              <dd title={typeof field.value === "string" ? field.value : undefined}>{field.value}</dd>
             </div>
           ))}
         </dl>
@@ -72,29 +98,52 @@ export function InspectionDetailPage() {
     );
   }, []);
 
+  const header = (
+    <header className="inspectionTabHeader">
+      <div className="inspectionTabBrand">
+        <span className="inspectionTabBrandMark">NBINS</span>
+        <span className="inspectionTabBrandSub">Inspection</span>
+      </div>
+      <div className="inspectionTabTitleBlock">
+        <h1 className="inspectionTabTitle" title={title}>{title}</h1>
+        {subtitle ? <p className="inspectionTabSubtitle" title={subtitle}>{subtitle}</p> : null}
+      </div>
+      <button type="button" className="inspectionTabClose" onClick={handleCloseTab}>
+        Close tab
+      </button>
+    </header>
+  );
+
   if (!itemId) {
     return (
-      <main className="workspace">
-        <div className="alert warning" role="alert">Missing inspection item id.</div>
-        <Link to="/dashboard" className="inspectionPageBack">← Back to inspection workspace</Link>
-      </main>
+      <div className="inspectionTab">
+        {header}
+        <main className="inspectionTabBody">
+          <div className="alert warning" role="alert">Missing inspection item id.</div>
+        </main>
+      </div>
     );
   }
 
   return (
-    <main className="workspace inspectionPage">
-      <nav className="inspectionPageNav" aria-label="Breadcrumb">
-        <Link to="/dashboard" className="inspectionPageBack">← Inspection workspace</Link>
-        <span className="inspectionPageId" title="Inspection item id">{itemId}</span>
-      </nav>
-      <div className="expansion-panel-inner inspectionPageBody">
+    <div className="inspectionTab">
+      {header}
+
+      {showCloseHint ? (
+        <p className="inspectionTabCloseHint" role="status">
+          Browsers only close tabs they opened themselves. If this tab is still open,
+          close it with Ctrl+W (⌘+W on macOS).
+        </p>
+      ) : null}
+
+      <main className="inspectionTabBody">
         <InspectionWorkspace
           inspectionItemId={itemId}
           onDetailChange={handleDetailChange}
           onDetailLoaded={handleDetailLoaded}
           renderHeader={renderHeader}
         />
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

@@ -27,6 +27,7 @@ import { resolveAvailableProjectId, useProjectContext } from "../project-context
 import { useToast } from "../components/Toast";
 import { useKeyedSaveState } from "../hooks/use-save-state";
 import { saveButtonLabel, saveErrorMessage } from "../save-state";
+import { formatDisplayDate } from "../date-format";
 
 
 function badgeColor(status: NcrItemResponse["status"]): string {
@@ -559,9 +560,9 @@ export function Ncrs() {
                       </span>
                     </div>
                     <div style={{ fontSize: 13, color: "var(--nb-text-muted)", marginBottom: 8 }}>
-                      Raised by {item.authorName ?? item.authorId} on {new Date(item.createdAt).toLocaleString()}
+                      Raised by {item.authorName ?? item.authorId} on {formatDisplayDate(item.createdAt)}
                       {item.approvedBy
-                        ? ` · Published by ${item.approvedByName ?? item.approvedBy}${item.approvedAt ? ` on ${new Date(item.approvedAt).toLocaleString()}` : ""}`
+                        ? ` · Published by ${item.approvedByName ?? item.approvedBy}${item.approvedAt ? ` on ${formatDisplayDate(item.approvedAt)}` : ""}`
                         : ""}
                     </div>
                     <div style={{ fontSize: 14, color: "var(--nb-text)", lineHeight: 1.6, marginBottom: 8, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
@@ -575,7 +576,7 @@ export function Ncrs() {
                     </div>
                     {item.closedAt && (
                       <div style={tagStyle("#64748b")}>
-                        CLOSED • {item.closedAt.slice(0, 10)}
+                        CLOSED • {formatDisplayDate(item.closedAt)}
                       </div>
                     )}
                   </div>

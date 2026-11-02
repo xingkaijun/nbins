@@ -38,10 +38,18 @@ export function App() {
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route element={<ProtectedRoute />}>
+                {/*
+                  Standalone inspection page: a sibling of the "/" layout route so
+                  the new browser tab gets a lightweight shell (own header, no
+                  TopBar / global nav / project picker) instead of the full app.
+                  It is NOT under Layout but stays under ProtectedRoute, so the
+                  auth guard, ErrorBoundary, ToastProvider and basename are the
+                  same as for every other page.
+                */}
+                <Route path={INSPECTION_DETAIL_ROUTE} element={<InspectionDetailPage />} />
                 <Route path="/" element={<Layout />}>
                   <Route index element={<Projects />} />
                   <Route path="dashboard" element={<Dashboard />} />
-                  <Route path={INSPECTION_DETAIL_ROUTE} element={<InspectionDetailPage />} />
                   <Route path="reports" element={<Reports />} />
                   <Route path="import" element={<Import />} />
                   <Route path="observations" element={<Observations />} />

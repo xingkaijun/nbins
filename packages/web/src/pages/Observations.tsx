@@ -29,6 +29,7 @@ import { useToast } from "../components/Toast";
 import { CommentDetailModal } from "../components/CommentDetailModal";
 import { Pagination } from "../components/Pagination";
 import { paginate, PAGE_SIZE_OPTIONS, type PageSlice } from "../dashboard-filters";
+import { formatDisplayDate } from "../date-format";
 
 type ActiveTab = "observations" | "inspection-comments" | "highlighted";
 
@@ -800,7 +801,7 @@ export function Observations() {
                     <td className="obsTd"><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
                     <td className="obsTd"><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
                     <td className="obsTd">{item.location || "—"}</td>
-                    <td className="obsTd">{item.date}</td>
+                    <td className="obsTd">{formatDisplayDate(item.date)}</td>
                     <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{item.content}</td>
                     <td className="obsTd">{item.authorName ?? item.authorId}</td>
                     <td className="obsTd"><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
@@ -808,7 +809,7 @@ export function Observations() {
                       {item.closedBy && item.closedAt ? (
                         <div style={{ fontSize: 11 }}>
                           <div style={{ fontWeight: 600 }}>{item.closedByName ?? item.closedBy}</div>
-                          <div style={{ color: 'var(--nb-text-muted)', fontSize: 10 }}>{new Date(item.closedAt).toLocaleDateString("en-CA")}</div>
+                          <div style={{ color: 'var(--nb-text-muted)', fontSize: 10 }}>{formatDisplayDate(item.closedAt)}</div>
                         </div>
                       ) : "—"}
                     </td>
@@ -908,9 +909,9 @@ export function Observations() {
                         </button>
                       </td>
                       <td className="obsTd">{cm.authorName}</td>
-                      <td className="obsTd">{cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—"}</td>
+                      <td className="obsTd">{cm.createdAt ? formatDisplayDate(cm.createdAt) : "—"}</td>
                       <td className="obsTd"><span style={tagStyle(cm.status === "open" ? "#f59e0b" : "#22c55e")}>{cm.status.toUpperCase()}</span></td>
-                      <td className="obsTd">{cm.closedAt ? new Date(cm.closedAt).toLocaleDateString("en-CA") : "—"}</td>
+                      <td className="obsTd">{cm.closedAt ? formatDisplayDate(cm.closedAt) : "—"}</td>
                       <td className="obsTd">
                         <div style={{ display: "flex", gap: 4 }}>
                           <button 
@@ -973,7 +974,7 @@ export function Observations() {
                       <td className="obsTd"><span style={tagStyle("#6366f1")}>{getTypeLabel(item.type)}</span></td>
                       <td className="obsTd"><span style={tagStyle("#0ea5e9")}>{item.discipline}</span></td>
                       <td className="obsTd">{item.location || "—"}</td>
-                      <td className="obsTd">{item.date}</td>
+                      <td className="obsTd">{formatDisplayDate(item.date)}</td>
                       <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>{item.content}</td>
                       <td className="obsTd">{item.authorName ?? item.authorId}</td>
                       <td className="obsTd"><span style={tagStyle(item.status === "open" ? "#f59e0b" : "#22c55e")}>{item.status.toUpperCase()}</span></td>
@@ -994,7 +995,7 @@ export function Observations() {
                       <td className="obsTd">{cm.inspectionItemName}</td>
                       <td className="obsTd"><span style={tagStyle("#0ea5e9")}>{cm.discipline}</span></td>
                       <td className="obsTd">—</td>
-                      <td className="obsTd">{cm.createdAt ? new Date(cm.createdAt).toLocaleDateString("en-CA") : "—"}</td>
+                      <td className="obsTd">{cm.createdAt ? formatDisplayDate(cm.createdAt) : "—"}</td>
                       <td style={{ ...tdStyle, maxWidth: 280, wordBreak: "break-word", overflowWrap: "break-word", whiteSpace: "pre-wrap" }}>
                         <button
                           type="button"

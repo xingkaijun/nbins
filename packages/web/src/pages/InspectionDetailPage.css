@@ -1,0 +1,142 @@
+/*
+ * Lightweight shell for the standalone inspection tab (/inspections/:itemId).
+ * Only this page imports it, so it never collides with styles.css.
+ * Sizes and colours follow the existing scale (11–15px, --nb-accent teal).
+ */
+.inspectionTab {
+  min-height: 100vh;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  background: var(--nb-bg);
+}
+
+.inspectionTabHeader {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+  border: 1px solid var(--nb-border);
+  border-radius: 12px;
+  background: var(--nb-panel);
+}
+
+.inspectionTabBrand {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.15;
+  padding-right: 12px;
+  border-right: 1px solid var(--nb-border);
+}
+
+.inspectionTabBrandMark {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  color: var(--nb-accent);
+}
+
+.inspectionTabBrandSub {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.inspectionTabTitleBlock {
+  flex: 1;
+  min-width: 0;
+}
+
+.inspectionTabTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--nb-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inspectionTabSubtitle {
+  margin: 2px 0 0;
+  font-size: 10px;
+  color: var(--nb-text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.inspectionTabClose {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--nb-accent);
+  background: transparent;
+  border: 1px solid var(--nb-accent);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.inspectionTabClose:hover {
+  background: rgba(0, 106, 99, 0.08);
+}
+
+.inspectionTabClose:focus-visible {
+  outline: 2px solid var(--nb-accent);
+  outline-offset: 2px;
+}
+
+.inspectionTabCloseHint {
+  margin: 0;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--nb-warn-ink);
+  background: var(--nb-warn-bg);
+  border: 1px solid var(--nb-warn-border);
+  border-radius: 8px;
+}
+
+.inspectionTabBody {
+  flex: 1;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--nb-border);
+  border-radius: 12px;
+  background: var(--nb-panel);
+}
+
+/* Compact context list (replaces the large context cards inside the tab). */
+.inspectionTabContext {
+  margin: 0 0 12px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 6px 16px;
+}
+
+.inspectionTabContext > div {
+  min-width: 0;
+}
+
+.inspectionTabContext dt {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--nb-text-muted);
+}
+
+.inspectionTabContext dd {
+  margin: 1px 0 0;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--nb-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

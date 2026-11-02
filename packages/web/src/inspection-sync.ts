@@ -43,7 +43,11 @@ export function isBroadcastChannelSupported(): boolean {
   return typeof globalThis.BroadcastChannel === "function";
 }
 
-/** Route pattern registered in App.tsx (relative to the "/" layout route). */
+/**
+ * Route pattern registered in App.tsx. It is a direct child of <ProtectedRoute>
+ * (a sibling of the "/" layout route), so the standalone page renders without
+ * the app Layout.
+ */
 export const INSPECTION_DETAIL_ROUTE = "inspections/:itemId";
 
 /** Router path (without basename), used with <Route> / navigate(). */
@@ -64,20 +68,62 @@ export function buildInspectionDetailHref(
   return `${normalizedBase}${inspectionDetailRoutePath(itemId)}`;
 }
 
-/** Opens the inspection detail page in a new tab without giving it `window.opener`. */
+/**
+ * Opens the inspection detail page in a new tab without giving it `window.opener`.
+ *
+ * `focus()` only *asks* the browser to bring the new tab forward: it is a hint,
+ * never a guarantee (many browsers keep the current tab in front, and some
+ * cannot focus a tab that is still being created). A blocked popup returns
+ * null. None of these cases may throw or break the click in the Dashboard.
+ */
 export function openInspectionInNewTab(itemId: string): void {
   if (typeof window === "undefined") {
     return;
   }
 
-  const opened = window.open(buildInspectionDetailHref(itemId), "_blank");
+  let opened: Window | null = null;
+  try {
+    opened = window.open(buildInspectionDetailHref(itemId), "_blank");
+  } catch {
+    // ignore: popup blocker or browser policy refused to open a tab
+  }
 
-  if (opened) {
-    try {
-      opened.opener = null;
-    } catch {
-      // ignore: some browsers make opener read-only
-    }
+  if (!opened) {
+    return;
+  }
+
+  try {
+    opened.opener = null;
+  } catch {
+    // ignore: some browsers make opener read-only
+  }
+
+  try {
+    opened.focus();
+  } catch {
+    // ignore: focus may be forbidden, or the tab may already be gone
+  }
+}
+
+/**
+ * Asks the browser to close the current tab.
+ *
+ * Only tabs opened by script (the normal Dashboard → new tab flow) may be
+ * closed; a directly typed / shared URL is ignored by the browser and
+ * `window.close()` reports nothing either way. Returns false when the call
+ * itself threw, so the page can always fall back to a manual-close hint. This
+ * never claims the tab actually closed.
+ */
+export function closeCurrentTab(): boolean {
+  if (typeof window === "undefined" || typeof window.close !== "function") {
+    return false;
+  }
+
+  try {
+    window.close();
+    return true;
+  } catch {
+    return false;
   }
 }
 
