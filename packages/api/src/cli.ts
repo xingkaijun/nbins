@@ -9,7 +9,7 @@
  *   migrate                     apply pending migrations / add missing columns
  *   check                       integrity, foreign keys, migrations, row counts
  *   backup [--out DIR] [--keep N] [--no-files]
- *                               online SQLite backup (+ tar.gz of the file store),
+ *                               stopped-server SQLite backup + tar.gz file store,
  *                               verified with integrity_check; keeps the newest N
  *   import-d1 FILE.sql [--objects DIR] [--force]
  *                               build the database from a `wrangler d1 export` file
@@ -30,6 +30,7 @@ import { schema } from "./db/schema.ts";
 import { quoteIdentifier } from "./db/sql.ts";
 import { D1SeededInspectionStorage } from "./persistence/d1-seeded-inspection-storage.ts";
 import { LocalSqliteDatabase } from "./platform/sqlite-database.ts";
+import { acquireDataLock } from "./platform/data-lock.ts";
 
 const SAMPLE_DATA_FILES = ["init-admin.sql", "dummy-data.sql", "dummy-data-2.sql"];
 
@@ -248,7 +249,13 @@ async function commandBackup(config: ServerConfig, args: ParsedArgs): Promise<bo
   }
   mkdirSync(outDir, { recursive: true });
 
-  const stamp = timestamp();
+  // Never overwrite an earlier recovery point when commands finish within
+  // one second (notably repeated forced imports).
+  let instant = Date.now();
+  let stamp = timestamp(new Date(instant));
+  while (["db", "files.tar.gz", "db.partial"].some((suffix) => existsSync(join(outDir, `nbins-${stamp}.${suffix}`)))) {
+    stamp = timestamp(new Date(instant += 1000));
+  }
   const dbTarget = join(outDir, `nbins-${stamp}.db`);
   const tmpTarget = `${dbTarget}.partial`;
   rmSync(tmpTarget, { force: true });
@@ -341,16 +348,14 @@ async function commandImportD1(config: ServerConfig, args: ParsedArgs): Promise<
     throw new UsageError("usage: import-d1 <wrangler-d1-export.sql> [--objects <dir>] [--force]");
   }
   const exportPath = resolve(file);
-  // D1 exports normally carry no explicit transaction, but strip one if present:
-  // the whole file is loaded inside our own transaction.
-  const sql = readFileSync(exportPath, "utf8").replace(/^\s*(BEGIN(\s+TRANSACTION)?|COMMIT)\s*;\s*$/gim, "");
+  const sql = readFileSync(exportPath, "utf8");
 
   if (hasUserData(config.dbPath)) {
     if (!args.flags.has("force")) {
       console.log(`refusing: ${config.dbPath} already contains data. Re-run with --force to replace it (a backup is made first).`);
       return false;
     }
-    const ok = await commandBackup(config, parseArgs(["--no-files", "--keep", "1000"]));
+    const ok = await commandBackup(config, parseArgs(["--keep", "1000"]));
     if (!ok) {
       return false;
     }
@@ -366,7 +371,9 @@ async function commandImportD1(config: ServerConfig, args: ParsedArgs): Promise<
     // The export contains its own CREATE TABLE statements (the production schema)
     // and INSERTs in table order; foreign keys are checked after loading.
     db.sqlite.exec("PRAGMA foreign_keys = OFF;");
-    db.transaction(() => db.sqlite.exec(sql));
+    // The temporary database is not activated on failure. Let SQLite parse the
+    // dump's own transactions; never rewrite SQL text inside string literals.
+    db.sqlite.exec(sql);
     for (const internal of ["_cf_KV", "_cf_METADATA", "d1_migrations"]) {
       db.sqlite.exec(`DROP TABLE IF EXISTS ${quoteIdentifier(internal)};`);
     }
@@ -381,7 +388,7 @@ async function commandImportD1(config: ServerConfig, args: ParsedArgs): Promise<
     db.close();
   }
 
-  if (!ok && !args.flags.has("force")) {
+  if (!ok) {
     console.log(`import checks failed; the imported database was left at ${tmpPath} for inspection (not activated).`);
     return false;
   }
@@ -416,6 +423,21 @@ async function main(argv: string[]): Promise<number> {
   loadEnvFileIfPresent();
   const config = loadConfig();
 
+  const releaseDataLock = ["init", "migrate", "check", "backup", "import-d1", "import-objects"].includes(command)
+    ? acquireDataLock(config.dbPath, config.storageDir, command)
+    : () => {};
+  // Hold ownership through every await, database snapshot and object copy.
+  // SIGINT/SIGTERM release before exiting so Ctrl+C leaves no stale lock;
+  // SIGKILL cannot run handlers, which is why acquireDataLock reclaims locks
+  // whose owner PID is gone.
+  process.once("exit", releaseDataLock);
+  const releaseOnSignal = (signal: NodeJS.Signals) => {
+    releaseDataLock();
+    process.exit(signal === "SIGINT" ? 130 : 143);
+  };
+  process.once("SIGINT", releaseOnSignal);
+  process.once("SIGTERM", releaseOnSignal);
+  try {
   switch (command) {
     case "init":
       await commandInit(config, args);
@@ -439,6 +461,10 @@ async function main(argv: string[]): Promise<number> {
     default:
       console.log(usage());
       return command ? 2 : 0;
+  }
+  } finally {
+    releaseDataLock();
+    process.removeListener("exit", releaseDataLock);
   }
 }
 

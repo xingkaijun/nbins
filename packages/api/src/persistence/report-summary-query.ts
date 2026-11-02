@@ -6,14 +6,25 @@ import type { ReportSummaryResponse, ReportDisciplineRow } from "@nbins/shared";
  * inspection item and comment to the browser.
  *
  * Semantics match the former client-side computation in Reports.tsx:
- * - inspections: current round's plannedDate inside [startDate, endDate]
- *   (calendar dates, inclusive); result = COALESCE(resolvedResult, lastRoundResult)
+ * - inspections: the current round's plannedDate inside [startDate, endDate].
+ *   Reports.tsx parsed plannedDate with date-fns parseISO and tested
+ *   isWithinInterval against [startOfDay, endOfDay] of the local period, so a
+ *   plannedDate that is a timestamp is an instant (an ISO one with Z/offset is
+ *   compared as written; one without a zone is read as the browser's local
+ *   time, like parseISO), while a plain YYYY-MM-DD plan date stays a calendar
+ *   date compared with the inclusive [startDate, endDate] bounds.
+ *   result = COALESCE(resolvedResult, lastRoundResult)
  * - comments: createdAt inside [startAt, endAt] (instants). A createdAt without
  *   a timezone is read as the browser's local time, like date-fns parseISO did;
  *   `tzOffsetMinutes` is the browser's Date#getTimezoneOffset().
  * - comments are the ones GET /observations/inspection-comments returns
  *   (joined to item, creating round, ship and project).
  * - hull / discipline: exact match; discipline key falls back to "UNKNOWN".
+ *
+ * Known limitation (not fixed here): a historical timestamp without a zone is
+ * read with the browser's *current* UTC offset, so a period that crossed a DST
+ * transition in the browser's zone can be off by one hour for such rows. A
+ * single tzOffsetMinutes cannot express the historical offset.
  */
 export interface ReportSummaryFilter {
   /** Projects the caller may see. */
@@ -58,12 +69,35 @@ export async function queryReportSummary(db: SqlDatabase, filter: ReportSummaryF
   const hulls = [...new Set(options.results.map((row) => String(row.hull)))].sort();
   const disciplines = [...new Set(options.results.map((row) => String(row.discipline)))].sort();
 
+  const offset = Number(filter.tzOffsetMinutes) || 0;
+  // date-fns parseISO: "2026-11-01" is local midnight, "2026-11-01 08:00:00" is
+  // local time, an ISO string with Z/offset is that instant. Apply the same
+  // rule as for comments so a timestamp plannedDate is compared by instant.
+  const asInstant = (column: string) => `CASE
+      WHEN length(${column}) > 10 AND (substr(${column}, -1) IN ('Z', 'z') OR substr(${column}, -6, 1) IN ('+', '-'))
+        THEN julianday(${column})
+      ELSE julianday(${column}, '${offset >= 0 ? "+" : "-"}${Math.abs(offset)} minutes')
+    END`;
+  // Plain YYYY-MM-DD (and a longer string that is not a timestamp) keeps the
+  // calendar-date comparison the date filter used; comparisons against NULL
+  // (unparseable) are NULL, so those rows fall out just like parseISO's
+  // isValid() === false did.
   const itemClauses = [
     scoped.sql,
     `date(substr(round."plannedDate", 1, 10)) IS NOT NULL`,
-    `substr(round."plannedDate", 1, 10) BETWEEN ? AND ?`
+    `(CASE
+        WHEN instr(substr(round."plannedDate", 11), ':') > 0
+          THEN (${asInstant(`round."plannedDate"`)} BETWEEN julianday(?) AND julianday(?))
+        ELSE substr(round."plannedDate", 1, 10) BETWEEN ? AND ?
+      END)`
   ];
-  const itemParams: unknown[] = [...scoped.params, filter.startDate, filter.endDate];
+  const itemParams: unknown[] = [
+    ...scoped.params,
+    filter.startAt,
+    filter.endAt,
+    filter.startDate,
+    filter.endDate
+  ];
   const commentClauses = [scoped.sql];
   const commentParams: unknown[] = [...scoped.params];
   if (filter.hull) {
@@ -103,12 +137,7 @@ export async function queryReportSummary(db: SqlDatabase, filter: ReportSummaryF
     .all<Record<string, unknown>>();
 
   // createdAt: ISO with Z/offset is an instant; without a zone it is local time.
-  const offset = Math.trunc(Number(filter.tzOffsetMinutes) || 0);
-  const commentInstant = `CASE
-      WHEN length(cm."createdAt") > 10 AND (substr(cm."createdAt", -1) IN ('Z', 'z') OR substr(cm."createdAt", -6, 1) IN ('+', '-'))
-        THEN julianday(cm."createdAt")
-      ELSE julianday(cm."createdAt", '${offset >= 0 ? "+" : "-"}${Math.abs(offset)} minutes')
-    END`;
+  const commentInstant = asInstant(`cm."createdAt"`);
   const comments = await db
     .prepare(
       `SELECT COALESCE(NULLIF(item."discipline", ''), 'UNKNOWN') AS "discipline", COUNT(*) AS "comments"

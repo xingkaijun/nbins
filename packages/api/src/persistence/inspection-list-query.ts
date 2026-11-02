@@ -272,6 +272,12 @@ export async function queryInspectionListPage(
  * Every matching list row, in list order, read in batches of EXPORT_BATCH_SIZE
  * so the server never materialises one huge result set at once: the ordered
  * ids are read once (one sort), then the summary columns batch by batch.
+ *
+ * The export streams to a client while other requests keep writing, so the
+ * first SELECT's ids are only a candidate list: every batch re-applies the
+ * same WHERE (project scope, mode, date, hull, discipline, keyword) so a row
+ * that moved out of scope or stopped matching after the first batch is dropped
+ * instead of being exported with its new, unauthorised content.
  */
 export async function* iterateInspectionList(
   db: SqlDatabase,
@@ -287,11 +293,17 @@ export async function* iterateInspectionList(
 
   for (let start = 0; start < ids.length; start += batchSize) {
     const chunk = ids.slice(start, start + batchSize);
+    const chunkClause = `item."id" IN (${chunk.map(() => "?").join(", ")})`;
+    // `where.sql` is "WHERE ..." (scoped above); apply it to this batch too so
+    // rows that no longer match stay out of the export.
+    const batchClause = where.sql ? `${chunkClause} AND ${where.sql.replace(/^WHERE /, "")}` : chunkClause;
     const { results } = await db
-      .prepare(`SELECT ${LIST_COLUMNS} ${FROM_CLAUSE} WHERE item."id" IN (${chunk.map(() => "?").join(", ")})`)
-      .bind(...chunk)
+      .prepare(`SELECT ${LIST_COLUMNS} ${FROM_CLAUSE} WHERE ${batchClause}`)
+      .bind(...chunk, ...where.params)
       .all<Record<string, unknown>>();
     const byId = new Map(results.map((row) => [String(row.id), mapRow(row)]));
+    // Rows that stopped matching are absent from `results` and drop out here;
+    // rows still in scope keep the order of the first pass.
     yield chunk.map((id) => byId.get(id)).filter((row): row is InspectionListItem => row !== undefined);
   }
 }

@@ -11,10 +11,18 @@
  *
  * Writes go to a temporary file first and are renamed into place, so a reader
  * never sees half an object. Keys are validated so they cannot leave the root.
+ *
+ * File-name limits: a path component may be at most 255 bytes (255 UTF-16 units
+ * on NTFS, 255 bytes on ext4). Object keys arrive with long, legal basenames
+ * (e.g. a 250-byte attachment name), so:
+ *   - the temporary file is `.tmp-<uuid>` in the target directory, never
+ *     `<basename>.tmp-<pid>-<uuid>` (which used to overflow the limit);
+ *   - when `<basename>.json` would not fit, the metadata is kept next to the
+ *     object as `.meta-<hash>.json` instead (read/delete look at both names).
  */
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join, relative, sep } from "node:path";
+import { basename, dirname, join, relative, sep } from "node:path";
 import type {
   ObjectBody,
   ObjectHttpMetadata,
@@ -28,7 +36,26 @@ import type {
 
 const META_SUFFIX = ".json";
 const DEFAULT_LIST_LIMIT = 1000;
-const TMP_FILE_PATTERN = /\.tmp-\d+-[0-9a-f-]{36}$/;
+/** Longest file name a filesystem is expected to accept (ext4 bytes, NTFS UTF-16 units). */
+const MAX_FILE_NAME_LENGTH = 255;
+const MAX_FILE_NAME_BYTES = 255;
+/** `<basename>.json` is kept when it fits; otherwise `.meta-<hash>.json` is used. */
+const FALLBACK_META_PREFIX = ".meta-";
+/**
+ * Temporary write files: `<dir>/.tmp-<uuid>` (new form) and the historic
+ * `<basename>.tmp-<pid>-<uuid>`. Both must stay out of list() results.
+ */
+const TMP_FILE_PATTERN = /^(?:\.tmp-[0-9a-f-]{36}|.*\.tmp-\d+-[0-9a-f-]{36})$/;
+/** `.meta-<sha256 prefix>.json`, written when `<basename>.json` would be too long. */
+const FALLBACK_META_PATTERN = /^\.meta-[0-9a-f]{28,64}\.json$/;
+
+/**
+ * ext4 counts bytes, NTFS counts UTF-16 units; a name is safe only if it fits
+ * both, so a long Chinese name and a long ASCII name behave the same everywhere.
+ */
+function fitsFileName(name: string): boolean {
+  return name.length <= MAX_FILE_NAME_LENGTH && Buffer.byteLength(name, "utf8") <= MAX_FILE_NAME_BYTES;
+}
 
 const CONTENT_TYPES: Record<string, string> = {
   ".json": "application/json",
@@ -98,6 +125,38 @@ function isNotFound(error: unknown): boolean {
   return code === "ENOENT" || code === "ENOTDIR";
 }
 
+/**
+ * ENOENT/ENOTDIR, plus ENAMETOOLONG — a file whose name exceeds the file
+ * system limit cannot exist, so looking it up is "missing", not an error.
+ */
+function isMissing(error: unknown): boolean {
+  const code = (error as NodeJS.ErrnoException | undefined)?.code;
+  return code === "ENOENT" || code === "ENOTDIR" || code === "ENAMETOOLONG";
+}
+
+/** Metadata file contents, or null when the file is absent/unreadable as JSON. */
+async function readMetaFile(path: string): Promise<MetaFile | null> {
+  try {
+    return JSON.parse(await readFile(path, "utf8")) as MetaFile;
+  } catch (error) {
+    if (isMissing(error) || error instanceof SyntaxError) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+/** rm that also tolerates names the file system rejects as too long. */
+async function removeFile(path: string): Promise<void> {
+  try {
+    await rm(path, { force: true });
+  } catch (error) {
+    if (!isMissing(error)) {
+      throw error;
+    }
+  }
+}
+
 export class FileSystemObjectStore implements ObjectStore {
   readonly root: string;
   readonly #objectsDir: string;
@@ -125,7 +184,7 @@ export class FileSystemObjectStore implements ObjectStore {
     };
 
     await this.#writeAtomic(this.#objectPath(key), bytes);
-    await this.#writeAtomic(this.#metaPath(key), Buffer.from(JSON.stringify(meta), "utf8"));
+    await this.#writeAtomic(this.#fallbackMetaPath(key) ?? this.#metaPath(key), Buffer.from(JSON.stringify(meta), "utf8"));
 
     const info = await this.head(key);
     if (!info) {
@@ -201,8 +260,12 @@ export class FileSystemObjectStore implements ObjectStore {
   async delete(keys: string | string[]): Promise<void> {
     for (const key of Array.isArray(keys) ? keys : [keys]) {
       assertSafeObjectKey(key);
-      await rm(this.#objectPath(key), { force: true });
-      await rm(this.#metaPath(key), { force: true });
+      await removeFile(this.#objectPath(key));
+      await removeFile(this.#metaPath(key));
+      const fallbackMetaPath = this.#fallbackMetaPath(key);
+      if (fallbackMetaPath) {
+        await removeFile(fallbackMetaPath);
+      }
     }
   }
 
@@ -235,20 +298,35 @@ export class FileSystemObjectStore implements ObjectStore {
     return join(this.#metaDir, ...key.split("/")) + META_SUFFIX;
   }
 
-  async #readMeta(key: string): Promise<MetaFile> {
-    try {
-      return JSON.parse(await readFile(this.#metaPath(key), "utf8")) as MetaFile;
-    } catch (error) {
-      if (isNotFound(error) || error instanceof SyntaxError) {
-        return {};
-      }
-      throw error;
+  /**
+   * `.meta-<hash of key>.json` next to the metadata directory location, used
+   * when `<basename>.json` would exceed the file-name limit. Sidecar of the
+   * object in meta/, so listing objects/ never sees it either way.
+   */
+  #fallbackMetaPath(key: string): string | null {
+    const primary = this.#metaPath(key);
+    if (fitsFileName(basename(primary))) {
+      return null;
     }
+    const hash = createHash("sha256").update(key).digest("hex").slice(0, 32);
+    return join(dirname(primary), `${FALLBACK_META_PREFIX}${hash}${META_SUFFIX}`);
+  }
+
+  async #readMeta(key: string): Promise<MetaFile> {
+    const primaryPath = this.#metaPath(key);
+    const fallbackPath = this.#fallbackMetaPath(key);
+    if (fallbackPath) {
+      // Long key: `<basename>.json` cannot exist, so a failed lookup is cheap.
+      return (await readMetaFile(fallbackPath)) ?? (await readMetaFile(primaryPath)) ?? {};
+    }
+    return (await readMetaFile(primaryPath)) ?? {};
   }
 
   async #writeAtomic(path: string, bytes: Buffer): Promise<void> {
     await mkdir(dirname(path), { recursive: true });
-    const tmp = `${path}.tmp-${process.pid}-${randomUUID()}`;
+    // A fixed short name in the target directory instead of `<basename>.tmp-...`:
+    // a 250-byte object basename plus a suffix used to exceed the 255-byte limit.
+    const tmp = join(dirname(path), `.tmp-${randomUUID()}`);
     try {
       await writeFile(tmp, bytes);
       await rename(tmp, path);
@@ -274,7 +352,13 @@ export class FileSystemObjectStore implements ObjectStore {
       const full = join(dir, entry.name);
       if (entry.isDirectory()) {
         keys.push(...(await this.#walk(full)));
-      } else if (entry.isFile() && !TMP_FILE_PATTERN.test(entry.name)) {
+      } else if (
+        entry.isFile() &&
+        !TMP_FILE_PATTERN.test(entry.name) &&
+        // Our own long-key metadata must never be listed as an object. Covers the
+        // `.json` twin of such an object too, should one ever be copied in.
+        !FALLBACK_META_PATTERN.test(entry.name)
+      ) {
         keys.push(relative(this.#objectsDir, full).split(sep).join("/"));
       }
     }

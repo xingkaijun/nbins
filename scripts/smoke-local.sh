@@ -7,18 +7,27 @@
 #   bash scripts/smoke-local.sh            # PORT=8787 by default
 #   SQL_SECRET=<expected secret> bash scripts/smoke-local.sh
 #
-# The server reads its config (SQL_CONSOLE_SECRET included) from packages/api/.env.
-# SQL_SECRET is the secret the test sends; it defaults to the value in that file.
-set -u
+# Uses an isolated env file and fresh paths; never reads the runtime .env.
+set -uo pipefail
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 API=$REPO/packages/api
-WORK=${WORK:-$(mktemp -d /tmp/nbins-smoke.XXXXXX)}
-SQL_SECRET=${SQL_SECRET:-$(sed -n 's/^SQL_CONSOLE_SECRET=//p' "$API/.env" 2>/dev/null | tail -1)}
+# WORK may choose a parent, but never a pre-existing data directory to erase.
+WORK=$(mktemp -d "${WORK:-${TMPDIR:-/tmp}}/nbins-smoke.XXXXXX") || exit 1
+SQL_SECRET=${SQL_SECRET:-nbins-isolated-smoke-secret}
 echo "work dir: $WORK"
 PORT=${PORT:-8787}
 BASE=http://127.0.0.1:$PORT
-export NBINS_ENV_FILE=$API/.env          # the real runtime env file (SQL_CONSOLE_SECRET comes from here)
+# Fail before any requests/writes if another server already occupies the port.
+node -e 'const s=require("node:net").createServer();s.once("error",e=>{console.error(e.message);process.exit(1)});s.listen(Number(process.argv[1]),"127.0.0.1",()=>s.close())' "$PORT" || exit 1
+: > "$WORK/smoke.env"
+export NBINS_ENV_FILE=$WORK/smoke.env
 export NBINS_DATA_DIR=$WORK/data
+export NBINS_DB_PATH=$WORK/data/nbins.db
+export NBINS_STORAGE_DIR=$WORK/data/storage
+export NBINS_BACKUP_DIR=$WORK/data/backups
+export APP_ENV=development NBINS_AUTO_MIGRATE=true
+export JWT_SECRET=nbins-isolated-smoke-jwt SQL_CONSOLE_SECRET=$SQL_SECRET
+export N8N_WEBHOOK_URL='' NBINS_CORS_ORIGINS=''
 export NBINS_HOST=127.0.0.1
 export NBINS_PORT=$PORT
 export NBINS_WEB_DIST=$REPO/packages/web/dist
@@ -31,7 +40,11 @@ check() { # name expected actual
 start_server() {
   (cd "$API" && exec node --disable-warning=ExperimentalWarning dist/server.mjs) >>"$WORK/server.log" 2>&1 &
   SERVER_PID=$!
-  for _ in $(seq 1 50); do curl -s -o /dev/null "$BASE/health" && return 0; sleep 0.2; done
+  for _ in $(seq 1 50); do
+    kill -0 "$SERVER_PID" 2>/dev/null || { echo "server exited"; cat "$WORK/server.log"; exit 1; }
+    curl -s -o /dev/null "$BASE/health" && return 0
+    sleep 0.2
+  done
   echo "server did not come up"; cat "$WORK/server.log"; exit 1
 }
 stop_server() { kill -TERM "$SERVER_PID"; wait "$SERVER_PID" 2>/dev/null; echo "server exit code after SIGTERM: $?"; SERVER_PID=""; }
@@ -39,9 +52,8 @@ SERVER_PID=""
 # never leave a server running, even if the script stops early
 trap '[ -n "$SERVER_PID" ] && kill -TERM "$SERVER_PID" 2>/dev/null' EXIT
 
-mkdir -p "$WORK"; rm -rf "$WORK/data" "$WORK/server.log"
 echo "== init fresh database"
-(cd "$API" && node dist/cli.mjs init) | sed 's/^/   /'
+(cd "$API" && node dist/cli.mjs init) | sed 's/^/   /' || exit 1
 
 echo "== start dist/server.mjs"
 start_server
@@ -109,7 +121,7 @@ check "port $PORT closed after stop" 000 "$(curl -s -o /dev/null -w '%{http_code
 echo "== server log"
 sed 's/^/   /' "$WORK/server.log"
 echo "== backup + check on the smoke database"
-(cd "$API" && node dist/cli.mjs backup && node dist/cli.mjs check) | sed 's/^/   /'
+(cd "$API" && node dist/cli.mjs backup && node dist/cli.mjs check) | sed 's/^/   /' || FAIL=1
 
 if [ $FAIL = 0 ]; then echo "SMOKE RESULT: ALL PASS"; else echo "SMOKE RESULT: FAILURES"; fi
 exit $FAIL

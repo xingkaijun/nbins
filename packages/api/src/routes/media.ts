@@ -4,7 +4,6 @@ import type { AuthContextVariables } from "../auth.ts";
 import type { Bindings } from "../env.ts";
 import {
   assertBucket,
-  buildMediaFilename,
   getMediaObjectKey,
   getMediaVariantFilenames,
   getObjectFilename,
@@ -12,7 +11,7 @@ import {
   hasProjectAccess,
   isDerivedMediaVariant,
   MEDIA_VARIANTS,
-  sanitizeFilename,
+  resolveMediaUploadObjectKey,
   type MediaVariant
 } from "../services/ncr-storage.ts";
 
@@ -63,14 +62,16 @@ export function createMediaRoutes(): Hono<MediaRouteEnv> {
       const baseId = String(form.get("baseId") ?? "").trim() || crypto.randomUUID();
       const originalName = String(form.get("originalName") ?? file.name).trim() || file.name;
       const variant = isMediaVariant(requestedVariant) ? requestedVariant : null;
-      const extension = file.name.includes(".") ? file.name.slice(file.name.lastIndexOf(".")) : ".webp";
-      const filename = variant
-        ? buildMediaFilename(baseId, originalName, variant)
-        : `${crypto.randomUUID()}-${sanitizeFilename(file.name.replace(/\.[^.]+$/, ""))}${extension}`;
-      const objectKey = getMediaObjectKey(shipId, filename);
       const bucket = assertBucket(c.env);
+      const storedKey = resolveMediaUploadObjectKey({
+        shipId,
+        baseId,
+        originalName,
+        variant,
+        fileName: file.name
+      });
 
-      await bucket.put(objectKey, await file.arrayBuffer(), {
+      await bucket.put(storedKey, await file.arrayBuffer(), {
         httpMetadata: {
           contentType: file.type || "application/octet-stream",
           cacheControl: "private, max-age=31536000"
@@ -80,8 +81,8 @@ export function createMediaRoutes(): Hono<MediaRouteEnv> {
       return c.json({
         ok: true,
         data: {
-          key: objectKey,
-          filename,
+          key: storedKey,
+          filename: getObjectFilename(storedKey),
           contentType: file.type || "application/octet-stream",
           size: file.size,
           variant: variant ?? undefined

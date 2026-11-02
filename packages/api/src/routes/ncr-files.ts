@@ -5,7 +5,7 @@ import type { Bindings } from "../env.ts";
 import type { NcrRelatedFile } from "@nbins/shared";
 import {
   assertBucket,
-  getNcrFileObjectKey,
+  getNcrFileObjectKeyForUpload,
   getObjectFilename,
   hasProjectAccess,
   readStoredNcrById,
@@ -67,7 +67,11 @@ export function createNcrFileRoutes(): Hono<NcrFileRouteEnv> {
 
       const bucket = assertBucket(c.env);
       const fileId = crypto.randomUUID();
-      const objectKey = getNcrFileObjectKey(record.shipId, record.id, fileId, file.name);
+      // The stored name is `<fileId>-<sanitised name>`. A name so long that the
+      // entry would not fit falls back to `<fileId><extension>`; the original
+      // name stays in `record.name` below, for display and the download header.
+      // Keys of files uploaded earlier keep their objectKey, so they still read.
+      const objectKey = getNcrFileObjectKeyForUpload(record.shipId, record.id, fileId, file.name);
       await bucket.put(objectKey, await file.arrayBuffer(), {
         httpMetadata: {
           contentType: file.type || "application/octet-stream"

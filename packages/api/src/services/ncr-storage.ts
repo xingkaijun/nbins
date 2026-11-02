@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type { SqlDatabase } from "../platform/sql-database.ts";
 import type { NcrIndexRecord } from "../persistence/records.ts";
 import type { Bindings } from "../env.ts";
@@ -173,26 +174,98 @@ export const MEDIA_VARIANTS = ["original", "medium", "thumb"] as const;
 
 export type MediaVariant = typeof MEDIA_VARIANTS[number];
 
-export function sanitizeFilename(value: string): string {
+/**
+ * Size limits for object keys: one directory entry may be 255 UTF-16 units
+ * (NTFS) and 255 bytes (ext4), so a name must fit both.
+ */
+const MAX_FILE_NAME_LENGTH = 255;
+const MAX_FILE_NAME_BYTES = 255;
+const MAX_EXTENSION_LENGTH = 16;
+
+export function sanitizeFilename(value: string, fallback?: string): string {
   const trimmed = value.trim();
   const safe = trimmed
+    .replace(/[\u0000-\u001f\u007f]/g, "")
     .replace(/[\\/:*?"<>|]/g, "-")
     .replace(/\s+/g, "-")
     .replace(/-+/g, "-")
     .replace(/^-|-$/g, "");
 
-  return safe || `file-${crypto.randomUUID()}`;
+  return safe || fallback || `file-${crypto.randomUUID()}`;
+}
+
+/**
+ * Lower-case extension (with the dot) when it is short and alphanumeric,
+ * "" otherwise — keeps arbitrary user input out of stored file names.
+ */
+export function sanitizeExtension(filename: string): string {
+  const dot = filename.lastIndexOf(".");
+  if (dot <= 0 || dot === filename.length - 1) {
+    return "";
+  }
+  const extension = filename.slice(dot);
+  return extension.length <= MAX_EXTENSION_LENGTH && /^\.[a-z0-9]+$/i.test(extension)
+    ? extension.toLowerCase()
+    : "";
+}
+
+/** True when `filename` can be used as a single directory entry. */
+function isStoredFilenameSafe(filename: string): boolean {
+  return filename.length > 0
+    && filename.length <= MAX_FILE_NAME_LENGTH
+    && Buffer.byteLength(filename, "utf8") <= MAX_FILE_NAME_BYTES
+    && !filename.includes("/")
+    && !filename.includes("\\")
+    && !filename.includes("\0")
+    && filename !== "."
+    && filename !== "..";
+}
+
+/**
+ * `<id>-<name>[_variant]<extension>`, the historic attachment shape. An empty
+ * name keeps the id alone (`<id>-<variant>`), so the caller can detect it.
+ */
+function buildIdentifiedStoredFilename(id: string, uploadedName: string, variant: MediaVariant | null = null): string {
+  const extension = sanitizeExtension(uploadedName);
+  const safeBaseName = sanitizeFilename(stripFileExtension(uploadedName), "");
+  const suffix = variant ? `_${variant}` : "";
+  return safeBaseName ? `${id}-${safeBaseName}${suffix}${extension}` : `${id}${suffix}${extension}`;
 }
 
 function stripFileExtension(filename: string): string {
   return filename.replace(/\.[^.]+$/, "") || filename;
 }
 
+/** The historic base id, unchanged for ids that were already clean. */
 function normalizeMediaBaseId(baseId: string): string {
   const safe = baseId.trim().replace(/[^a-zA-Z0-9_-]/g, "");
   return safe || crypto.randomUUID();
 }
 
+/**
+ * The base id used for a stored key: the normalised base id, shortened with a
+ * stable hash (`<prefix>-<sha256[:10]>`) when it cannot head a directory entry
+ * even without a name. Ordinary UUIDs pass through untouched.
+ */
+function stableMediaBaseId(baseId: string): string {
+  const safe = normalizeMediaBaseId(baseId);
+  const maxWithVariant = MAX_FILE_NAME_LENGTH - "_medium.webp".length;
+  if (safe.length <= maxWithVariant && Buffer.byteLength(safe, "utf8") <= maxWithVariant) {
+    return safe;
+  }
+
+  const hash = createHash("sha256").update(safe).digest("hex").slice(0, 10);
+  let prefix = safe.slice(0, maxWithVariant - hash.length - 1);
+  while (Buffer.byteLength(prefix, "utf8") > MAX_FILE_NAME_BYTES - hash.length - 1) {
+    prefix = prefix.slice(0, -1);
+  }
+  return `${prefix || "media"}-${hash}`;
+}
+
+/**
+ * `<baseId>-<name>[_variant].webp`: the name the image uploader already uses and
+ * the gallery derives `<base>_thumb.webp` from.
+ */
 export function buildMediaFilename(baseId: string, originalName: string, variant: MediaVariant = "original"): string {
   const normalizedBaseId = normalizeMediaBaseId(baseId);
   const safeBaseName = sanitizeFilename(stripFileExtension(originalName));
@@ -237,6 +310,90 @@ export function getMediaObjectKey(shipId: string, filename: string): string {
 
 export function getNcrFileObjectKey(shipId: string, ncrId: string, fileId: string, filename: string): string {
   return `ncr-files/${shipId}/${ncrId}/${fileId}-${sanitizeFilename(filename)}`;
+}
+
+/**
+ * Object key physics: every segment must fit one directory entry (255 UTF-16
+ * units / 255 bytes). Ids are short, so only the last segment can be close.
+ */
+export function isPhysicalObjectKeySafe(key: string): boolean {
+  return key.split("/").every((segment: string) =>
+    segment.length > 0
+    && segment.length <= MAX_FILE_NAME_LENGTH
+    && Buffer.byteLength(segment, "utf8") <= MAX_FILE_NAME_BYTES
+  );
+}
+
+/** Collision-safe id for a fallback key: the prefixed id when short, else a UUID. */
+function shortStoredId(id: string): string {
+  const stripped = id.replace(/-/g, "");
+  return stripped.length <= 32 ? stripped : crypto.randomUUID();
+}
+
+/**
+ * The object key a new NCR attachment is stored under: the historic
+ * `<fileId>-<name>` shape, or `<fileId><extension>` when the name is too long
+ * for one directory entry. Stored records keep their objectKey, so old keys
+ * still read.
+ */
+export function getNcrFileObjectKeyForUpload(shipId: string, ncrId: string, fileId: string, filename: string): string {
+  const key = getNcrFileObjectKey(shipId, ncrId, fileId, filename);
+  return isPhysicalObjectKeySafe(key)
+    ? key
+    : `ncr-files/${shipId}/${ncrId}/${shortStoredId(fileId)}${sanitizeExtension(filename)}`;
+}
+
+export interface MediaUploadKeyInput {
+  shipId: string;
+  /** `baseId` from the uploader (stable across original/medium/thumb), or "" for a fresh UUID. */
+  baseId: string;
+  /** `originalName` from the uploader, falling back to the multipart file name. */
+  originalName: string;
+  variant: MediaVariant | null;
+  /** The multipart file's own name (carries the extension). */
+  fileName: string;
+}
+
+/**
+ * The object key a new media upload is stored under. Key shapes, by path:
+ *   - no variant (NCR / FAT editor attachment): `<uuid>-<name><ext>`
+ *   - variant with a base id (image uploader): `<baseId>-<name>[_variant].webp`
+ *   - variant without a base id: `<uuid>-<name>[_variant]<ext>`
+ *
+ * For the image uploader the decision is made for the whole variant group at
+ * once, against the longest variant (`_medium.webp`), so original/medium/thumb
+ * always share one shape: either the named key for all three, or
+ * `<id>[_variant].webp` for all three. The gallery derives the variant names
+ * from the original's key. The original name is kept by the caller, so display
+ * and download are unaffected.
+ */
+export function resolveMediaUploadObjectKey(input: MediaUploadKeyInput): string {
+  const baseId = input.baseId.trim();
+  const directory = `media/${input.shipId}`;
+
+  if (input.variant && baseId) {
+    const base = stableMediaBaseId(baseId);
+    const safeBaseName = sanitizeFilename(stripFileExtension(input.originalName), "image");
+    const suffix = input.variant === "original" ? "" : `_${input.variant}`;
+    // The group fits one directory entry only when its longest member does.
+    return isStoredFilenameSafe(`${base}-${safeBaseName}_medium.webp`)
+      ? `${directory}/${base}-${safeBaseName}${suffix}.webp`
+      : `${directory}/${base}${suffix}.webp`;
+  }
+
+  // NCR / FAT editor attachment: `<uuid>-<name>`, the shape the gallery and
+  // exports derive their download name from. Extension-less names get `.webp`,
+  // as the route always did.
+  const suffix = input.variant ? `_${input.variant}` : "";
+  const trimmedName = stripFileExtension(input.fileName).trim();
+  const fileName = sanitizeExtension(input.fileName) || trimmedName.length === 0
+    ? input.fileName
+    : `${input.fileName}.webp`;
+  const id = crypto.randomUUID();
+  const described = buildIdentifiedStoredFilename(id, fileName, input.variant);
+  return isStoredFilenameSafe(described)
+    ? `${directory}/${described}`
+    : `${directory}/${shortStoredId(id)}${suffix}${sanitizeExtension(fileName)}`;
 }
 
 export function getNcrPdfObjectKey(shipId: string, ncrId: string): string {

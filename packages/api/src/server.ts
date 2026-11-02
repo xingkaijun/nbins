@@ -1,7 +1,7 @@
 /**
  * nbins API server for a local / on-premises machine (Node >= 22.13).
  *
- *   pnpm dev     -> node --watch src/server.ts      (source, auto-reload)
+ *   pnpm dev     -> node src/server.ts            (source; restart after edits)
  *   pnpm start   -> node dist/server.mjs            (bundled by `pnpm build`)
  *
  * Start-up: read .env (if present) -> config -> open SQLite (WAL) -> apply
@@ -16,6 +16,7 @@ import { migrate } from "./db/migrate.ts";
 import type { Bindings } from "./env.ts";
 import { FileSystemObjectStore } from "./platform/fs-object-store.ts";
 import { LocalSqliteDatabase } from "./platform/sqlite-database.ts";
+import { acquireDataLock } from "./platform/data-lock.ts";
 import { createServerApp } from "./server-app.ts";
 
 function log(message: string): void {
@@ -29,6 +30,10 @@ function main(): void {
   mkdirSync(dirname(config.dbPath), { recursive: true });
   mkdirSync(config.storageDir, { recursive: true });
 
+  const releaseDataLock = acquireDataLock(config.dbPath, config.storageDir, "starting the server");
+  // Startup failures and the forced-shutdown path release here. A hard kill
+  // (SIGKILL) cannot, so acquireDataLock reclaims locks whose owner is gone.
+  process.once("exit", releaseDataLock);
   const db = new LocalSqliteDatabase(config.dbPath);
 
   if (config.autoMigrate) {

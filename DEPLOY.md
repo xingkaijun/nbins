@@ -244,7 +244,8 @@ sudo systemctl start nbins
 ```
 
 - `import-d1` 先导入到临时文件，删掉 D1 内部表（`_cf_KV`、`_cf_METADATA`、`d1_migrations`），补齐迁移，跑 `integrity_check` 和 `foreign_key_check`，打印各表行数；检查通过才替换正式库。检查不通过时临时库留在原地供排查，正式库不动。
-- 目标库里已经有数据时会拒绝执行；确认要覆盖就加 `--force`（会先自动做一次数据库备份）。注意：加了 `--force` 时检查不通过也会替换，所以覆盖前先不加 `--force` 试一次。
+- 目标库里已经有数据时会拒绝执行；确认要覆盖就加 `--force`，覆盖前自动备份数据库与完整文件目录。`--force` 只允许覆盖已有数据，不会跳过完整性或外键检查。
+- 服务和维护命令共用数据库及文件目录的独占锁。执行维护命令前必须停止 nbins；旧版进程不认识锁，首次升级时也必须先停掉旧进程。进程崩溃后锁会保留并拒绝后续操作，确认所有使用该数据的进程已停止后，才可删除报错指向的 `.nbins-lock` 目录。
 - 文件也可以单独导入：`node dist/cli.mjs import-objects /path/to/nbins-assets`。
 - 在开发机上可以用 `pnpm db:import-d1 -- /绝对路径/nbins-prod.sql --objects /绝对路径/nbins-assets`（读 `packages/api/.env`）。
 
@@ -253,19 +254,17 @@ sudo systemctl start nbins
 手动备份：
 
 ```bash
+sudo systemctl stop nbins
 sudo -u nbins NBINS_ENV_FILE=/etc/nbins/nbins.env node /opt/nbins/packages/api/dist/cli.mjs backup
+sudo systemctl start nbins
 ```
 
-- 用 SQLite 在线备份（服务运行中也可以做），备份后跑 `integrity_check`，写成 `nbins-<时间>.db`
-- 同时把文件目录打包成 `nbins-<时间>.files.tar.gz`（`--no-files` 跳过）
-- 默认保留最近 14 份（`--keep N` 修改），`--out DIR` 指定目录
+完整备份必须停服务，独占锁会拒绝服务仍在运行时执行。SQLite 备份与文件打包在同一段停写窗口完成，备份后运行 `integrity_check`。输出为配套的 `nbins-<时间>.db` 和 `nbins-<时间>.files.tar.gz`；`--no-files` 只能生成不包含正文、附件的数据库备份，不可视为完整恢复点。默认保留最近 14 份，`--keep N` 修改数量，`--out DIR` 指定目录。
 
-**每晚自动备份**，`/etc/cron.d/nbins`：
+**每晚自动备份**，`/etc/cron.d/nbins`（root 执行以控制服务；备份进程以 nbins 身份运行，失败时也会尝试恢复服务）：
 
 ```cron
-NBINS_ENV_FILE=/etc/nbins/nbins.env
-# 每天 02:30 备份，保留 14 份
-30 2 * * * nbins /usr/bin/node /opt/nbins/packages/api/dist/cli.mjs backup --keep 14 >> /var/log/nbins/backup.log 2>&1
+30 2 * * * root /bin/bash -c 'systemctl stop nbins || exit; trap "systemctl start nbins" EXIT; runuser -u nbins -- env NBINS_ENV_FILE=/etc/nbins/nbins.env /usr/bin/node /opt/nbins/packages/api/dist/cli.mjs backup --keep 14' >> /var/log/nbins/backup.log 2>&1
 ```
 
 备份目录最好再同步到另一台机器或外部存储。
@@ -287,14 +286,15 @@ sudo systemctl start nbins
 
 ```bash
 cd /opt/nbins
-sudo -u nbins NBINS_ENV_FILE=/etc/nbins/nbins.env node packages/api/dist/cli.mjs backup   # 先备份
+sudo systemctl stop nbins
+sudo -u nbins NBINS_ENV_FILE=/etc/nbins/nbins.env node packages/api/dist/cli.mjs backup   # 停写后备份
 git pull                       # 或拷入新代码
 pnpm install --frozen-lockfile
 pnpm build:nbins
 sudo -u nbins NBINS_ENV_FILE=/etc/nbins/nbins.env node packages/api/dist/cli.mjs migrate  # 可选：服务启动时也会自动迁移
-sudo systemctl restart nbins
+sudo systemctl start nbins
 curl http://127.0.0.1:8787/health
-sudo -u nbins NBINS_ENV_FILE=/etc/nbins/nbins.env node packages/api/dist/cli.mjs check
+# 需要手动 check 时，先停止服务，检查后再启动。
 ```
 
 - 迁移记录在 `schema_migrations` 表里，可以重复执行；启动时（`NBINS_AUTO_MIGRATE=true`）会自动补上缺的表、索引和可以安全添加的列，日志里会写出补了什么。
@@ -316,7 +316,8 @@ NBINS_WEB_BASE=/nbins/
 ```bash
 pnpm install
 pnpm db:init                    # 或 pnpm db:init -- --sample-data
-pnpm dev                        # 同时起 API（127.0.0.1:8787，改代码自动重启）和前端（Vite，端口 5173，/api 代理到 8787）
+pnpm dev                        # 同时起 API（127.0.0.1:8787）和前端（Vite，5173，/api 代理到 8787）
+# API 源码变更后需停止再启动；禁用自动 watch 重启，避免新旧进程重叠争用数据锁。
 ```
 
 其他命令：`pnpm typecheck`、`pnpm build`、`pnpm test:api`、`pnpm test:web`、`pnpm db:migrate`、`pnpm db:check`、`pnpm db:backup`。
@@ -327,4 +328,4 @@ pnpm dev                        # 同时起 API（127.0.0.1:8787，改代码自�
 bash scripts/smoke-local.sh
 ```
 
-它在临时目录里新建数据库，用 `packages/api/.env` 的配置在 127.0.0.1:8787 启动 `dist/server.mjs`，依次检查健康检查、登录、列表、详情、提交结果、照片上传、`/nbins/inspections/<id>` 单页回退、SQL 控制台（正确 / 错误口令）和重启后数据是否还在，最后停掉服务。
+它创建全新的临时目录与独立 env 文件，显式覆盖数据库、文件、备份等路径及外部 webhook 配置，不读取 `packages/api/.env`。若端口已被占用则提前退出。随后在 127.0.0.1:8787 启动 `dist/server.mjs`，检查登录、检验读写、上传、页面回退、SQL 控制台、重启持久化和停止服务后的完整备份。
