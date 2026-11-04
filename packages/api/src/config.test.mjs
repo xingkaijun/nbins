@@ -1,15 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { resolve } from "node:path";
 
 import { ConfigError, loadConfig, normalizeBasePath } from "./config.ts";
+
+// loadConfig resolves paths with the platform's own rules, so the expected
+// values are built the same way: the literals below are POSIX examples that a
+// Windows checkout resolves to a local drive path.
+const at = (base, ...parts) => resolve(base, ...parts);
 
 test("defaults bind to localhost and keep data under ./data", () => {
   const config = loadConfig({}, "/srv/nbins");
   assert.equal(config.host, "127.0.0.1");
   assert.equal(config.port, 8787);
-  assert.equal(config.dbPath, "/srv/nbins/data/nbins.db");
-  assert.equal(config.storageDir, "/srv/nbins/data/storage");
-  assert.equal(config.backupDir, "/srv/nbins/data/backups");
+  assert.equal(config.dbPath, at("/srv/nbins", "data", "nbins.db"));
+  assert.equal(config.storageDir, at("/srv/nbins", "data", "storage"));
+  assert.equal(config.backupDir, at("/srv/nbins", "data", "backups"));
   assert.equal(config.webDistDir, null);
   assert.equal(config.webBasePath, "/nbins/");
   assert.equal(config.autoMigrate, true);
@@ -36,9 +42,10 @@ test("explicit settings are honoured and relative paths resolve against cwd", ()
   );
   assert.equal(config.host, "0.0.0.0");
   assert.equal(config.port, 9000);
-  assert.equal(config.dbPath, "/opt/nbins/db/main.db");
-  assert.equal(config.storageDir, "/var/lib/nbins/storage");
-  assert.equal(config.webDistDir, "/opt/nbins/packages/web/dist");
+  assert.equal(config.dbPath, at("/opt/nbins", "db", "main.db"));
+  // The data dir is used verbatim, so storage hangs off it with one separator.
+  assert.equal(config.storageDir, at("/var/lib/nbins", "storage"));
+  assert.equal(config.webDistDir, at("/opt/nbins", "packages", "web", "dist"));
   assert.equal(config.webBasePath, "/app/");
   assert.equal(config.autoMigrate, false);
   assert.equal(config.sqlConsoleSecret, undefined, "blank secret keeps the SQL console disabled");

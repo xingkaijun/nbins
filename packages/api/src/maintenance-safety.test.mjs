@@ -10,6 +10,9 @@ import { LocalSqliteDatabase } from "./platform/sqlite-database.ts";
 
 const cli = fileURLToPath(new URL("./cli.ts", import.meta.url));
 const smoke = fileURLToPath(new URL("../../../scripts/smoke-local.sh", import.meta.url));
+/** native path → the POSIX form bash reports (C:\x becomes /c/x). */
+const toPosix = (path) =>
+  path.startsWith("/") ? path : `/` + path[0].toLowerCase() + path.slice(2).replace(/\\/g, "/");
 function run(dir, ...args) {
   return spawnSync(process.execPath, ["--experimental-strip-types", "--disable-warning=ExperimentalWarning", cli, ...args], {
     cwd: dir, encoding: "utf8", env: { PATH: process.env.PATH, NBINS_DATA_DIR: dir }
@@ -91,7 +94,12 @@ test("forced import preserves the old object body in a matching files backup", (
   assert.equal(result.status, 0, result.stdout + result.stderr);
   const archive = readdirSync(join(dir, "backups")).find((name) => name.endsWith(".files.tar.gz"));
   assert.ok(archive, "full files backup must exist before overwriting objects");
-  const original = spawnSync("tar", ["-xOzf", join(dir, "backups", archive), "storage/objects/ncrs/n1.json"], { encoding: "utf8" });
+  // Archive named relative to its own directory: MSYS tar reads an absolute
+  // `C:\...` -f value as a remote host.
+  const original = spawnSync("tar", ["-xOzf", archive, "storage/objects/ncrs/n1.json"], {
+    cwd: join(dir, "backups"),
+    encoding: "utf8"
+  });
   assert.equal(original.status, 0, original.stderr);
   assert.equal(original.stdout, oldBody);
   assert.equal(readFileSync(join(dir, "storage", "objects", "ncrs", "n1.json"), "utf8"), "OLDER IMPORT BODY");
@@ -121,15 +129,19 @@ test("forced import refuses failed foreign-key checks and preserves the active d
 }));
 
 test("smoke setup overrides inherited concrete paths without reading runtime env", () => fixture((dir) => {
-  const setup = readFileSync(smoke, "utf8").split("\nFAIL=0")[0];
+  const setup = readFileSync(smoke, "utf8").split("\nFAIL=0")[0].replace(/\r\n/g, "\n");
+  // Hand the script a POSIX work dir: it is a bash script, and on Windows a
+  // native `C:\...` value comes back with mixed separators in its output.
+  const work = toPosix(dir);
   const sentinel = join(dir, "production");
   mkdirSync(sentinel);
   writeFileSync(join(sentinel, "keep"), "untouched");
   const result = spawnSync("bash", ["-c", `${setup}\nprintf '\\nCHECK:%s|%s|%s|%s\\n' "$NBINS_ENV_FILE" "$NBINS_DB_PATH" "$NBINS_STORAGE_DIR" "$NBINS_BACKUP_DIR"`], {
-    cwd: dir, encoding: "utf8", env: { PATH: process.env.PATH, WORK: dir, PORT: "0", NBINS_DB_PATH: join(sentinel, "db"), NBINS_STORAGE_DIR: sentinel, NBINS_BACKUP_DIR: sentinel, NBINS_ENV_FILE: join(sentinel, "missing.env") }
+    cwd: dir, encoding: "utf8", env: { PATH: process.env.PATH, WORK: work, PORT: "0", NBINS_DB_PATH: join(sentinel, "db"), NBINS_STORAGE_DIR: sentinel, NBINS_BACKUP_DIR: sentinel, NBINS_ENV_FILE: join(sentinel, "missing.env") }
   });
   assert.equal(result.status, 0, result.stderr);
   const paths = result.stdout.match(/CHECK:(.*)/)[1].split("|");
-  assert.ok(paths.every((path) => path.startsWith(join(dir, "nbins-smoke."))), result.stdout);
+  const prefix = `${work}/nbins-smoke.`;
+  assert.ok(paths.every((path) => path.startsWith(prefix)), result.stdout);
   assert.equal(readFileSync(join(sentinel, "keep"), "utf8"), "untouched");
 }));

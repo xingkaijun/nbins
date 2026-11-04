@@ -121,7 +121,8 @@ test("Date objects and epoch numbers use the local calendar day", () => {
 });
 
 test("overview surfaces use the shared helper, detail surfaces keep their timestamps", () => {
-  const read = (rel) => readFileSync(path.join(HERE, rel), "utf8");
+  // Source text is checked across line breaks, so normalise CRLF checkouts.
+  const read = (rel) => readFileSync(path.join(HERE, rel), "utf8").replace(/\r\n/g, "\n");
 
   const dashboard = read("pages/Dashboard.tsx");
   assert.match(dashboard, /data-label="Planned">\{formatDisplayDate\(item\.plannedDate\)\}</);

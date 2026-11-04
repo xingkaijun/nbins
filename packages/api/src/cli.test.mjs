@@ -105,7 +105,8 @@ test("backup writes a verified database copy and a files archive, pruning old on
     assert.deepEqual(names.filter((n) => n.startsWith("nbins-2020")), ["nbins-20200102-000000.db"]);
     assert.equal(count(join(backups, dbCopy), "users"), count(join(dir, "nbins.db"), "users"));
 
-    const listing = spawnSync("tar", ["-tzf", join(backups, names.find((n) => n.endsWith(".files.tar.gz")))], {
+    const listing = spawnSync("tar", ["-tzf", names.find((n) => n.endsWith(".files.tar.gz"))], {
+      cwd: backups,
       encoding: "utf8"
     }).stdout;
     assert.match(listing, /storage\/objects\/ncrs\/n1\.json/);

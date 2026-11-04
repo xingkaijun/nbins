@@ -59,8 +59,11 @@ export function resolveInside(root: string, relativePath: string): string | null
     return null;
   }
   const full = normalize(join(root, decoded));
-  const rootWithSep = root.endsWith(sep) ? root : root + sep;
-  return full === root || full.startsWith(rootWithSep) ? full : null;
+  // Compare in the platform's own separator form: normalize("C:\srv", ...) uses
+  // "\" on Windows, while the configured root may still be written with "/".
+  const rootFull = normalize(root);
+  const rootWithSep = rootFull.endsWith(sep) ? rootFull : rootFull + sep;
+  return full === rootFull || full.startsWith(rootWithSep) ? full : null;
 }
 
 async function readFileIfExists(path: string): Promise<Buffer | null> {

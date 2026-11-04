@@ -21,9 +21,14 @@ function createDb() {
   return createTestDatabase(createBaselineInspectionStorage());
 }
 
-/** 3 items in project A, planned on 2026-11-01, plus one more per batch of extra noise. */
+// The baseline fixture seeds insp-002 on today's date, so the seeded rows must
+// share that date: a hardcoded day silently turns the filter into "no rows" as
+// soon as the clock moves past it.
+const TEST_DATE = new Date().toLocaleDateString("en-CA");
+
+/** 3 items in project A, planned on TEST_DATE, plus one more per batch of extra noise. */
 async function seedItems(db, count = 5) {
-  const now = "2026-11-01T00:00:00.000Z";
+  const now = `${TEST_DATE}T00:00:00.000Z`;
   db.sqlite.exec("BEGIN");
   try {
     const item = db.sqlite.prepare(
@@ -32,13 +37,13 @@ async function seedItems(db, count = 5) {
     );
     const round = db.sqlite.prepare(
       `INSERT INTO inspection_rounds (id, inspectionItemId, roundNumber, rawItemName, plannedDate, source, createdAt, updatedAt)
-       VALUES (?, ?, 1, ?, '2026-11-01', 'manual', ?, ?)`
+       VALUES (?, ?, 1, ?, ?, 'manual', ?, ?)`
     );
     for (let index = 0; index < count; index += 1) {
       const id = `scope-${String(index).padStart(3, "0")}`;
       const name = `Scoped Item ${String(index).padStart(3, "0")}`;
       item.run(id, name, name.toLowerCase(), now, now);
-      round.run(`${id}-r1`, id, name, now, now);
+      round.run(`${id}-r1`, id, name, TEST_DATE, now, now);
     }
     db.sqlite.exec("COMMIT");
   } catch (error) {
@@ -51,7 +56,7 @@ const filterForA = {
   allowedProjectIds: [PROJECT_A],
   projectId: PROJECT_A,
   mode: "date",
-  date: "2026-11-01"
+  date: TEST_DATE
 };
 
 // The baseline fixture also has insp-002 in project A on today's date; the
@@ -133,9 +138,10 @@ test("export re-applies the round date filter: a row whose planned date changed 
   const first = await iterator.next();
   assert.equal(first.value.length, 4);
   const movedId = "scope-003";
+  const tomorrow = new Date(Date.now() + 86_400_000).toLocaleDateString("en-CA");
   await db
     .prepare("UPDATE inspection_rounds SET plannedDate = ? WHERE id = ?")
-    .bind("2026-11-02", `${movedId}-r1`)
+    .bind(tomorrow, `${movedId}-r1`)
     .run();
 
   const rest = [];

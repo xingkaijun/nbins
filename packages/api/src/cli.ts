@@ -283,8 +283,12 @@ async function commandBackup(config: ServerConfig, args: ParsedArgs): Promise<bo
   console.log(`database backup: ${dbTarget} (${statSync(dbTarget).size} bytes, ${method}, integrity ok)`);
 
   if (!args.flags.has("no-files") && existsSync(config.storageDir)) {
-    const filesTarget = join(outDir, `nbins-${stamp}.files.tar.gz`);
-    const result = spawnSync("tar", ["-czf", filesTarget, "-C", dirname(config.storageDir), basename(config.storageDir)], {
+    const filesName = `nbins-${stamp}.files.tar.gz`;
+    const filesTarget = join(outDir, filesName);
+    // Run tar from outDir and name the archive relatively: GNU tar (e.g. MSYS
+    // tar on Windows) reads an absolute `C:\...` -f value as a remote host.
+    const result = spawnSync("tar", ["-czf", filesName, "-C", dirname(config.storageDir), basename(config.storageDir)], {
+      cwd: outDir,
       encoding: "utf8"
     });
     if (result.status !== 0) {

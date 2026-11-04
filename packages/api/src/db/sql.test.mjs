@@ -82,8 +82,9 @@ test("bootstrapSchema executes each generated table and index statement in order
 
 test("src/db/bootstrap.sql is exactly what `pnpm db:gen` generates (tables and indexes)", () => {
   // Regenerating the file used to drop the hand-written indexes; this pins that
-  // the file and sql.ts can no longer drift apart.
-  const bootstrapSql = readFileSync(new URL("./bootstrap.sql", import.meta.url), "utf8");
+  // the file and sql.ts can no longer drift apart. CRLF checkouts are normalised
+  // because the file is compared line for line.
+  const bootstrapSql = readFileSync(new URL("./bootstrap.sql", import.meta.url), "utf8").replace(/\r\n/g, "\n");
 
   assert.equal(renderBootstrapSql(), bootstrapSql);
   assert.equal(createIndexStatements.length, (bootstrapSql.match(/^CREATE INDEX IF NOT EXISTS /gm) ?? []).length);

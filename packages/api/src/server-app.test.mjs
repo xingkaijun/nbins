@@ -86,7 +86,8 @@ test("health, meta and SPA routes are served; unknown assets are 404", async () 
       assert.doesNotMatch(await response.text(), /do not serve/, path);
     }
     assert.equal(resolveInside("/srv/dist", "..%2fsecret.txt"), null);
-    assert.equal(resolveInside("/srv/dist", "assets/a.js"), "/srv/dist/assets/a.js");
+    // resolveInside joins with the platform's rules: build the expected value the same way.
+    assert.equal(resolveInside("/srv/dist", "assets/a.js"), join("/srv/dist", "assets/a.js"));
   } finally {
     cleanup();
   }
