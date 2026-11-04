@@ -3,19 +3,8 @@ import { DISCIPLINES } from '@nbins/shared';
 import { fetchProjects, fetchShips, batchImportInspections } from '../api.ts';
 import { useProjectContext } from '../project-context';
 import { useToast } from "../components/Toast";
-
-/** A single staging row — parsed from text but NOT yet in DB */
-interface StagingRow {
-  /** Unique key for React */
-  uid: string;
-  item: string;
-  discipline: string;
-  date: string;
-  qc: string;
-  startAtRound: number;
-  shipId?: string;
-  hullLabel?: string;
-}
+import type { ProjectRecord, ShipRecord } from '../api/types.ts';
+import { findImportColumns, removeRowsByUid, resolveShip, rowIssues, submitStaging, type ImportOutcome, type StagingRow } from '../import-staging.ts';
 
 let _uid = 0;
 function nextUid() { return `stg-${Date.now()}-${++_uid}`; }
@@ -23,8 +12,16 @@ function nextUid() { return `stg-${Date.now()}-${++_uid}`; }
 export function Import() {
   const toast = useToast();
   const { selectedProjectId } = useProjectContext();
-  const [projects, setProjects] = useState<any[]>([]);
-  const [ships, setShips] = useState<any[]>([]);
+  const [projects, setProjects] = useState<ProjectRecord[]>([]);
+  const [ships, setShips] = useState<ShipRecord[]>([]);
+  const [loadedProjectId, setLoadedProjectId] = useState('');
+  const [projectsLoaded, setProjectsLoaded] = useState(false);
+  const [isParsing, setIsParsing] = useState(false);
+  const [outcome, setOutcome] = useState<ImportOutcome | null>(null);
+  const alive = React.useRef(false);
+  const busyRef = React.useRef(false);
+  const projectRef = React.useRef(selectedProjectId);
+  projectRef.current = selectedProjectId;
 
   const [selectedShip, setSelectedShip] = useState('');
 
@@ -46,36 +43,46 @@ export function Import() {
   const [isDragging, setIsDragging] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
-  // Load backend data
   useEffect(() => {
-    fetchProjects().then(data => {
-      setProjects(data);
-    });
+    alive.current = true;
+    return () => { alive.current = false; };
   }, []);
 
   useEffect(() => {
+    let active = true;
+    fetchProjects().then(data => {
+      if (active) { setProjects(data); setProjectsLoaded(true); }
+    }).catch(() => { if (active) toast.error('Failed to load projects.'); });
+    return () => { active = false; };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+    setLoadedProjectId('');
+    setShips([]);
+    setSelectedShip('');
     if (selectedProjectId) {
       fetchShips().then(data => {
+        if (!active) return;
         const projectShips = data.filter(s => s.projectId === selectedProjectId);
         setShips(projectShips);
-        if (projectShips.length > 0) {
-          setSelectedShip(projectShips[0].id);
-        } else {
-          setSelectedShip('');
-        }
-      });
+        setSelectedShip(projectShips[0]?.id || '');
+        setLoadedProjectId(selectedProjectId);
+      }).catch(() => { if (active) toast.error('Failed to load ships.'); });
     }
+    return () => { active = false; };
   }, [selectedProjectId]);
 
-  /** Get effective disciplines for the currently selected project (empty = all presets) */
+  const ready = projectsLoaded && !!selectedProjectId && loadedProjectId === selectedProjectId && projects.some(p => p.id === selectedProjectId);
+  const busy = isParsing || isImporting;
   const projectDisciplines: readonly string[] = (() => {
-    const proj = projects.find((p: any) => p.id === selectedProjectId);
+    const proj = projects.find(p => p.id === selectedProjectId);
     return proj && proj.disciplines && proj.disciplines.length > 0 ? proj.disciplines : DISCIPLINES;
   })();
 
   // ── Parse → 追加到暂存 ──
   const handleParse = () => {
-    if (!pastedData.trim()) return;
+    if (!ready || busyRef.current || !pastedData.trim()) return;
     const lines = pastedData.trim().split('\n');
     const newRows: StagingRow[] = [];
 
@@ -116,60 +123,26 @@ export function Import() {
   };
 
   const parseExcelFile = async (file: File) => {
+    if (!ready || busyRef.current) return;
+    busyRef.current = true;
+    setIsParsing(true);
+    const projectId = selectedProjectId;
+    const isCurrent = () => alive.current && projectRef.current === projectId;
     try {
       const { read, utils } = await import('xlsx');
       const data = await file.arrayBuffer();
       const workbook = read(data);
       const firstSheetName = workbook.SheetNames[0];
       const worksheet = workbook.Sheets[firstSheetName];
-      const json = utils.sheet_to_json<any>(worksheet, { header: 1, raw: false });
-      
+      const json = utils.sheet_to_json<unknown[]>(worksheet, { header: 1, raw: false });
       const newRows: StagingRow[] = [];
-      let headerRowIndex = -1;
-      let itemIdx = -1, dateIdx = -1, hullIdx = -1, qcIdx = -1, roundIdx = -1;
-      
-      // Attempt to find header row (first 20 rows)
-      for (let i = 0; i < Math.min(json.length, 20); i++) {
-        const row = json[i];
-        if (!Array.isArray(row)) continue;
-        
-        let foundItem = -1, foundDate = -1, foundHull = -1, foundQc = -1, foundRound = -1;
-        for (let j = 0; j < row.length; j++) {
-            const cell = String(row[j] || '').toLowerCase().replace(/[\s\.]/g, '');
-            if (cell.includes('item') || cell.includes('项目') || cell.includes('description') || cell.includes('内容')) foundItem = j;
-            if (cell.includes('date') || cell.includes('日期') || cell.includes('time') || cell.includes('plan')) foundDate = j;
-            if (cell.includes('vs') || cell.includes('hull') || cell.includes('船号') || cell.includes('为') || cell === 'v/s') foundHull = j;
-            if (cell.includes('qc') || cell.includes('检验') || cell.includes('inspector') || cell.includes('质检')) foundQc = j;
-            if (cell.includes('round') || cell.includes('轮次') || cell.includes('start')) foundRound = j;
-        }
-        
-        if (foundItem !== -1) {
-            headerRowIndex = i;
-            itemIdx = foundItem;
-            dateIdx = foundDate;
-            hullIdx = foundHull;
-            qcIdx = foundQc;
-            roundIdx = foundRound;
-            break;
-        }
-      }
-
-      // Fallback: If no header row found, assume default index: 0=item, 1=qc, 2=round
-      if (headerRowIndex === -1) {
-        itemIdx = 0;
-        qcIdx = 1;
-        roundIdx = 2;
-        headerRowIndex = 0; 
-      }
-      
-      for (let i = headerRowIndex; i < json.length; i++) {
+      const columns = findImportColumns(json);
+      const { item: itemIdx, date: dateIdx, hull: hullIdx, qc: qcIdx, round: roundIdx } = columns;
+      for (let i = columns.start; i < json.length; i++) {
         const row = json[i];
         if (!Array.isArray(row)) continue;
 
         const rawItem = String(row[itemIdx] || '').trim();
-        // Skip header lines
-        if (i === headerRowIndex && (rawItem.toLowerCase().includes('item') || rawItem.includes('项目'))) continue;
-        
         if (!rawItem) continue;
 
         let rawDate = dateIdx !== -1 ? String(row[dateIdx] || '').trim() : selectedDate;
@@ -177,16 +150,7 @@ export function Import() {
         let rawQc = qcIdx !== -1 ? String(row[qcIdx] || '').trim() : '-';
         let rawRound = roundIdx !== -1 ? parseInt(String(row[roundIdx] || "1"), 10) : 1;
         
-        // fuzzy match hull to ship id
-        let matchedShipId = selectedShip;
-        let finalHullLabel = rawHull || (ships.find(s=>s.id === selectedShip)?.hullNumber || '');
-        if (rawHull) {
-            const matched = ships.find(s => s.hullNumber.replace(/[\s-]/g, '').toLowerCase() === rawHull.replace(/[\s-]/g, '').toLowerCase() || s.shipName.toLowerCase() === rawHull.toLowerCase());
-            if (matched) {
-                matchedShipId = matched.id;
-                finalHullLabel = matched.hullNumber;
-            }
-        }
+        const resolvedShip = resolveShip(rawHull, ships, selectedShip);
         
         let finalDate = selectedDate;
         if (rawDate && rawDate.match(/[\d-./]/)) {
@@ -202,24 +166,27 @@ export function Import() {
           date: finalDate,
           qc: rawQc || '-',
           startAtRound,
-          shipId: matchedShipId,
-          hullLabel: finalHullLabel || '-'
+          ...resolvedShip
         });
       };
 
+      if (!isCurrent()) return;
       if (newRows.length > 0) {
         setStaging(prev => [...prev, ...newRows]);
       } else {
         toast.error("No valid items found in the Excel file.");
       }
-    } catch (err: any) {
-      toast.error("Failed to parse Excel file: " + err.message);
+    } catch (err: unknown) {
+      if (isCurrent()) toast.error("Failed to parse Excel file: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      busyRef.current = false;
+      if (isCurrent()) setIsParsing(false);
     }
   };
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
-    setIsDragging(true);
+    if (!busyRef.current && ready) setIsDragging(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -230,6 +197,7 @@ export function Import() {
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragging(false);
+    if (busyRef.current || !ready) return;
     const file = e.dataTransfer.files[0];
     if (file && (file.name.endsWith('.xlsx') || file.name.endsWith('.xls') || file.name.endsWith('.csv'))) {
       await parseExcelFile(file);
@@ -237,35 +205,38 @@ export function Import() {
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
+    const input = e.currentTarget;
+    const file = input.files?.[0];
     if (file) {
       await parseExcelFile(file);
     }
-    e.target.value = '';
+    input.value = '';
   };
 
   // ── 暂存操作 ──
   const handleDeleteStaging = (uid: string) => {
+    if (busyRef.current) return;
     setStaging(prev => prev.filter(r => r.uid !== uid));
     if (editingUid === uid) setEditingUid(null);
   };
 
   const handleEditStart = (row: StagingRow) => {
+    if (busyRef.current) return;
     setEditingUid(row.uid);
     setEditForm({ item: row.item, discipline: row.discipline, date: row.date, qc: row.qc, startAtRound: row.startAtRound, shipId: row.shipId, hullLabel: row.hullLabel });
   };
 
   const handleEditSave = () => {
-    if (!editingUid) return;
+    if (!editingUid || busyRef.current) return;
     setStaging(prev => prev.map(r => r.uid === editingUid
-      ? { ...r, item: editForm.item || r.item, discipline: editForm.discipline || r.discipline, date: editForm.date || r.date, qc: editForm.qc ?? r.qc, startAtRound: editForm.startAtRound ?? r.startAtRound, shipId: editForm.shipId ?? r.shipId, hullLabel: editForm.hullLabel ?? r.hullLabel }
+      ? { ...r, ...editForm }
       : r
     ));
     setEditingUid(null);
   };
 
   const handleClearStaging = () => {
-    if (staging.length === 0 || !confirm("Clear the staging list?")) return;
+    if (busyRef.current || staging.length === 0 || !confirm("Clear the staging list?")) return;
     setStaging([]);
     setEditingUid(null);
   };
@@ -277,48 +248,34 @@ export function Import() {
     return Array.from(map.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }, [staging]);
 
-  // ── 最终提交入库 ──
+  const issuesByUid = useMemo(() => new Map(staging.map(row => [row.uid, rowIssues(row, selectedProjectId || '', ships, projectDisciplines)])), [staging, selectedProjectId, ships, projectDisciplines]);
+  const invalidCount = staging.filter(row => (issuesByUid.get(row.uid)?.length ?? 0) > 0).length;
+
   const handleImport = async () => {
-    if (staging.length === 0 || !selectedProjectId || isImporting) return;
-    if (!confirm(`Submit ${staging.length} inspection records to the database?`)) return;
-
+    if (!ready || busyRef.current || editingUid || invalidCount || !staging.length || !selectedProjectId) return;
+    busyRef.current = true;
+    if (!confirm(`Submit ${staging.length} inspection records to the database?`)) { busyRef.current = false; return; }
+    const projectId = selectedProjectId;
+    const isCurrent = () => alive.current && projectRef.current === projectId;
     setIsImporting(true);
-    let successCount = 0;
+    setOutcome(null);
     try {
-      const groupedByShip: Record<string, StagingRow[]> = {};
-      staging.forEach(r => {
-        const sid = r.shipId || selectedShip;
-        if (!groupedByShip[sid]) groupedByShip[sid] = [];
-        groupedByShip[sid].push(r);
+      const result = await submitStaging({
+        projectId, rows: staging, ships, disciplines: projectDisciplines,
+        request: batchImportInspections,
+        shouldContinue: isCurrent,
+        onSuccess: rows => { if (isCurrent()) setStaging(prev => removeRowsByUid(prev, rows)); }
       });
-
-      for (const [sId, items] of Object.entries(groupedByShip)) {
-        if (!sId) continue;
-        const resp = await batchImportInspections({
-          projectId: selectedProjectId,
-          shipId: sId,
-          items: items.map(r => ({
-            itemName: r.item,
-            discipline: r.discipline,
-            plannedDate: r.date,
-            yardQc: r.qc,
-            startAtRound: r.startAtRound
-          }))
-        });
-        successCount += resp.imported;
+      if (isCurrent()) {
+        setOutcome(result);
+        if (result.failedShip) toast.error(`Import stopped at ${result.failedShip}: ${result.error}`);
+        else toast.success(`Imported ${result.succeeded} inspection ${result.succeeded === 1 ? 'record' : 'records'}.`);
       }
-      setStaging([]);
-      setEditingUid(null);
-      toast.success(`Imported ${successCount} inspection ${successCount === 1 ? "record" : "records"}.`);
-    } catch (e: any) {
-      const reason = e instanceof Error ? e.message : String(e);
-      toast.error(
-        successCount > 0
-          ? `Import failed after ${successCount} records were saved: ${reason}`
-          : `Import failed: ${reason}`
-      );
+    } catch (error: unknown) {
+      if (isCurrent()) toast.error(error instanceof Error ? error.message : String(error));
     } finally {
-      setIsImporting(false);
+      busyRef.current = false;
+      if (isCurrent()) setIsImporting(false);
     }
   };
 
@@ -337,7 +294,7 @@ export function Import() {
     <span style={{ background: 'var(--nb-accent)', color: '#fff', width: '20px', height: '20px', borderRadius: '50%', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: '12px', fontWeight: 'bold', flexShrink: 0 }}>{n}</span>
   );
 
-  const currentProject = projects.find((p: any) => p.id === selectedProjectId);
+  const currentProject = projects.find(p => p.id === selectedProjectId);
   const projectName = currentProject ? `${currentProject.name} (${currentProject.code})` : '';
 
   return (
@@ -355,6 +312,7 @@ export function Import() {
       </section>
 
 
+      <fieldset disabled={busy} style={{ border: 0, padding: 0, margin: 0, minWidth: 0 }}>
       <div style={{ marginTop: '24px', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
 
         {/* ═══════  左侧：配置 + 粘贴  ═══════ */}
@@ -369,7 +327,8 @@ export function Import() {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
               <div className="field">
                 <span>Ship / Hull No.</span>
-                <select className="filterSelect" value={selectedShip} onChange={e => setSelectedShip(e.target.value)}>
+                <select className="filterSelect" value={selectedShip} onChange={e => setSelectedShip(e.target.value)} disabled={!ready}>
+                  {!selectedShip && <option value="">Select a ship</option>}
                   {ships.map(s => <option key={s.id} value={s.id}>{s.hullNumber} ({s.shipName})</option>)}
                 </select>
               </div>
@@ -421,13 +380,14 @@ export function Import() {
             </div>
             
             <div style={{ marginTop: '12px', display: 'flex', gap: '12px', alignItems: 'center' }}>
-              <button className="submitButton" onClick={handleParse} disabled={!pastedData.trim()} style={{ flex: 1 }}>
+              <button className="submitButton" onClick={handleParse} disabled={!ready || busy || !pastedData.trim()} style={{ flex: 1 }}>
                 Parse Details & Append ➔
               </button>
-              <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileSelect} ref={fileInputRef} style={{ display: 'none' }} />
+              <input type="file" accept=".xlsx, .xls, .csv" onChange={handleFileSelect} ref={fileInputRef} disabled={!ready || busy} style={{ display: 'none' }} />
               <button 
                 className="submitButton" 
                 onClick={() => fileInputRef.current?.click()}
+                disabled={!ready || busy}
                 style={{ flex: 1, background: '#fff', color: 'var(--nb-text)', border: '1px solid var(--nb-border)', boxShadow: 'none' }}
               >
                 📁 Select Excel File
@@ -454,7 +414,15 @@ export function Import() {
             )}
           </div>
 
-          {/* 专业分组统计 */}
+          {staging.length > 0 && <p style={{ fontSize: 12 }}>{staging.length - invalidCount} valid · {invalidCount} need confirmation</p>}
+          {outcome && (
+            <div role="status" style={{ marginBottom: 12, padding: 12, border: '1px solid var(--nb-border)', borderRadius: 8, fontSize: 12 }}>
+              <div>Last import: {outcome.succeeded} succeeded · {outcome.remaining} remaining</div>
+              {outcome.failedShip && <div>Stopped at ship {outcome.failedShip}: {outcome.error}</div>}
+              {outcome.unknown && <div>Result not confirmed. Check the database before deciding whether to retry. No automatic retry was attempted.</div>}
+            </div>
+          )}
+          {!ready && <p style={{ fontSize: 12 }}>Project and ship data must finish loading before import.</p>}
           {disciplineGroups.length > 0 && (
             <div style={{ display: 'flex', gap: '6px', marginBottom: '12px', flexWrap: 'wrap' }}>
               {disciplineGroups.map(([disc, count]) => (
@@ -513,10 +481,11 @@ export function Import() {
                                   value={editForm.shipId || ''} 
                                   onChange={e => {
                                     const matched = ships.find(s => s.id === e.target.value);
-                                    setEditForm(f => ({ ...f, shipId: e.target.value, hullLabel: matched?.hullNumber || '-' }))
+                                    setEditForm(f => ({ ...f, shipId: e.target.value, hullLabel: matched?.hullNumber || r.hullLabel, shipIssue: matched ? undefined : 'Select a ship' }))
                                   }} 
                                   style={cellInput}
                                 >
+                                  <option value="">Select a ship</option>
                                   {ships.map(s => <option key={s.id} value={s.id}>{s.hullNumber}</option>)}
                                 </select>
                               </td>
@@ -536,7 +505,7 @@ export function Import() {
                             </>
                           ) : (
                             <>
-                              <td style={{ ...tdS, fontWeight: 600 }}>{r.item}</td>
+                              <td style={{ ...tdS, fontWeight: 600 }}>{r.item}{(issuesByUid.get(r.uid)?.length ?? 0) > 0 && <div style={{ color: '#b91c1c', fontSize: 10 }}>Needs confirmation: {issuesByUid.get(r.uid)?.join('; ')}</div>}</td>
                               <td style={tdS}>
                                 <span style={{
                                   fontSize: '9px', fontWeight: 'bold', padding: '2px 6px', borderRadius: '4px', letterSpacing: '0.05em',
@@ -580,7 +549,7 @@ export function Import() {
                     <span style={{ fontSize: '16px', fontWeight: 800, color: 'var(--nb-text)' }}>{disciplineGroups.length}</span>
                   </div>
                 </div>
-                <button className="submitButton" onClick={handleImport} disabled={isImporting || staging.length === 0 || !selectedShip}>
+                <button className="submitButton" onClick={handleImport} disabled={!ready || busy || !!editingUid || invalidCount > 0 || staging.length === 0}>
                   {isImporting ? 'Importing…' : `Confirm Import (${staging.length})`}
                 </button>
               </div>
@@ -589,6 +558,7 @@ export function Import() {
         </div>
 
       </div>
+      </fieldset>
     </main>
   );
 }
